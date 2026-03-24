@@ -1,0 +1,12 @@
+{
+    "name": "@types/pino-http",
+    "version": "6.1.0",
+    "description": "Stub TypeScript definitions entry for pino-http, which provides its own types definitions",
+    "main": "",
+    "scripts": {},
+    "license": "MIT",
+    "dependencies": {
+        "pino-http": "*"
+    },
+    "deprecated": "This is a stub types definition. pino-http provides its own type definitions, so you do not need this installed."
+}

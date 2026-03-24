@@ -1,0 +1,141 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.toggleItemAvailability = exports.createMenuItem = exports.getMenuItems = exports.reorderCategories = exports.createCategory = exports.getCategories = void 0;
+const prisma_1 = require("../db/prisma");
+const socket_1 = require("../socket");
+const plans_1 = require("../config/plans");
+const cache_service_1 = require("../services/cache.service");
+const invalidateMenuCache = async (tenantId) => {
+    const t = await prisma_1.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (t)
+        await (0, cache_service_1.deleteCache)(`public_menu_${t.slug}`);
+};
+const getCategories = async (req, res) => {
+    try {
+        const categories = await prisma_1.prisma.category.findMany({
+            where: { tenantId: req.tenantId },
+            orderBy: { sortOrder: 'asc' },
+        });
+        res.json(categories);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to fetch categories' });
+    }
+};
+exports.getCategories = getCategories;
+const createCategory = async (req, res) => {
+    try {
+        const { name, description } = req.body;
+        const category = await prisma_1.prisma.category.create({
+            data: {
+                name,
+                description,
+                tenantId: req.tenantId,
+            },
+        });
+        await invalidateMenuCache(req.tenantId);
+        res.status(201).json(category);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to create category' });
+    }
+};
+exports.createCategory = createCategory;
+const reorderCategories = async (req, res) => {
+    try {
+        const { orderIds } = req.body;
+        await prisma_1.prisma.$transaction(orderIds.map((id, index) => prisma_1.prisma.category.updateMany({
+            where: { id, tenantId: req.tenantId },
+            data: { sortOrder: index },
+        })));
+        await invalidateMenuCache(req.tenantId);
+        res.json({ success: true });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to reorder categories' });
+    }
+};
+exports.reorderCategories = reorderCategories;
+const getMenuItems = async (req, res) => {
+    try {
+        const items = await prisma_1.prisma.menuItem.findMany({
+            where: { tenantId: req.tenantId },
+            orderBy: { sortOrder: 'asc' },
+            include: {
+                modifierGroups: {
+                    include: { modifiers: true }
+                }
+            }
+        });
+        res.json(items);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to fetch items' });
+    }
+};
+exports.getMenuItems = getMenuItems;
+const createMenuItem = async (req, res) => {
+    try {
+        const { name, description, price, categoryId, dietaryTags } = req.body;
+        const tenant = await prisma_1.prisma.tenant.findUnique({ where: { id: req.tenantId } });
+        if (!tenant)
+            return res.status(404).json({ error: 'Tenant not found' });
+        const count = await prisma_1.prisma.menuItem.count({ where: { tenantId: req.tenantId } });
+        const planLimits = plans_1.PLAN_LIMITS[tenant.plan];
+        if (planLimits && count >= planLimits.items) {
+            return res.status(403).json({ error: `Plan limit reached. Your ${tenant.plan} plan allows up to ${planLimits.items} menu items.` });
+        }
+        const tags = Array.isArray(dietaryTags) ? dietaryTags : [];
+        const isVeg = tags.includes('VEG') || tags.includes('VEGETARIAN');
+        const isVegan = tags.includes('VEGAN');
+        const isGlutenFree = tags.includes('GLUTEN_FREE') || tags.includes('GF');
+        const item = await prisma_1.prisma.menuItem.create({
+            data: {
+                name,
+                description,
+                price,
+                categoryId,
+                isVeg,
+                isVegan,
+                isGlutenFree,
+                tenantId: req.tenantId,
+            },
+            include: {
+                modifierGroups: {
+                    include: { modifiers: true }
+                }
+            }
+        });
+        await invalidateMenuCache(req.tenantId);
+        res.status(201).json(item);
+    }
+    catch (error) {
+        console.error('Create item err', error);
+        res.status(500).json({ error: 'Failed to create item' });
+    }
+};
+exports.createMenuItem = createMenuItem;
+const toggleItemAvailability = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { isAvailable } = req.body;
+        const item = await prisma_1.prisma.menuItem.updateMany({
+            where: { id, tenantId: req.tenantId },
+            data: { isAvailable },
+        });
+        if (item.count === 0) {
+            return res.status(404).json({ error: 'Item not found' });
+        }
+        (0, socket_1.getIO)().to(`tenant_${req.tenantId}`).emit('menu:availability_changed', {
+            itemId: id,
+            isAvailable,
+        });
+        await invalidateMenuCache(req.tenantId);
+        res.json({ success: true, isAvailable });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to toggle availability' });
+    }
+};
+exports.toggleItemAvailability = toggleItemAvailability;
+//# sourceMappingURL=menu.controller.js.map

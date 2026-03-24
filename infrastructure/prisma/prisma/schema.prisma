@@ -1,0 +1,442 @@
+// schema.prisma - DineFlow V2 Complete Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── TENANTS (Businesses) ──────────────────────────────────
+model Tenant {
+  id              String   @id @default(cuid())
+  slug            String   @unique  // "rustic-bistro" → dineflow.com/order/rustic-bistro
+  businessName    String
+  description     String?
+  logoUrl         String?
+  coverImageUrl   String?
+  primaryColor    String   @default("#FF6B35")
+  accentColor     String   @default("#2D3748")
+  cuisineType     String?
+  businessType    String   @default("restaurant") // restaurant|cafe|hotel|street_vendor|cloud_kitchen
+  address         String?
+  city            String?
+  phone           String?
+  email           String
+  website         String?
+  instagramUrl    String?
+  currency        String   @default("INR")
+  currencySymbol  String   @default("₹")
+  taxRate         Float    @default(5.0) // GST percentage
+  timezone        String   @default("Asia/Kolkata")
+  isActive        Boolean  @default(true)
+  plan            Plan     @default(FREE)
+  planStartedAt   DateTime?
+  planExpiresAt   DateTime?
+  trialEndsAt     DateTime?  // 1-month free trial
+  businessHours   Json?    // { monday: { open: "09:00", close: "22:00", isOpen: true }, ... }
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  users           User[]
+  categories      Category[]
+  menuItems       MenuItem[]
+  tables          Table[]
+  zones           Zone[]
+  orders          Order[]
+  customerSessions CustomerSession[]
+  offers          Offer[]
+  reviews         Review[]
+  staffInvites    StaffInvite[]
+  analytics       DailyAnalytics[]
+}
+
+// ─── USERS (Staff/Owners) ──────────────────────────────────
+model User {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name          String
+  email         String
+  passwordHash  String
+  role          UserRole @default(STAFF)
+  avatarUrl     String?
+  isActive      Boolean  @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model StaffInvite {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email      String
+  role       UserRole
+  token      String   @unique @default(cuid())
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+// ─── MENU ─────────────────────────────────────────────────
+model Category {
+  id          String     @id @default(cuid())
+  tenantId    String
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  emoji       String?    @default("🍽️")
+  imageUrl    String?
+  sortOrder   Int        @default(0)
+  isVisible   Boolean    @default(true)
+  availFrom   String?    // "09:00" - time-based availability
+  availUntil  String?    // "23:00"
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  menuItems   MenuItem[]
+
+  @@index([tenantId, sortOrder])
+}
+
+model MenuItem {
+  id                    String          @id @default(cuid())
+  tenantId              String
+  tenant                Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoryId            String
+  category              Category        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name                  String
+  description           String?
+  price                 Float           // in paise (₹12.99 stored as 1299) - NO, store as Float for simplicity
+  compareAtPrice        Float?          // original price for "was ₹X" display
+  images                String[]        // Cloudinary URLs, first is primary
+  isAvailable           Boolean         @default(true)
+  isPopular             Boolean         @default(false)
+  isChefSpecial         Boolean         @default(false)
+  isBestSeller          Boolean         @default(false)
+  isNew                 Boolean         @default(false)
+  isVeg                 Boolean?        // null = not tagged, true = veg, false = non-veg
+  isVegan               Boolean         @default(false)
+  isGlutenFree          Boolean         @default(false)
+  spiceLevel            Int?            // 0=none, 1=mild, 2=medium, 3=hot, 4=extra hot
+  allergens             String[]        // ["nuts", "dairy", "gluten", "eggs", "soy"]
+  calories              Int?
+  prepTimeMinutes       Int?
+  sortOrder             Int             @default(0)
+  tags                  String[]        // flexible tagging
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  modifierGroups        ModifierGroup[]
+  orderItems            OrderItem[]
+
+  @@index([tenantId, categoryId])
+  @@index([tenantId, isAvailable])
+}
+
+model ModifierGroup {
+  id            String     @id @default(cuid())
+  menuItemId    String
+  menuItem      MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  name          String     // "Choose Size", "Add Extras", "Select Spice Level"
+  isRequired    Boolean    @default(false)
+  minSelections Int        @default(0)
+  maxSelections Int        @default(1)
+  sortOrder     Int        @default(0)
+
+  modifiers     Modifier[]
+}
+
+model Modifier {
+  id               String        @id @default(cuid())
+  modifierGroupId  String
+  modifierGroup    ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  name             String        // "Large", "Extra Cheese", "Spicy"
+  priceAdjustment  Float         @default(0) // +50, -20, 0
+  isDefault        Boolean       @default(false)
+  isAvailable      Boolean       @default(true)
+  sortOrder        Int           @default(0)
+}
+
+// ─── OFFERS & COMBOS ──────────────────────────────────────
+model Offer {
+  id           String      @id @default(cuid())
+  tenantId     String
+  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title        String      // "Happy Hour 20% Off"
+  description  String?
+  offerType    OfferType   // PERCENTAGE | FIXED | COMBO | BOGO
+  discountValue Float?     // 20 for 20%, 50 for ₹50 off
+  imageUrl     String?
+  bannerColor  String?
+  menuItemIds  String[]    // items this applies to (empty = all items)
+  minimumOrder Float?      // minimum cart value to activate
+  isActive     Boolean     @default(true)
+  startsAt     DateTime?
+  endsAt       DateTime?
+  usageCount   Int         @default(0)
+  maxUsage     Int?
+  createdAt    DateTime    @default(now())
+
+  @@index([tenantId, isActive])
+}
+
+// ─── TABLES & ZONES ───────────────────────────────────────
+model Zone {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String  // "Main Dining", "Outdoor", "Bar", "Private"
+  color     String  @default("#3B82F6")
+  sortOrder Int     @default(0)
+
+  tables    Table[]
+
+  @@index([tenantId])
+}
+
+model Table {
+  id              String      @id @default(cuid())
+  tenantId        String
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  zoneId          String?
+  zone            Zone?       @relation(fields: [zoneId], references: [id])
+  name            String      // "Table 1", "T-01", "Bar Seat 3"
+  capacity        Int         @default(4)
+  seats           Int         @default(4)
+  occupiedSeats   String[]    @default([])
+  shape           TableShape  @default(SQUARE)
+  status          TableStatus @default(AVAILABLE)
+  positionX       Float       @default(0)  // for floor plan canvas
+  positionY       Float       @default(0)
+  qrCodeUrl       String?     // stored QR image URL
+  qrSecret        String      @unique @default(cuid()) // used to validate QR scan
+  currentOrderId  String?     // FK to active Order (for quick lookup)
+  isRoaming       Boolean     @default(false) // street vendor roaming table
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  orders          Order[]
+  sessions        CustomerSession[]
+
+  @@index([tenantId, status])
+}
+
+// ─── CUSTOMER SESSIONS ────────────────────────────────────
+model CustomerSession {
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tableId       String?
+  table         Table?    @relation(fields: [tableId], references: [id])
+  anonymousId   String    // generated client-side, stored in sessionStorage
+  phoneNumber   String?   // voluntarily provided for loyalty
+  name          String?   // optional name
+  deviceInfo    String?   // browser UA
+  ipAddress     String?
+  startedAt     DateTime  @default(now())
+  lastActivityAt DateTime @default(now())
+  endedAt       DateTime?
+
+  orders        Order[]
+
+  @@index([tenantId, anonymousId])
+  @@index([tableId])
+}
+
+// ─── ORDERS ───────────────────────────────────────────────
+model Order {
+  id                  String      @id @default(cuid())
+  tenantId            String
+  tenant              Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tableId             String?
+  table               Table?      @relation(fields: [tableId], references: [id])
+  sessionId           String?
+  session             CustomerSession? @relation(fields: [sessionId], references: [id])
+  orderNumber         String      // human-readable: "#SN7N3KJN" - unique per tenant
+  orderType           OrderType   @default(DINE_IN) // DINE_IN | TAKEAWAY | ROAMING
+  status              OrderStatus @default(PENDING)
+  
+  // Pricing
+  subtotal            Float       // sum of items before tax
+  taxAmount           Float       @default(0)
+  discountAmount      Float       @default(0)
+  totalAmount         Float       // final amount
+  
+  // Customer info (captured at order time)
+  customerName        String?
+  customerPhone       String?
+  
+  specialInstructions String?
+  estimatedPrepMins   Int?        // set by kitchen
+  acceptedAt          DateTime?
+  preparingAt         DateTime?
+  readyAt             DateTime?
+  servedAt            DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  cancellationReason  String?
+  
+  // Payment
+  isPaid              Boolean     @default(false)
+  paymentMethod       String?     // cash|upi|card
+  paymentReference    String?
+  
+  // Rating
+  hasReview           Boolean     @default(false)
+  
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  items               OrderItem[]
+  review              Review?
+
+  @@index([tenantId, status])
+  @@index([tenantId, tableId])
+  @@index([tenantId, createdAt])
+  @@index([sessionId])
+}
+
+model OrderItem {
+  id                  String    @id @default(cuid())
+  orderId             String
+  order               Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId          String?   // nullable in case item is deleted after order
+  menuItem            MenuItem? @relation(fields: [menuItemId], references: [id])
+  
+  // Snapshot at time of order (in case menu changes later)
+  name                String
+  description         String?
+  imageUrl            String?   // snapshot of primary image
+  unitPrice           Float
+  quantity            Int
+  totalPrice          Float     // unitPrice * quantity + modifiers
+  selectedModifiers   Json      // [{ groupName: "Size", modifierName: "Large", priceAdj: 50 }]
+  specialNote         String?
+  isVeg               Boolean?
+  
+  createdAt           DateTime  @default(now())
+
+  @@index([orderId])
+}
+
+// ─── REVIEWS ──────────────────────────────────────────────
+model Review {
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orderId       String    @unique
+  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sessionId     String?
+  
+  overallRating Int       // 1-5 stars
+  foodRating    Int?      // 1-5
+  serviceRating Int?      // 1-5
+  comment       String?   // "Leave a note for the chef"
+  isPublic      Boolean   @default(true)
+  
+  createdAt     DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([orderId])
+}
+
+// ─── ANALYTICS (Daily Snapshots) ──────────────────────────
+model DailyAnalytics {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  date            DateTime // date only (midnight UTC)
+  
+  totalOrders     Int      @default(0)
+  completedOrders Int      @default(0)
+  cancelledOrders Int      @default(0)
+  totalRevenue    Float    @default(0)
+  totalTax        Float    @default(0)
+  avgOrderValue   Float    @default(0)
+  avgPrepTimeMins Float    @default(0)
+  uniqueCustomers Int      @default(0)
+  peakHour        Int?     // 0-23
+  topItemId       String?
+  topItemName     String?
+  topItemRevenue  Float    @default(0)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, date])
+  @@index([tenantId, date])
+}
+
+// ─── ENUMS ────────────────────────────────────────────────
+enum Plan {
+  FREE
+  STARTER     // ₹499/mo
+  GOLD        // ₹999/mo
+  PLATINUM    // ₹1599/mo
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+  STAFF
+  KITCHEN
+}
+
+enum TableShape {
+  ROUND
+  SQUARE
+  RECTANGLE
+}
+
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  CLEANING
+  BLOCKED
+}
+
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  PREPARING
+  READY
+  SERVED
+  COMPLETED
+  CANCELLED
+}
+
+enum OrderType {
+  DINE_IN
+  TAKEAWAY
+  ROAMING
+}
+
+enum OfferType {
+  PERCENTAGE
+  FIXED
+  COMBO
+  BOGO
+}

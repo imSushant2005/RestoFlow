@@ -1,0 +1,25 @@
+{
+  "name": "restoflow-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:api": "pnpm --filter @dineflow/api dev",
+    "dev:dashboard": "pnpm --filter @dineflow/dashboard dev",
+    "dev:customer": "pnpm --filter @dineflow/customer dev",
+    "dev:kds": "pnpm --filter @dineflow/kds dev",
+    "dev": "pnpm run --parallel --filter @dineflow/api --filter @dineflow/dashboard --filter @dineflow/customer --filter @dineflow/kds dev",
+    "build": "pnpm run -r build",
+    "lint": "pnpm run -r lint",
+    "db:push": "pnpm --filter @dineflow/prisma db:push",
+    "db:generate": "pnpm --filter @dineflow/prisma db:generate",
+    "db:migrate": "pnpm --filter @dineflow/prisma db:migrate",
+    "db:seed": "pnpm --filter @dineflow/prisma db:seed",
+    "db:setup": "pnpm db:push && pnpm db:generate && pnpm db:seed",
+    "docker:up": "cd infrastructure/docker && docker-compose up -d",
+    "docker:down": "cd infrastructure/docker && docker-compose down"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "typescript": "^5.3.3"
+  }
+}
