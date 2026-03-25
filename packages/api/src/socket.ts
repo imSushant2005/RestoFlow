@@ -22,7 +22,7 @@ export const initSocket = (server: HttpServer) => {
   if (process.env.REDIS_URL) {
     const redisOptions = {
       lazyConnect: true,
-      maxRetriesPerRequest: 1,
+      maxRetriesPerRequest: 0,
       enableOfflineQueue: false,
       connectTimeout: 1500,
       retryStrategy: () => null,
