@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { CategorySidebar } from '../components/CategorySidebar';
@@ -14,6 +14,12 @@ export function MenuBuilder() {
       return res.data;
     }
   });
+
+  useEffect(() => {
+    if (!selectedCategoryId && categories.length > 0) {
+      setSelectedCategoryId(categories[0].id);
+    }
+  }, [categories, selectedCategoryId]);
 
   return (
     <div className="flex w-full h-full">

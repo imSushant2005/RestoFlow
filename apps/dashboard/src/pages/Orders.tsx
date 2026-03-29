@@ -10,20 +10,22 @@ export function Orders() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'LIVE' | 'HISTORY'>('LIVE');
 
-  const { data: liveOrders = [], isLoading } = useQuery({
+  const { data: liveOrders = [], isLoading } = useQuery<any[]>({
     queryKey: ['live-orders'],
     queryFn: async () => {
       const res = await api.get('/orders');
       return res.data;
-    }
+    },
+    staleTime: 1000 * 10,
   });
 
-  const { data: historyResponse } = useQuery({
+  const { data: historyResponse = [] } = useQuery<any[]>({
     queryKey: ['order-history'],
     queryFn: async () => {
       const res = await api.get('/orders/history');
       return res.data;
-    }
+    },
+    staleTime: 1000 * 30,
   });
 
   const statusMutation = useMutation({
@@ -86,7 +88,7 @@ export function Orders() {
   const pending = liveOrders.filter((o: any) => o.status === 'PENDING' || o.status === 'ACCEPTED');
   const preparing = liveOrders.filter((o: any) => o.status === 'PREPARING');
   const ready = liveOrders.filter((o: any) => o.status === 'READY');
-  const history = historyResponse?.data || [];
+  const history = historyResponse || [];
 
   const OrderCard = ({ order }: { order: any }) => {
     const [expanded, setExpanded] = useState(false);

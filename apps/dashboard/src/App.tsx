@@ -8,7 +8,7 @@ import { Onboarding } from './pages/Onboarding'
 import { Billing } from './pages/Billing'
 import { Admin } from './pages/Admin'
 import { LayoutDashboard, UtensilsCrossed, Receipt, CreditCard, LogIn } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useQueries } from '@tanstack/react-query'
 import { api } from './lib/api'
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, UserCircle2 } from 'lucide-react'
@@ -71,16 +71,26 @@ function DashboardShell() {
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
-  const { data: business, isLoading } = useQuery({
-    queryKey: ['settings-business'],
-    queryFn: async () => (await api.get('/settings/business')).data,
-    retry: false
+  const [businessQuery, billingQuery] = useQueries({
+    queries: [
+      {
+        queryKey: ['settings-business'],
+        queryFn: async () => (await api.get('/settings/business')).data,
+        retry: false,
+        staleTime: 1000 * 30,
+      },
+      {
+        queryKey: ['billing-summary'],
+        queryFn: async () => (await api.get('/billing')).data,
+        retry: false,
+        staleTime: 1000 * 30,
+      },
+    ],
   });
-  const { data: billing } = useQuery({
-    queryKey: ['billing-summary'],
-    queryFn: async () => (await api.get('/billing')).data,
-    retry: false
-  });
+
+  const business = businessQuery.data;
+  const billing = billingQuery.data;
+  const isLoading = businessQuery.isLoading || billingQuery.isLoading;
 
   useEffect(() => {
     const closeOnOutside = (event: MouseEvent) => {

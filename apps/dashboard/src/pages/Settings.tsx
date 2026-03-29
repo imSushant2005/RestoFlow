@@ -6,6 +6,7 @@ import { Save, Plus, Trash2 } from 'lucide-react';
 export function Settings() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'business' | 'staff' | 'qr'>('business');
+  const [successMessage, setSuccessMessage] = useState('');
 
   const { data: business, isLoading: loadingBusiness } = useQuery({
     queryKey: ['settings-business'],
@@ -16,7 +17,8 @@ export function Settings() {
     mutationFn: (data: any) => api.patch('/settings/business', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings-business'] });
-      alert('Business settings updated');
+      setSuccessMessage('Business settings updated successfully.');
+      window.setTimeout(() => setSuccessMessage(''), 3500);
     }
   });
 
@@ -43,6 +45,8 @@ export function Settings() {
     mutationFn: (data: any) => api.post('/settings/staff', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings-staff'] });
+      setSuccessMessage('Staff list updated successfully.');
+      window.setTimeout(() => setSuccessMessage(''), 3500);
     }
   });
 
@@ -67,8 +71,12 @@ export function Settings() {
 
   return (
     <div className="flex-1 p-8 bg-gray-50 overflow-y-auto w-full">
-      <h2 className="text-3xl font-bold tracking-tight text-gray-900 mb-8">System Settings</h2>
-      
+      <h2 className="text-3xl font-bold tracking-tight text-gray-900 mb-4">System Settings</h2>
+      {successMessage && (
+        <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 text-green-800 px-4 py-3 shadow-sm">
+          {successMessage}
+        </div>
+      )}
       <div className="flex gap-4 mb-8 border-b">
         <button className={`pb-4 px-2 font-semibold ${activeTab === 'business' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`} onClick={() => setActiveTab('business')}>Business Profile</button>
         <button className={`pb-4 px-2 font-semibold ${activeTab === 'staff' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`} onClick={() => setActiveTab('staff')}>Staff Management</button>
