@@ -9,7 +9,7 @@ const envSchema = z.object({
   PORT: z.string().default('4000'),
   DATABASE_URL: z.string().url("Valid Neon DB URL is required"),
   JWT_SECRET: z.string().min(16, "Must be at least 16 chars for secure signatures"),
-  REDIS_URL: z.string().optional().refine(val => !val || val.startsWith('redis://') || val.startsWith('rediss://'), { message: 'Must be a valid redis:// or rediss:// URL' }),
+  REDIS_URL: z.string().optional(),
   CLOUDINARY_URL: z.string().url("Cloudinary URL is required for file uploads").optional(),
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
