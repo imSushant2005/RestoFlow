@@ -16,15 +16,30 @@ const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus }: any) =
   const isOccupied = isGloballyOccupied || isAllSeatsTaken || table.orders?.length > 0;
   const isReserved = table.status === 'RESERVED';
   const isCleaning = table.status === 'CLEANING';
+  const isOrdering = table.status === 'ORDERING';
+  const isActiveMeal = table.status === 'ACTIVE_MEAL';
+  const isAwaitingBill = table.status === 'AWAITING_BILL';
 
   let statusColor = 'bg-white border-green-500 text-green-900 shadow-green-100';
   let badgeText = occupiedList.length > 0 ? 'Partially Full' : 'Available';
   let badgeColor = occupiedList.length > 0 ? 'bg-green-600 text-white' : 'bg-green-500 text-white';
   
   if (isReserved) {
-    statusColor = 'bg-white border-orange-400 text-orange-900 shadow-orange-100';
+    statusColor = 'bg-white border-purple-400 text-purple-900 shadow-purple-100';
     badgeText = 'Reserved';
-    badgeColor = 'bg-orange-400 text-white';
+    badgeColor = 'bg-purple-400 text-white';
+  } else if (isOrdering) {
+    statusColor = 'bg-blue-50 border-blue-500 text-blue-900 shadow-blue-100';
+    badgeText = 'Ordering...';
+    badgeColor = 'bg-blue-500 text-white animate-pulse';
+  } else if (isActiveMeal) {
+    statusColor = 'bg-orange-50 border-orange-500 text-orange-900 shadow-orange-100';
+    badgeText = 'Active Meal';
+    badgeColor = 'bg-orange-500 text-white';
+  } else if (isAwaitingBill) {
+    statusColor = 'bg-yellow-50 border-yellow-500 text-yellow-900 shadow-yellow-100';
+    badgeText = 'Awaiting Bill';
+    badgeColor = 'bg-yellow-500 text-white animate-pulse';
   } else if (isOccupied) {
     statusColor = 'bg-white border-red-500 text-red-900 shadow-red-100';
     badgeText = 'Occupied';

@@ -23,6 +23,8 @@ import billingRoutes from './routes/billing.routes';
 import paymentRoutes from './routes/payment.routes';
 import aiRoutes from './routes/ai.routes';
 import notificationRoutes from './routes/notification.routes';
+import customerRoutes from './routes/customer.routes';
+import sessionRoutes from './routes/session.routes';
 import { initSocket } from './socket';
 
 
@@ -72,6 +74,8 @@ app.use('/billing', billingRoutes);
 app.use('/payments', paymentRoutes);
 app.use('/ai', aiRoutes);
 app.use('/notifications', notificationRoutes);
+app.use('/customer', customerRoutes);
+app.use('/public', sessionRoutes);
 
 // Global Error Handler must be the LAST middleware
 app.use(globalErrorHandler);

@@ -95,49 +95,91 @@ export function Orders() {
     </div>
   );
 
-  const pending = liveOrders.filter((o: any) => o.status === 'PENDING' || o.status === 'ACCEPTED');
-  const preparing = liveOrders.filter((o: any) => o.status === 'PREPARING');
-  const ready = liveOrders.filter((o: any) => o.status === 'READY');
-  const history = historyResponse || [];
+  const groupedLive = Object.values(
+    liveOrders.reduce((acc: any, order: any) => {
+      const gId = order.diningSessionId || `single_${order.id}`;
+      if (!acc[gId]) {
+        acc[gId] = {
+          id: gId,
+          isSession: !!order.diningSessionId,
+          sessionId: order.diningSessionId,
+          session: order.diningSession,
+          table: order.table,
+          customerName: order.diningSession?.customer?.name || order.customerName,
+          customerPhone: order.diningSession?.customer?.phone || order.customerPhone,
+          orders: [],
+          createdAt: order.diningSession?.openedAt || order.createdAt,
+          totalAmount: 0
+        };
+      }
+      acc[gId].orders.push(order);
+      acc[gId].totalAmount += order.totalAmount;
+      return acc;
+    }, {})
+  ).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const OrderCard = ({ order }: { order: any }) => {
-    const [expanded, setExpanded] = useState(false);
+  const TicketCard = ({ ticket }: { ticket: any }) => {
+    const isCancelled = ticket.orders.every((o: any) => o.status === 'CANCELLED');
+    
+    const handleCloseSession = async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!confirm('Generate final bill and close this session?')) return;
+      try {
+        const slug = JSON.parse(localStorage.getItem('restaurant') || '{}').slug;
+        if (!slug) throw new Error("Tenant slug not found");
+        await api.post(`/public/${slug}/sessions/${ticket.sessionId}/finish`);
+        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+      } catch (err) {
+        alert('Failed to close session');
+      }
+    };
+
     return (
-      <div 
-        className={`border rounded-2xl shadow-sm p-5 flex flex-col gap-4 animate-in fade-in duration-300 cursor-pointer hover:shadow-md transition-all ${order.status === 'CANCELLED' ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100'}`}
-        onClick={() => setExpanded(!expanded)}
-      >
+      <div className={`border rounded-2xl shadow-sm p-5 flex flex-col gap-4 animate-in fade-in duration-300 ${isCancelled ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100'}`}>
         <div className="flex justify-between items-start">
           <div>
-            <span className="font-extrabold text-gray-900 text-lg block tracking-tight">{order.table ? `Table ${order.table.name}` : 'Takeaway'}</span>
-            <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">#{order.id.slice(-8)} • {format(new Date(order.createdAt), 'MMM d, h:mm a')}</span>
-            {(order.customerName || order.customerPhone) && (
+            <span className="font-extrabold text-gray-900 text-lg block tracking-tight">
+              {ticket.table ? `Table ${ticket.table.name}` : 'Takeaway'}
+              {ticket.session?.partySize > 1 ? ` • ${ticket.session.partySize} Guests` : ''}
+            </span>
+            <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">
+              {ticket.isSession ? 'SESSION TAB' : `#${ticket.orders[0].id.slice(-8)}`} • {format(new Date(ticket.createdAt), 'h:mm a')}
+            </span>
+            {(ticket.customerName || ticket.customerPhone) && (
               <div className="flex flex-col gap-0.5 mt-2 bg-blue-50/50 px-3 py-1.5 rounded-lg border border-blue-100/50">
-                {order.customerName && <span className="text-sm font-bold text-gray-800">{order.customerName}</span>}
-                {order.customerPhone && <span className="text-xs font-semibold text-gray-500">{order.customerPhone}</span>}
-              </div>
-            )}
-            {order.status === 'CANCELLED' && order.cancelReason && (
-              <div className="mt-2 text-xs font-bold text-red-700 bg-red-100 px-2 py-1.5 rounded border border-red-200">
-                Reason: {order.cancelReason}
+                {ticket.customerName && <span className="text-sm font-bold text-gray-800">{ticket.customerName}</span>}
+                {ticket.customerPhone && <span className="text-xs font-semibold text-gray-500">{ticket.customerPhone}</span>}
               </div>
             )}
           </div>
-          <span className="font-black text-blue-600 text-lg">{formatINR(order.totalAmount || 0)}</span>
+          <div className="text-right">
+            <span className="font-black text-blue-600 text-xl block">{formatINR(ticket.totalAmount || 0)}</span>
+            {ticket.isSession && (
+              <button 
+                onClick={handleCloseSession}
+                className="mt-2 text-xs font-bold bg-orange-100 text-orange-600 border border-orange-200 px-3 py-1.5 rounded-lg hover:bg-orange-200 transition-colors"
+              >
+                Close Session
+              </button>
+            )}
+          </div>
         </div>
 
-        {expanded && (
-          <div className="border-t border-gray-100 pt-3 mt-1" onClick={(e) => e.stopPropagation()}>
-            <ul className="flex flex-col gap-2 mb-4">
-              {order.items?.map((item: any) => (
-                <li key={item.id} className="text-sm text-gray-700">
-                  <span className="font-bold text-blue-600 mr-2">{item.quantity}x</span>
-                  <span className="font-medium text-gray-900">{item.menuItem?.name || 'Item'}</span>
-                  {item.specialNote && <div className="text-xs text-orange-500 italic ml-6 font-medium">Note: {item.specialNote}</div>}
-                </li>
-              ))}
-            </ul>
-            <div className="flex gap-2">
+        <div className="border-t border-gray-100 pt-3 mt-1 space-y-4">
+          {ticket.orders.map((order: any, idx: number) => (
+            <div key={order.id} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div className="flex justify-between mb-2">
+                <span className="text-xs font-black text-gray-500">ORDER {ticket.isSession ? `#${idx + 1}` : ''}</span>
+              </div>
+              <ul className="flex flex-col gap-1.5 mb-3">
+                {order.items?.map((item: any) => (
+                  <li key={item.id} className="text-sm text-gray-700 font-medium">
+                    <span className="font-bold text-blue-600 mr-2">{item.quantity}x</span>
+                    {item.menuItem?.name || 'Item'}
+                    {item.specialNote && <div className="text-xs text-orange-500 italic ml-6">Note: {item.specialNote}</div>}
+                  </li>
+                ))}
+              </ul>
               <select 
                 value={order.status}
                 onChange={(e) => {
@@ -150,18 +192,23 @@ export function Orders() {
                     statusMutation.mutate({ id: order.id, status: nextStatus });
                   }
                 }}
-                className="flex-1 bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-2.5 font-bold outline-none cursor-pointer"
+                className={`w-full text-xs rounded-lg font-bold border-0 ring-1 ring-inset px-3 py-2 outline-none cursor-pointer ${
+                  order.status === 'PENDING' ? 'bg-blue-50 text-blue-700 ring-blue-200' :
+                  order.status === 'PREPARING' ? 'bg-yellow-50 text-yellow-700 ring-yellow-200' :
+                  order.status === 'READY' ? 'bg-green-50 text-green-700 ring-green-200' :
+                  'bg-gray-100 text-gray-700 ring-gray-200'
+                }`}
               >
-                <option value="PENDING">Pending</option>
-                <option value="ACCEPTED">Accepted</option>
-                <option value="PREPARING">Preparing</option>
-                <option value="READY">Ready</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="CANCELLED">Cancelled</option>
+                <option value="PENDING">Status: Pending</option>
+                <option value="ACCEPTED">Status: Accepted</option>
+                <option value="PREPARING">Status: Preparing</option>
+                <option value="READY">Status: Ready</option>
+                <option value="COMPLETED">Status: Completed</option>
+                <option value="CANCELLED">Status: Cancelled</option>
               </select>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
     );
   };
@@ -237,45 +284,22 @@ export function Orders() {
       )}
       
       {activeTab === 'LIVE' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden">
-          <div className="flex flex-col bg-gray-50/50 rounded-3xl border border-gray-100 overflow-hidden">
-            <div className="bg-white p-4 border-b border-gray-100 flex justify-between items-center shadow-sm z-10">
-              <h2 className="font-bold text-gray-700 flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50"></div> Incoming</h2>
-              <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{pending.length}</span>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-              {pending.map((order: any) => <OrderCard key={order.id} order={order} />)}
-              {pending.length === 0 && <div className="m-auto text-gray-400 font-medium text-sm">No incoming orders</div>}
-            </div>
-          </div>
-
-          <div className="flex flex-col bg-gray-50/50 rounded-3xl border border-gray-100 overflow-hidden">
-            <div className="bg-white p-4 border-b border-gray-100 flex justify-between items-center shadow-sm z-10">
-              <h2 className="font-bold text-gray-700 flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-yellow-500 shadow-sm shadow-yellow-500/50"></div> Preparing</h2>
-              <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{preparing.length}</span>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-              {preparing.map((order: any) => <OrderCard key={order.id} order={order} />)}
-              {preparing.length === 0 && <div className="m-auto text-gray-400 font-medium text-sm">No orders preparing</div>}
-            </div>
-          </div>
-
-          <div className="flex flex-col bg-gray-50/50 rounded-3xl border border-gray-100 overflow-hidden">
-            <div className="bg-white p-4 border-b border-gray-100 flex justify-between items-center shadow-sm z-10">
-              <h2 className="font-bold text-gray-700 flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm shadow-green-500/50"></div> Ready</h2>
-              <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{ready.length}</span>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-              {ready.map((order: any) => <OrderCard key={order.id} order={order} />)}
-              {ready.length === 0 && <div className="m-auto text-gray-400 font-medium text-sm">No orders ready</div>}
-            </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50/50 p-6 rounded-3xl border border-gray-100">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+            {groupedLive.map((ticket: any) => <TicketCard key={ticket.id} ticket={ticket} />)}
+            {groupedLive.length === 0 && (
+              <div className="col-span-full flex flex-col items-center justify-center mt-20 opacity-50">
+                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-4"><span className="text-2xl">🍽️</span></div>
+                <p className="text-gray-500 font-bold text-lg">No active sessions or orders.</p>
+              </div>
+            )}
           </div>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50/50 p-6 rounded-3xl border border-gray-100">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {history.map((order: any) => <OrderCard key={order.id} order={order} />)}
-            {history.length === 0 && <div className="col-span-full text-center text-gray-400 font-medium mt-20">No completed or canceled orders yet.</div>}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+            {historyResponse.map((order: any) => <TicketCard key={`history_${order.id}`} ticket={{ ...order, isSession: false, orders: [order] }} />)}
+            {historyResponse.length === 0 && <div className="col-span-full text-center text-gray-400 font-medium mt-20">No completed orders yet.</div>}
           </div>
         </div>
       )}

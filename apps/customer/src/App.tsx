@@ -1,7 +1,12 @@
 import { Routes, Route } from 'react-router-dom'
 import { RestaurantHome } from './pages/RestaurantHome'
+import { LoginPage } from './pages/LoginPage'
+import { PartySizePage } from './pages/PartySizePage'
 import { Storefront } from './pages/Storefront'
 import { OrderStatus } from './pages/OrderStatus'
+import { SessionTracker } from './pages/SessionTracker'
+import { BillPage } from './pages/BillPage'
+import { HistoryPage } from './pages/HistoryPage'
 import { useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { get, set } from 'idb-keyval'
@@ -62,14 +67,32 @@ function App() {
     <div className="min-h-[100dvh] bg-gray-50 flex flex-col font-sans antialiased text-gray-900">
       <main className="flex-1 flex flex-col">
         <Routes>
-          {/* Restaurant Home — first screen after QR scan */}
-          <Route path="/order/:tenantSlug/:tableId" element={<RestaurantHome />} />
-          {/* Menu browsing */}
+          {/* === NEW SESSION FLOW === */}
+          {/* Step 1: QR Scan → Login (phone + name) */}
+          <Route path="/order/:tenantSlug/:tableId" element={<LoginPage />} />
+          
+          {/* Step 2: Party Size Selection */}
+          <Route path="/order/:tenantSlug/:tableId/party" element={<PartySizePage />} />
+          
+          {/* Step 3: Menu Browsing + Ordering */}
           <Route path="/order/:tenantSlug/:tableId/menu" element={<Storefront />} />
+          
+          {/* Step 4: Session Tracker (multi-order view + running bill) */}
+          <Route path="/order/:tenantSlug/session/:sessionId" element={<SessionTracker />} />
+          
+          {/* Step 5: Final Bill */}
+          <Route path="/order/:tenantSlug/session/:sessionId/bill" element={<BillPage />} />
+          
+          {/* Order History */}
+          <Route path="/order/:tenantSlug/history" element={<HistoryPage />} />
+          
+          {/* Legacy: Order Status (kept for backward compatibility) */}
+          <Route path="/order/:tenantSlug/status" element={<OrderStatus />} />
+          
           {/* Takeaway (no table) — skip home, go to storefront */}
           <Route path="/order/:tenantSlug" element={<Storefront />} />
-          {/* Order tracker */}
-          <Route path="/order/:tenantSlug/status" element={<OrderStatus />} />
+          
+          {/* Fallback */}
           <Route path="*" element={
             <div className="flex flex-col items-center justify-center min-h-[100dvh] text-center px-6 gap-4">
               <div className="text-5xl">📱</div>

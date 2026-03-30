@@ -12,6 +12,7 @@ export const getOrders = async (req: Request, res: Response) => {
       },
       include: {
         table: true,
+        diningSession: { include: { customer: true } },
         items: {
           include: {
             menuItem: true

@@ -95,7 +95,16 @@ export function Storefront() {
     );
   }
 
-  if (!customerName) {
+  // --- Auto-fill customer info from LoginPage session ---
+  const rfName = localStorage.getItem('rf_customer_name');
+  const rfPhone = localStorage.getItem('rf_customer_phone');
+  const activeSessionId = localStorage.getItem('rf_active_session');
+
+  if (!customerName && rfName && rfPhone) {
+    setCustomerInfo({ name: rfName, phone: rfPhone, type: 'DINE_IN', seat: seatParam || undefined });
+  }
+
+  if (!customerName && !rfName) {
     return (
       <div
         className="min-h-[100dvh] bg-white flex flex-col fade-in"
@@ -223,6 +232,20 @@ export function Storefront() {
         <meta name="description" content={`Order delicious food from ${restaurantName}. Browse our digital menu and order ahead.`} />
         <meta property="og:title" content={`${restaurantName} | RestoFlow`} />
       </Helmet>
+
+      {/* Session Banner */}
+      {activeSessionId && (
+        <div
+          onClick={() => navigate(`/order/${tenantSlug}/session/${activeSessionId}`)}
+          className="bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-2.5 flex justify-between items-center cursor-pointer hover:brightness-95 transition-all"
+        >
+          <span className="text-white text-xs font-black flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+            Session active • You can add more items anytime
+          </span>
+          <span className="text-white/80 text-xs font-bold">View Orders →</span>
+        </div>
+      )}
 
       <header ref={headerRef} className="bg-[color:var(--bg-secondary)] sticky top-0 z-30 border-b border-[color:var(--border-primary)] shadow-sm transition-colors duration-300">
         <div className="flex items-center justify-between px-5 py-3 gap-3">

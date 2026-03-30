@@ -48,10 +48,12 @@ model Tenant {
   zones           Zone[]
   orders          Order[]
   customerSessions CustomerSession[]
+  diningSessions  DiningSession[]
   offers          Offer[]
   reviews         Review[]
   staffInvites    StaffInvite[]
   analytics       DailyAnalytics[]
+  bills           Bill[]
 }
 
 // ─── USERS (Staff/Owners) ──────────────────────────────────
@@ -232,6 +234,7 @@ model Table {
   qrCodeUrl       String?     // stored QR image URL
   qrSecret        String      @unique @default(cuid()) // used to validate QR scan
   currentOrderId  String?     // FK to active Order (for quick lookup)
+  currentSessionId String?    // FK to active DiningSession
   isRoaming       Boolean     @default(false) // street vendor roaming table
   notes           String?
   createdAt       DateTime    @default(now())
@@ -239,6 +242,7 @@ model Table {
 
   orders          Order[]
   sessions        CustomerSession[]
+  diningSessions  DiningSession[]
 
   @@index([tenantId, status])
 }
@@ -265,6 +269,66 @@ model CustomerSession {
   @@index([tableId])
 }
 
+// ─── CUSTOMERS (Lightweight, for login + history) ─────────
+model Customer {
+  id          String    @id @default(cuid())
+  phone       String    @unique
+  name        String?
+  email       String?
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+
+  sessions    DiningSession[]
+  reviews     Review[]
+}
+
+// ─── DINING SESSIONS (Open Tab / Check) ───────────────────
+model DiningSession {
+  id              String         @id @default(cuid())
+  tenantId        String
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tableId         String?
+  table           Table?         @relation(fields: [tableId], references: [id])
+  customerId      String
+  customer        Customer       @relation(fields: [customerId], references: [id])
+  partySize       Int            @default(1)
+  sessionStatus   SessionStatus  @default(INITIATED)
+  source          String         @default("qr")
+  openedAt        DateTime       @default(now())
+  closedAt        DateTime?
+  isBillGenerated Boolean        @default(false)
+  billGeneratedAt DateTime?
+
+  orders          Order[]
+  bill            Bill?
+  review          Review?
+
+  @@index([tenantId, sessionStatus])
+  @@index([tableId])
+  @@index([customerId])
+}
+
+// ─── BILLS (Generated after session completion) ───────────
+model Bill {
+  id              String    @id @default(cuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId       String    @unique
+  session         DiningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  subtotal        Float
+  taxAmount       Float     @default(0)
+  serviceCharge   Float     @default(0)
+  discountAmount  Float     @default(0)
+  totalAmount     Float
+  paymentStatus   String    @default("UNPAID") // UNPAID | PAID | PARTIAL
+  paymentMethod   String?   // cash | upi | card
+  paidAt          DateTime?
+  generatedAt     DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([sessionId])
+}
+
 // ─── ORDERS ───────────────────────────────────────────────
 model Order {
   id                  String      @id @default(cuid())
@@ -274,9 +338,12 @@ model Order {
   table               Table?      @relation(fields: [tableId], references: [id])
   sessionId           String?
   session             CustomerSession? @relation(fields: [sessionId], references: [id])
+  diningSessionId     String?
+  diningSession       DiningSession?   @relation(fields: [diningSessionId], references: [id])
   orderNumber         String      // human-readable: "#SN7N3KJN" - unique per tenant
   orderType           OrderType   @default(DINE_IN) // DINE_IN | TAKEAWAY | ROAMING
   status              OrderStatus @default(PENDING)
+  placedBy            String      @default("customer") // customer | vendor
   
   // Pricing
   subtotal            Float       // sum of items before tax
@@ -298,7 +365,7 @@ model Order {
   cancelledAt         DateTime?
   cancellationReason  String?
   
-  // Payment
+  // Payment (legacy, bills handle this now for sessions)
   isPaid              Boolean     @default(false)
   paymentMethod       String?     // cash|upi|card
   paymentReference    String?
@@ -316,6 +383,7 @@ model Order {
   @@index([tenantId, tableId])
   @@index([tenantId, createdAt])
   @@index([sessionId])
+  @@index([diningSessionId])
 }
 
 model OrderItem {
@@ -343,12 +411,15 @@ model OrderItem {
 
 // ─── REVIEWS ──────────────────────────────────────────────
 model Review {
-  id            String    @id @default(cuid())
-  tenantId      String
-  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  orderId       String    @unique
-  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  sessionId     String?
+  id               String    @id @default(cuid())
+  tenantId         String
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orderId          String?   @unique
+  order            Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  diningSessionId  String?   @unique
+  diningSession    DiningSession? @relation(fields: [diningSessionId], references: [id])
+  customerId       String?
+  customer         Customer? @relation(fields: [customerId], references: [id])
   
   overallRating Int       // 1-5 stars
   foodRating    Int?      // 1-5
@@ -360,6 +431,7 @@ model Review {
 
   @@index([tenantId])
   @@index([orderId])
+  @@index([diningSessionId])
 }
 
 // ─── ANALYTICS (Daily Snapshots) ──────────────────────────
@@ -413,12 +485,29 @@ enum TableShape {
 enum TableStatus {
   AVAILABLE
   OCCUPIED
+  ORDERING
+  ACTIVE_MEAL
+  AWAITING_BILL
+  PAYMENT_PENDING
   RESERVED
   CLEANING
   BLOCKED
 }
 
+enum SessionStatus {
+  INITIATED
+  SEATED
+  ORDERING
+  KITCHEN_ACTIVE
+  AWAITING_COMPLETION
+  BILL_GENERATED
+  PAYMENT_PENDING
+  COMPLETED
+  CANCELLED
+}
+
 enum OrderStatus {
+  DRAFT
   PENDING
   ACCEPTED
   PREPARING
