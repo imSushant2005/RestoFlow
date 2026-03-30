@@ -5,13 +5,24 @@
 
 :root {
   --font-main: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --orange: #FF5000;
-  --orange-light: #FFF0EA;
+  --bg-primary: #FAFAFA;
+  --bg-secondary: #FFFFFF;
+  --text-primary: #111827;
+  --text-secondary: #6B7280;
+  --border-primary: #F3F4F6;
+}
+
+.dark {
+  --bg-primary: #0A0A0A;
+  --bg-secondary: #121212;
+  --text-primary: #F9FAFB;
+  --text-secondary: #9CA3AF;
+  --border-primary: #1F2937;
 }
 
 * { -webkit-tap-highlight-color: transparent; }
 html { scroll-behavior: smooth; }
-body { font-family: var(--font-main); background: #FAFAFA; }
+body { font-family: var(--font-main); background: var(--bg-primary); color: var(--text-primary); transition: background-color 0.3s ease, color 0.3s ease; }
 
 .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }

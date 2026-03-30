@@ -265,12 +265,21 @@ export const createOrder = async (req: Request, res: Response) => {
 
 export const getOrderInfo = async (req: Request, res: Response) => {
   try {
-    const { id, tenantSlug } = req.params;
+    const { id } = req.params;
+    
+    // Cache for 2 minutes since orders don't change status *that* frequently 
+    // and live updates are handled by Socket.io anyway.
+    const cacheKey = `order_info_${id}`;
+    const cachedOrder = await getCache(cacheKey);
+    if (cachedOrder) return res.json(cachedOrder);
+
     const order = await prisma.order.findUnique({
       where: { id },
       include: { table: true, items: { include: { menuItem: true } } }
     });
     if (!order) return res.status(404).json({ error: 'Order not found' });
+    
+    await setCache(cacheKey, order, 120);
     res.json(order);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch order' });
@@ -298,6 +307,11 @@ export const getSessionOrders = async (req: Request, res: Response) => {
     });
 
     const sessionIds = [...new Set([sessionToken, ...matchingSessions.map((session) => session.id)])];
+    
+    const cacheKey = `session_orders_${sessionToken}`;
+    const cachedOrders = await getCache(cacheKey);
+    if (cachedOrders) return res.json(cachedOrders);
+
     const orders = await prisma.order.findMany({
       where: {
         tenantId: tenant.id,
@@ -316,6 +330,7 @@ export const getSessionOrders = async (req: Request, res: Response) => {
       }))
     }));
     
+    await setCache(cacheKey, parsedOrders, 30); // 30-second cache
     res.json(parsedOrders);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch session orders' });

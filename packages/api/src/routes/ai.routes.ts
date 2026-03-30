@@ -9,5 +9,6 @@ router.post('/upsell', AIController.getUpsellRecommendations);
 
 // Strictly protected for authorized dashboard Administrators crafting the menus
 router.post('/generate-description', requireAuth, requireRole(['OWNER', 'MANAGER']), AIController.generateDescription);
+router.post('/process-image', requireAuth, requireRole(['OWNER', 'MANAGER']), AIController.processMenuImage);
 
 export default router;

@@ -1,10 +1,12 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { publicApi } from '../lib/api';
-import { ShoppingBag, UtensilsCrossed, Star, ChevronRight } from 'lucide-react';
+import { ShoppingBag, UtensilsCrossed, Star, ChevronRight, Moon, Sun } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
+import { useTheme } from '../context/ThemeContext';
 
 export function RestaurantHome() {
+  const { theme, toggleTheme } = useTheme();
   const { tenantSlug, tableId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -69,6 +71,14 @@ export function RestaurantHome() {
         )}
 
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+        <div className="absolute top-6 right-6 z-20">
+          <button 
+            onClick={toggleTheme}
+            className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20 text-white active:scale-95 transition-all"
+          >
+            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+          </button>
+        </div>
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full translate-y-1/2 -translate-x-1/4 pointer-events-none" />
 
         <div className="relative z-10 w-20 h-20 bg-white/20 backdrop-blur-sm rounded-3xl flex items-center justify-center mb-5 shadow-xl border border-white/30 overflow-hidden">

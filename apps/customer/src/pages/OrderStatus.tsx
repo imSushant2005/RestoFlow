@@ -58,7 +58,7 @@ export function OrderStatus() {
   const [tab, setTab] = useState<'TRACKING' | 'HISTORY'>('TRACKING');
   const sessionToken = localStorage.getItem('restoflow_session') || localStorage.getItem('dineflow_session');
 
-  const { data: orders = [], isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['session-orders', sessionToken, tenantSlug],
     queryFn: async () => {
       const res = await publicApi.get(`/${tenantSlug}/sessions/${sessionToken}/orders`);
@@ -68,6 +68,8 @@ export function OrderStatus() {
     refetchIntervalInBackground: true,
     staleTime: 1000,
   });
+
+  const orders = Array.isArray(data) ? data : [];
 
   useEffect(() => {
     if (!tenantSlug || !sessionToken) return;
@@ -166,30 +168,30 @@ export function OrderStatus() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 fade-in">
-      <div className="bg-white border-b border-gray-100 px-5 py-4 flex items-center gap-3 sticky top-0 z-10 shadow-sm">
-        <button onClick={() => navigate(-1)} className="w-9 h-9 flex items-center justify-center bg-gray-100 rounded-full text-gray-600 active:bg-gray-200">
+    <div className="min-h-screen bg-[color:var(--bg-primary)] text-[color:var(--text-primary)] pb-20 fade-in transition-colors duration-300">
+      <div className="bg-[color:var(--bg-secondary)] border-b border-[color:var(--border-primary)] px-5 py-4 flex items-center gap-3 sticky top-0 z-10 shadow-sm transition-colors duration-300">
+        <button onClick={() => navigate(-1)} className="w-9 h-9 flex items-center justify-center bg-[color:var(--bg-primary)] border border-[color:var(--border-primary)] rounded-full text-[color:var(--text-secondary)] active:bg-gray-200">
           <ArrowLeft size={18} />
         </button>
         <div className="min-w-0">
-          <h1 className="font-black text-gray-900 text-base">My Orders</h1>
-          <p className="text-xs text-gray-400 font-medium">
+          <h1 className="font-black text-[color:var(--text-primary)] text-base">My Orders</h1>
+          <p className="text-xs text-[color:var(--text-secondary)] font-medium">
             {activeOrders.length} active · {historyOrders.length} in history
           </p>
         </div>
       </div>
 
       <div className="max-w-md mx-auto px-4 py-6 flex flex-col gap-5">
-        <div className="grid grid-cols-2 gap-2 bg-gray-100 rounded-2xl p-1">
+        <div className="grid grid-cols-2 gap-2 bg-[color:var(--bg-primary)] border border-[color:var(--border-primary)] rounded-2xl p-1">
           <button
             onClick={() => setTab('TRACKING')}
-            className={`rounded-xl py-2.5 text-sm font-bold transition-colors ${tab === 'TRACKING' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+            className={`rounded-xl py-2.5 text-sm font-bold transition-all ${tab === 'TRACKING' ? 'bg-[color:var(--bg-secondary)] text-[color:var(--text-primary)] shadow-sm' : 'text-[color:var(--text-secondary)]'}`}
           >
             Tracking
           </button>
           <button
             onClick={() => setTab('HISTORY')}
-            className={`rounded-xl py-2.5 text-sm font-bold transition-colors ${tab === 'HISTORY' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+            className={`rounded-xl py-2.5 text-sm font-bold transition-all ${tab === 'HISTORY' ? 'bg-[color:var(--bg-secondary)] text-[color:var(--text-primary)] shadow-sm' : 'text-[color:var(--text-secondary)]'}`}
           >
             Order History
           </button>
@@ -205,34 +207,41 @@ export function OrderStatus() {
 
         {tab === 'TRACKING' && (
           <>
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-              <h2 className="font-black text-gray-900 text-lg mb-6 text-center">
+            <div className="bg-[color:var(--bg-secondary)] rounded-[32px] border border-[color:var(--border-primary)] shadow-xl shadow-gray-200/10 p-8 overflow-hidden relative">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-[color:var(--bg-primary)]">
+                <div 
+                  className="h-full bg-orange-500 transition-all duration-1000 ease-in-out"
+                  style={{ width: `${(currentStepIndex / (STEPS.length - 1)) * 100}%` }}
+                />
+              </div>
+
+              <h2 className="font-black text-[color:var(--text-primary)] text-xl mb-8 text-center mt-2">
                 {currentStepIndex === 0 && 'Waiting for the kitchen...'}
                 {currentStepIndex === 1 && 'Your food is being prepared'}
-                {currentStepIndex === 2 && 'Order is ready'}
-                {currentStepIndex === 3 && 'Order completed'}
+                {currentStepIndex === 2 && 'Order is ready to serve!'}
+                {currentStepIndex === 3 && 'Order completed!'}
               </h2>
-
+...
               <div className="relative flex justify-between items-start px-2">
-                <div className="absolute top-5 left-8 right-8 h-0.5 bg-gray-100 -z-10"></div>
-                <div
-                  className="absolute top-5 left-8 h-0.5 bg-orange-400 -z-10 transition-all duration-700 ease-out"
-                  style={{ width: `${(currentStepIndex / (STEPS.length - 1)) * (100 - 16)}%` }}
-                ></div>
-
                 {STEPS.map((step, idx) => {
                   const active = idx <= currentStepIndex;
                   const current = idx === currentStepIndex;
                   return (
-                    <div key={idx} className="flex flex-col items-center gap-2 w-14">
+                    <div key={idx} className="flex flex-col items-center gap-3 w-16 group">
                       <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${
-                          current ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/40 scale-110' : active ? 'bg-orange-100 text-orange-500' : 'bg-gray-100 text-gray-300'
+                        className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 transform ${
+                          current 
+                            ? 'bg-orange-500 text-white shadow-xl shadow-orange-500/40 scale-110 rotate-3' 
+                            : active 
+                              ? 'bg-orange-100 text-orange-600' 
+                              : 'bg-gray-50 text-gray-300'
                         }`}
                       >
                         {step.icon}
                       </div>
-                      <span className={`text-[10px] font-bold text-center leading-tight ${active ? 'text-orange-500' : 'text-gray-300'}`}>{step.label}</span>
+                      <span className={`text-[11px] font-black tracking-tight text-center leading-none ${active ? 'text-gray-900' : 'text-gray-300'}`}>
+                        {step.label}
+                      </span>
                     </div>
                   );
                 })}
@@ -325,28 +334,41 @@ export function OrderStatus() {
             )}
 
             {historyOrders.map((order: any) => (
-              <div key={order.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <div className="flex justify-between items-start mb-4 gap-3">
-                  <div className="min-w-0">
-                    <p className="font-black text-gray-900">Ticket #{String(order.orderNumber || order.id).replace('#', '').slice(-6).toUpperCase()}</p>
-                    <p className="text-xs text-gray-400 font-medium mt-0.5">
-                      {order.items?.length || 0} items · {order.table ? `Table ${order.table.name}` : 'Takeaway'}
+              <div key={order.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 relative overflow-hidden group hover:shadow-md transition-shadow">
+                <div className="absolute top-0 right-0 py-1 px-4 bg-gray-900 text-[10px] font-black text-white rounded-bl-xl tracking-widest uppercase">
+                  Receipt
+                </div>
+                
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                    <h4 className="font-black text-gray-900 text-lg leading-none">Order #{String(order.orderNumber || order.id).replace('#', '').slice(-6).toUpperCase()}</h4>
+                    <p className="text-xs text-gray-400 font-bold mt-1.5 flex items-center gap-1.5 uppercase tracking-wide">
+                      <Clock3 size={12} /> {new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase ${statusBadgeClass(order.status)}`}>
-                      {order.status}
-                    </span>
-                    <p className="font-black text-gray-900 text-base mt-2">{formatINR(order.totalAmount || 0)}</p>
+                  <div className={`px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest ${statusBadgeClass(order.status)}`}>
+                    {order.status}
                   </div>
                 </div>
-                <div className="text-xs font-medium text-gray-500 leading-relaxed border-t border-gray-50 pt-3 space-y-1">
-                  {Array.isArray(order.items) &&
-                    order.items.map((i: any) => (
-                      <p key={i.id}>
-                        {i.quantity}x {i.menuItem?.name || i.name}
-                      </p>
+
+                <div className="space-y-3 mb-6 relative">
+                  <div className="absolute -left-6 -right-6 top-0 border-t border-gray-50 border-dashed" />
+                  <div className="pt-4 space-y-2">
+                    {Array.isArray(order.items) && order.items.map((i: any) => (
+                      <div key={i.id} className="flex justify-between items-center text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-400 font-bold text-xs">{i.quantity}x</span>
+                          <span className="font-bold text-gray-700">{i.menuItem?.name || i.name}</span>
+                        </div>
+                        <span className="font-bold text-gray-900">{formatINR(i.totalPrice || 0)}</span>
+                      </div>
                     ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-5 border-t-2 border-gray-100 border-dashed">
+                  <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Grand Total</span>
+                  <span className="text-xl font-black text-gray-900">{formatINR(order.totalAmount || 0)}</span>
                 </div>
               </div>
             ))}

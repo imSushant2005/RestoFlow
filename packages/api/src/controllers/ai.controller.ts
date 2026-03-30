@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../db/prisma';
-import { generateItemDescription, analyzeCartForUpsell } from '../services/ai.service';
+import { generateItemDescription, analyzeCartForUpsell, extractMenuFromImage } from '../services/ai.service';
 import { getCache, setCache } from '../services/cache.service';
 import { logger } from '../utils/logger';
 
@@ -79,5 +79,22 @@ export const getUpsellRecommendations = async (req: Request, res: Response) => {
   } catch (error) {
     logger.error({ error }, 'Upsell Generation Controller Failed');
     res.status(500).json({ success: false, error: 'AI Recommendation Engine Failure' });
+  }
+};
+
+export const processMenuImage = async (req: Request, res: Response) => {
+  try {
+    const { image } = req.body; // base64
+    
+    if (!image) {
+      return res.status(400).json({ success: false, error: 'No image provided' });
+    }
+
+    const menuJson = await extractMenuFromImage(image);
+    
+    res.json({ success: true, menu: menuJson });
+  } catch (error: any) {
+    logger.error({ error }, 'Menu Image Process Controller Failed');
+    res.status(500).json({ success: false, error: error.message || 'AI Menu Extraction Failed' });
   }
 };

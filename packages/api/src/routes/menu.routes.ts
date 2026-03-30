@@ -15,5 +15,6 @@ router.put('/categories/reorder', requireRoles([UserRole.OWNER, UserRole.MANAGER
 router.get('/items', MenuController.getMenuItems);
 router.post('/items', requireRoles([UserRole.OWNER, UserRole.MANAGER]), MenuController.createMenuItem);
 router.patch('/items/:id/availability', requireRoles([UserRole.OWNER, UserRole.MANAGER, UserRole.STAFF, UserRole.KITCHEN]), MenuController.toggleItemAvailability);
+router.post('/bulk-import', requireRoles([UserRole.OWNER, UserRole.MANAGER]), MenuController.bulkImportMenu);
 
 export default router;

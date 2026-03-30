@@ -199,7 +199,7 @@ export function Storefront() {
 
   return (
     <div
-      className="flex flex-col min-h-screen bg-gray-50"
+      className="flex flex-col min-h-screen bg-[color:var(--bg-primary)] text-[color:var(--text-primary)] transition-colors duration-300"
       style={
         {
           '--brand': brandColor,
@@ -222,10 +222,10 @@ export function Storefront() {
         <meta property="og:title" content={`${restaurantName} | RestoFlow`} />
       </Helmet>
 
-      <header ref={headerRef} className="bg-white sticky top-0 z-30 border-b border-gray-100 shadow-sm">
+      <header ref={headerRef} className="bg-[color:var(--bg-secondary)] sticky top-0 z-30 border-b border-[color:var(--border-primary)] shadow-sm transition-colors duration-300">
         <div className="flex items-center justify-between px-5 py-3 gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-[color:var(--brand-soft)] border border-white/50 overflow-hidden flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-[color:var(--brand-soft)] border border-[color:var(--border-primary)] overflow-hidden flex items-center justify-center flex-shrink-0">
               {logoUrl ? (
                 <img src={logoUrl} alt={`${restaurantName} logo`} className="w-full h-full object-cover" loading="lazy" />
               ) : (
@@ -248,12 +248,12 @@ export function Storefront() {
         </div>
 
         <div className="px-5 pb-3">
-          <label className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
-            <Search size={16} className="text-gray-400" />
+          <label className="flex items-center gap-2 rounded-xl border border-[color:var(--border-primary)] bg-[color:var(--bg-primary)] px-3 py-2.5">
+            <Search size={16} className="text-[color:var(--text-secondary)]" />
             <input
               value={searchText}
               onChange={(e) => startTransition(() => setSearchText(e.target.value))}
-              className="w-full bg-transparent outline-none text-sm font-medium text-gray-700 placeholder:text-gray-400"
+              className="w-full bg-transparent outline-none text-sm font-medium text-[color:var(--text-primary)] placeholder:text-[color:var(--text-secondary)]"
               placeholder="Search dishes..."
             />
           </label>

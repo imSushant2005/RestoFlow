@@ -7,6 +7,8 @@ import { BrowserRouter } from 'react-router-dom'
 import { HelmetProvider } from 'react-helmet-async'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 
+import { ThemeProvider } from './context/ThemeContext'
+
 const queryClient = new QueryClient()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -14,9 +16,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <AppErrorBoundary>
       <HelmetProvider>
         <QueryClientProvider client={queryClient}>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
+          <ThemeProvider>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </ThemeProvider>
         </QueryClientProvider>
       </HelmetProvider>
     </AppErrorBoundary>

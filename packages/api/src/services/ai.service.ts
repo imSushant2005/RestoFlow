@@ -41,7 +41,7 @@ Valid Example Output:
 ["Garlic Naan", "Mint Mojito"]`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-1.5-flash',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -53,5 +53,63 @@ Valid Example Output:
   } catch (error) {
     logger.error({ error }, 'AI Generative Upsell Engine failed');
     return [];
+  }
+};
+
+export const extractMenuFromImage = async (base64Image: string): Promise<any> => {
+  if (!ai) throw new Error('AI Engine not initialized. GEMINI_API_KEY missing.');
+  try {
+    const prompt = `You are a high-accuracy restaurant menu digitizer. Extract all categories and menu items from this image and return them as a valid, strictly structured JSON object.
+    
+The JSON must follow this exact structure:
+{
+  "categories": [
+    {
+      "name": "Category Name (e.g. Starters, Main Course)",
+      "items": [
+        {
+          "name": "Dish Name",
+          "description": "Short description if available",
+          "price": 299,
+          "isVeg": true/false
+        }
+      ]
+    }
+  ]
+}
+
+- Prices must be plain numbers (do not include currency symbols).
+- If currency is not clear, assume INR.
+- If description is missing, keep it an empty string.
+- Identify "Veg" vs "Non-Veg" from icons or names if possible.
+- Group items logically by their physical sections on the menu.
+- Return ONLY the raw JSON object. No Markdown. No comments.`;
+
+    const result = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: "image/jpeg",
+                data: base64Image.split(',')[1] || base64Image
+              }
+            }
+          ]
+        }
+      ],
+      config: {
+        responseMimeType: "application/json",
+      }
+    });
+
+    const text = result.text;
+    return JSON.parse(text || '{}');
+  } catch (error) {
+    logger.error({ error }, 'AI Menu Extraction failed');
+    throw error;
   }
 };

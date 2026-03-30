@@ -13,6 +13,7 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
   const { items, addItem, removeItem, updateQuantity, clearCart, getCartTotal, tableSeat, customerName, customerPhone } =
     useCartStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const safeItems = Array.isArray(items) ? items : [];
 
@@ -69,8 +70,12 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
       if (!navigator.onLine) throw new Error('Network Error');
       await publicApi.post(`/${tenantSlug}/orders`, payload);
       clearCart();
-      onClose();
-      navigate(`/order/${tenantSlug}/status`);
+      setShowSuccess(true);
+      setTimeout(() => {
+        onClose();
+        setShowSuccess(false);
+        navigate(`/order/${tenantSlug}/status`);
+      }, 2000);
     } catch (error: any) {
       if (!navigator.onLine || error.message === 'Network Error') {
         const queue: any[] = (await get('offline_orders')) || [];
@@ -98,10 +103,22 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
 
   return (
     <div className="fixed inset-0 z-[100]" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[4px] transition-all" />
+
+      {showSuccess && (
+        <div className="absolute inset-0 z-[110] flex items-center justify-center bg-brand/90 backdrop-blur-md fade-in">
+          <div className="flex flex-col items-center gap-4 text-white text-center">
+            <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center scale-up shadow-2xl border border-white/30">
+              <Sparkles size={48} className="text-white" />
+            </div>
+            <h3 className="text-3xl font-black tracking-tight">Order Placed!</h3>
+            <p className="font-bold opacity-90">Kitchen is firing up your food</p>
+          </div>
+        </div>
+      )}
 
       <div
-        className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[28px] shadow-2xl slide-up flex flex-col"
+        className="absolute bottom-0 left-0 right-0 bg-[color:var(--bg-secondary)] text-[color:var(--text-primary)] rounded-t-[32px] shadow-2xl slide-up flex flex-col transition-colors duration-300"
         style={{ maxHeight: '90dvh' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -136,7 +153,7 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
                 const modifiers = Array.isArray(item?.modifiers) ? item.modifiers : [];
                 return (
                   <div key={item?.id || `${item?.menuItem?.id || 'item'}-${index}`} className="py-4 flex gap-3 items-start">
-                    <div className="w-16 h-16 rounded-xl bg-gray-100 flex-shrink-0 overflow-hidden">
+                    <div className="w-16 h-16 rounded-xl bg-[color:var(--bg-primary)] border border-[color:var(--border-primary)] flex-shrink-0 overflow-hidden">
                       {imageUrl ? (
                         <img src={imageUrl} alt={item?.menuItem?.name || 'Item'} loading="lazy" className="w-full h-full object-cover" />
                       ) : (
@@ -208,17 +225,17 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
         </div>
 
         {safeItems.length > 0 && (
-          <div className="px-5 pb-6 pt-4 border-t border-gray-100 bg-white" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
+          <div className="px-5 pb-6 pt-4 border-t border-[color:var(--border-primary)] bg-[color:var(--bg-secondary)]" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
             <div className="flex justify-between items-center mb-4">
-              <span className="text-gray-500 font-semibold">Total</span>
-              <span className="text-2xl font-black text-gray-900">{formatINR(getCartTotal())}</span>
+              <span className="text-[color:var(--text-secondary)] font-semibold">Total</span>
+              <span className="text-2xl font-black text-[color:var(--text-primary)]">{formatINR(getCartTotal())}</span>
             </div>
             <button
               onClick={handleCheckout}
-              disabled={isSubmitting}
+              disabled={isSubmitting || showSuccess}
               className="w-full bg-brand hover:bg-brand-dark active:scale-[0.98] text-white py-4 rounded-2xl font-black text-base shadow-lg disabled:opacity-60 transition-all"
             >
-              {isSubmitting ? 'Placing Order...' : `Place Order · ${totalItems} item${totalItems !== 1 ? 's' : ''}`}
+              {isSubmitting ? 'Placing Order...' : showSuccess ? 'Success!' : `Place Order · ${totalItems} item${totalItems !== 1 ? 's' : ''}`}
             </button>
           </div>
         )}
