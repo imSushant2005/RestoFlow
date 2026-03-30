@@ -5,10 +5,13 @@ import { io } from 'socket.io-client';
 import { format } from 'date-fns';
 import { formatINR } from '../lib/currency';
 import { getSocketUrl } from '../lib/network';
+import { Hand, Receipt, HelpCircle, Zap, XCircle } from 'lucide-react';
 
 export function Orders() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'LIVE' | 'HISTORY'>('LIVE');
+  const [busyMode, setBusyMode] = useState(false);
+  const [waiterCalls, setWaiterCalls] = useState<any[]>([]);
 
   const { data: liveOrders = [], isLoading } = useQuery<any[]>({
     queryKey: ['live-orders'],
@@ -65,6 +68,13 @@ export function Orders() {
         queryClient.invalidateQueries({ queryKey: ['order-history'] });
         queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
       }
+    });
+
+    // USP 10: Waiter call alerts
+    socket.on('waiter:call', (call: any) => {
+      setWaiterCalls(prev => [{ ...call, id: Date.now() }, ...prev].slice(0, 10));
+      // Play sound
+      try { new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczLjt0otf/mGEcFkl/sOLbfTcRJWuY1OOURBcRUIC06M1xKRAna6DM5aRaGhhAhb3e0okyDDBwpN77jl0ZJGqk2P+hXxcTRYe84tN5LQ0nbaXb+5JYGSNqpND/pFkUFEmIvuPXeS0NLW6m3v6SVxokZaXR/6RYGRUAAA==').play(); } catch {}  
     });
 
     return () => { socket.disconnect() };
@@ -158,23 +168,73 @@ export function Orders() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto h-[calc(100vh-theme(spacing.16))] overflow-hidden flex flex-col">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Active Operations</h1>
-        <div className="flex bg-gray-100 p-1.5 rounded-xl border border-gray-200">
-          <button 
-            onClick={() => setActiveTab('LIVE')}
-            className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'LIVE' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-4">
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Active Operations</h1>
+          {busyMode && (
+            <span className="flex items-center gap-1.5 bg-red-100 text-red-600 px-3 py-1 rounded-full text-xs font-black animate-pulse">
+              <Zap size={12} /> BUSY MODE
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setBusyMode(!busyMode)}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${
+              busyMode ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
           >
-            Live Kitchen
+            <Zap size={14} /> {busyMode ? 'Busy ON' : 'Busy Mode'}
           </button>
-          <button 
-            onClick={() => setActiveTab('HISTORY')}
-            className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'HISTORY' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+          <button
+            onClick={() => {
+              if (confirm('Close ALL live orders? This will mark them as Completed.')) {
+                liveOrders.forEach((o: any) => statusMutation.mutate({ id: o.id, status: 'COMPLETED' }));
+              }
+            }}
+            disabled={liveOrders.length === 0}
+            className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200 disabled:opacity-40 flex items-center gap-2 transition-all"
           >
-            Order History
+            <XCircle size={14} /> Close All
           </button>
+          <div className="flex bg-gray-100 p-1.5 rounded-xl border border-gray-200">
+            <button 
+              onClick={() => setActiveTab('LIVE')}
+              className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'LIVE' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+            >
+              Live Kitchen
+            </button>
+            <button 
+              onClick={() => setActiveTab('HISTORY')}
+              className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'HISTORY' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+            >
+              Order History
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Waiter Call Alerts */}
+      {waiterCalls.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {waiterCalls.slice(0, 3).map((call) => (
+            <div key={call.id} className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 animate-in slide-in-from-top-2">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center">
+                  {call.type === 'BILL' ? <Receipt size={16} /> : call.type === 'HELP' ? <HelpCircle size={16} /> : <Hand size={16} />}
+                </div>
+                <div>
+                  <p className="font-bold text-amber-900 text-sm">
+                    {call.type === 'BILL' ? 'Bill Requested' : call.type === 'HELP' ? 'Help Needed' : 'Waiter Called'}
+                  </p>
+                  <p className="text-xs text-amber-600">Table: {call.tableName} • {new Date(call.timestamp).toLocaleTimeString()}</p>
+                </div>
+              </div>
+              <button onClick={() => setWaiterCalls(prev => prev.filter(c => c.id !== call.id))} className="text-amber-400 hover:text-amber-600 p-1">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
       
       {activeTab === 'LIVE' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden">

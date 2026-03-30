@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { publicApi } from '../lib/api';
 import { useEffect, useMemo, useState } from 'react';
 import { io } from 'socket.io-client';
-import { ArrowLeft, Star, CheckCircle2, Clock3, ChefHat, Bell, PlusCircle } from 'lucide-react';
+import { ArrowLeft, Star, CheckCircle2, Clock3, ChefHat, Bell, PlusCircle, Share2, Timer } from 'lucide-react';
 import { formatINR } from '../lib/currency';
 import { getSocketUrl } from '../lib/network';
 
@@ -98,6 +98,26 @@ export function OrderStatus() {
 
   const activeOrders = useMemo(() => orders.filter((o: any) => isActiveOrder(o.status)), [orders]);
   const historyOrders = useMemo(() => orders.filter((o: any) => !isActiveOrder(o.status)), [orders]);
+
+  // USP 4: ETA calculation
+  const getETA = (order: any) => {
+    if (!order?.createdAt || order.status === 'READY' || order.status === 'COMPLETED') return null;
+    const items = Array.isArray(order.items) ? order.items : [];
+    const totalPrepMin = items.reduce((sum: number, i: any) => sum + (Number(i?.menuItem?.prepTimeMinutes) || 8), 0);
+    const avgPrepMin = items.length > 0 ? Math.ceil(totalPrepMin / items.length) + Math.min(items.length * 2, 10) : 15;
+    const orderTime = new Date(order.createdAt).getTime();
+    const etaTime = orderTime + avgPrepMin * 60 * 1000;
+    const remainingMs = etaTime - Date.now();
+    return Math.max(0, Math.ceil(remainingMs / 60000));
+  };
+
+  // USP 6: WhatsApp receipt
+  const shareWhatsApp = (order: any) => {
+    const items = Array.isArray(order.items) ? order.items : [];
+    const itemLines = items.map((i: any) => `- ${i?.name || 'Item'} x${i?.quantity || 1}`).join('\n');
+    const msg = `🍽 *RestoFlow Order*\n\nOrder: ${order.orderNumber || ''}\nTable: ${order.table?.name || 'N/A'}\n\n${itemLines}\n\n*Total: ${formatINR(order.totalAmount || 0)}*\n\nThank you! 🙏`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  };
   const latestCompletedWithoutReview = useMemo(
     () => historyOrders.find((o: any) => o.status === 'COMPLETED' && !o.hasReview),
     [historyOrders],
@@ -111,6 +131,7 @@ export function OrderStatus() {
 
   const statusesLive = activeOrders.length > 0 ? activeOrders : historyOrders.filter((o: any) => o.status === 'COMPLETED');
   const currentStepIndex = statusesLive.length > 0 ? Math.max(...statusesLive.map((o: any) => getStepIndex(o.status))) : 0;
+  const latestOrder = activeOrders[0] || historyOrders[0] || null;
   const trackingTotal = activeOrders.reduce((sum: number, o: any) => sum + Number(o.totalAmount || 0), 0);
   const historyTotal = historyOrders.reduce((sum: number, o: any) => sum + Number(o.totalAmount || 0), 0);
 
@@ -215,12 +236,25 @@ export function OrderStatus() {
                 />
               </div>
 
-              <h2 className="font-black text-[color:var(--text-primary)] text-xl mb-8 text-center mt-2">
+              <h2 className="font-black text-[color:var(--text-primary)] text-xl mb-2 text-center mt-2">
                 {currentStepIndex === 0 && 'Waiting for the kitchen...'}
                 {currentStepIndex === 1 && 'Your food is being prepared'}
                 {currentStepIndex === 2 && 'Order is ready to serve!'}
                 {currentStepIndex === 3 && 'Order completed!'}
               </h2>
+
+              {/* ETA Timer */}
+              {latestOrder && getETA(latestOrder) !== null && getETA(latestOrder)! > 0 && currentStepIndex < 2 && (
+                <div className="flex items-center justify-center gap-2 mb-6 text-orange-600">
+                  <Timer size={16} className="animate-pulse" />
+                  <span className="text-sm font-black">~{getETA(latestOrder)} min remaining</span>
+                </div>
+              )}
+              {latestOrder && (getETA(latestOrder) === 0 || currentStepIndex >= 2) && currentStepIndex < 3 && (
+                <div className="flex items-center justify-center gap-2 mb-6 text-emerald-600">
+                  <span className="text-sm font-black">🔥 Almost there!</span>
+                </div>
+              )}
 ...
               <div className="relative flex justify-between items-start px-2">
                 {STEPS.map((step, idx) => {
@@ -278,6 +312,22 @@ export function OrderStatus() {
                         {i.quantity}x {i.menuItem?.name || i.name}
                       </p>
                     ))}
+                </div>
+                {/* ETA + Share */}
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
+                  {getETA(order) !== null && getETA(order)! > 0 ? (
+                    <span className="text-xs font-black text-orange-500 flex items-center gap-1">
+                      <Timer size={12} /> ~{getETA(order)} min
+                    </span>
+                  ) : (
+                    <span className="text-xs font-black text-emerald-500">Ready soon!</span>
+                  )}
+                  <button
+                    onClick={() => shareWhatsApp(order)}
+                    className="flex items-center gap-1.5 text-xs font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-full hover:bg-green-100 transition-colors"
+                  >
+                    <Share2 size={12} /> WhatsApp
+                  </button>
                 </div>
               </div>
             ))}

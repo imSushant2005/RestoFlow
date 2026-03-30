@@ -367,3 +367,32 @@ export const submitFeedback = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to submit feedback' });
   }
 };
+
+export const waiterCall = async (req: Request, res: Response) => {
+  try {
+    const { tenantSlug } = req.params;
+    const { tableId, type } = req.body; // type: WAITER | BILL | HELP
+
+    const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (!tenant) return res.status(404).json({ error: 'Restaurant not found' });
+
+    let tableName = 'Unknown';
+    if (tableId) {
+      const table = await prisma.table.findUnique({ where: { id: tableId } });
+      if (table) tableName = table.name;
+    }
+
+    // Emit to dashboard and KDS via Socket.io
+    getIO().to(getTenantRoom(tenant.id)).emit('waiter:call', {
+      tableId,
+      tableName,
+      type: type || 'WAITER',
+      timestamp: new Date().toISOString(),
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('waiterCall error:', error);
+    res.status(500).json({ error: 'Failed to send waiter call' });
+  }
+};

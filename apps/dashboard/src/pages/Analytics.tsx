@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { api } from '../lib/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell, FunnelChart, Funnel, LabelList } from 'recharts';
-import { Download, TrendingUp } from 'lucide-react';
+import { Download, TrendingUp, Lightbulb, TrendingDown, Clock, AlertTriangle } from 'lucide-react';
 import { formatINR } from '../lib/currency';
 
 export function Analytics() {
@@ -25,6 +26,52 @@ export function Analytics() {
     a.click();
   };
 
+  // USP 7: Rule-based Smart Insights (Zero AI)
+  const insights = useMemo(() => {
+    if (!data) return [];
+    const tips: { icon: React.ReactNode; text: string; type: 'warning' | 'tip' | 'info' }[] = [];
+
+    // Peak hour detection
+    if (data.peakHours?.length > 0) {
+      const peak = [...data.peakHours].sort((a: any, b: any) => b.count - a.count)[0];
+      if (peak) tips.push({ icon: <Clock size={16} />, text: `Peak hour is ${peak.hour} with ${peak.count} orders. Consider adding extra staff during this window.`, type: 'info' });
+    }
+
+    // Low performers
+    if (data.topItems?.length > 3) {
+      const lowest = data.topItems[data.topItems.length - 1];
+      if (lowest?.count < 5) {
+        tips.push({ icon: <TrendingDown size={16} />, text: `"${lowest.name}" has only ${lowest.count} orders. Consider a combo deal or removing it.`, type: 'warning' });
+      }
+    }
+
+    // Conversion rate
+    if (data.summary?.conversionRate < 30) {
+      tips.push({ icon: <AlertTriangle size={16} />, text: `Conversion rate is ${data.summary.conversionRate}%. Add item photos and descriptions to boost orders.`, type: 'warning' });
+    } else if (data.summary?.conversionRate > 60) {
+      tips.push({ icon: <TrendingUp size={16} />, text: `Excellent ${data.summary.conversionRate}% conversion! Your menu is performing above industry average.`, type: 'tip' });
+    }
+
+    // Revenue trend
+    if (data.revenueChart?.length >= 7) {
+      const recent = data.revenueChart.slice(-3);
+      const older = data.revenueChart.slice(-7, -3);
+      const recentAvg = recent.reduce((s: number, r: any) => s + r.revenue, 0) / recent.length;
+      const olderAvg = older.reduce((s: number, r: any) => s + r.revenue, 0) / Math.max(older.length, 1);
+      if (recentAvg < olderAvg * 0.7) {
+        tips.push({ icon: <TrendingDown size={16} />, text: `Revenue dropped ~${Math.round((1 - recentAvg / olderAvg) * 100)}% in the last 3 days vs prior period. Consider promotions.`, type: 'warning' });
+      }
+    }
+
+    // Top item insight
+    if (data.topItems?.[0]) {
+      const topItem = data.topItems[0];
+      tips.push({ icon: <Lightbulb size={16} />, text: `"${topItem.name}" is your #1 seller (${topItem.count} orders, ${formatINR(topItem.revenue)}). Feature it prominently!`, type: 'tip' });
+    }
+
+    return tips;
+  }, [data]);
+
   if (isLoading || !data) return <div className="p-8 text-gray-500 text-xl font-medium animate-pulse">Loading Analytics Data...</div>;
 
   return (
@@ -38,6 +85,29 @@ export function Analytics() {
           <Download size={18} strokeWidth={2.5} /> Export CSV
         </button>
       </div>
+
+      {/* USP 7: Smart Insights */}
+      {insights.length > 0 && (
+        <div className="mb-8 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 rounded-2xl p-6">
+          <h3 className="font-black text-indigo-900 text-lg mb-4 flex items-center gap-2">
+            <Lightbulb size={20} className="text-indigo-600" />
+            Smart Insights
+            <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold uppercase">Auto-generated</span>
+          </h3>
+          <div className="space-y-3">
+            {insights.map((insight, idx) => (
+              <div key={idx} className={`flex items-start gap-3 p-3 rounded-xl ${
+                insight.type === 'warning' ? 'bg-amber-50 text-amber-800' :
+                insight.type === 'tip' ? 'bg-emerald-50 text-emerald-800' :
+                'bg-blue-50 text-blue-800'
+              }`}>
+                <div className="mt-0.5 flex-shrink-0">{insight.icon}</div>
+                <p className="text-sm font-semibold">{insight.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-center transition-shadow hover:shadow-md">

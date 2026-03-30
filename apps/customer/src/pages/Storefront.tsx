@@ -3,6 +3,8 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { publicApi } from '../lib/api';
 import { MenuSection } from '../components/MenuSection';
 import { CartDrawer } from '../components/CartDrawer';
+import { WaiterCall } from '../components/WaiterCall';
+import { LoyaltyBanner } from '../components/LoyaltyBanner';
 import { formatINR } from '../lib/currency';
 import { Utensils, UtensilsCrossed, Package, ArrowLeft, Search } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
@@ -273,6 +275,10 @@ export function Storefront() {
       </header>
 
       <div className="flex-1 pb-32">
+        {/* Loyalty Banner */}
+        <div className="pt-4">
+          <LoyaltyBanner tenantSlug={tenantSlug || ''} />
+        </div>
         <div className="px-4 py-5 space-y-10">
           {filteredCategories.map((category: any, index: number) => (
             <div key={category?.id || `category-${index}`} id={`category-${category?.id}`} className="scroll-mt-28">
@@ -310,6 +316,7 @@ export function Storefront() {
       )}
 
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} tenantSlug={tenantSlug!} tableId={tableId} />
+      <WaiterCall tenantSlug={tenantSlug || ''} tableId={tableId} />
     </div>
   );
 }
