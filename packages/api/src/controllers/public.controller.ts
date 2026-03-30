@@ -350,7 +350,7 @@ export const submitFeedback = async (req: Request, res: Response) => {
       data: {
         tenantId: order.tenantId,
         orderId: order.id,
-        sessionId: order.sessionId,
+        diningSessionId: order.diningSessionId,
         overallRating: rating,
         comment: feedback,
       }
