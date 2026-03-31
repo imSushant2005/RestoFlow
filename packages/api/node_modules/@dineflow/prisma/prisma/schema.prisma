@@ -305,7 +305,8 @@ model DiningSession {
   bill            Bill?
   review          Review?
 
-  @@index([tenantId, sessionStatus])
+  @@index([tenantId, sessionStatus, tableId])
+  @@index([tenantId, source])
   @@index([tableId])
   @@index([customerId])
 }
@@ -394,9 +395,9 @@ model Order {
   items               OrderItem[]
   review              Review?
 
-  @@index([tenantId, status])
-  @@index([tenantId, tableId])
-  @@index([tenantId, createdAt])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, tableId, status])
+  @@index([tenantId, orderNumber])
   @@index([sessionId])
   @@index([diningSessionId])
 }

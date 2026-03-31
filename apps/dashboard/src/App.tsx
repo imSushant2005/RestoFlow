@@ -7,18 +7,21 @@ import { Settings } from './pages/Settings'
 import { Onboarding } from './pages/Onboarding'
 import { Billing } from './pages/Billing'
 import { Admin } from './pages/Admin'
-import { LayoutDashboard, UtensilsCrossed, Receipt, CreditCard, LogIn } from 'lucide-react'
+import {
+  LayoutDashboard, UtensilsCrossed, Receipt, CreditCard, LogIn,
+  BarChart3, Settings2, ChevronRight, Store, Loader2
+} from 'lucide-react'
 import { useQueries } from '@tanstack/react-query'
 import { api } from './lib/api'
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, UserCircle2 } from 'lucide-react'
 
-// Simple login gate for the dashboard prototype
+/* ─── Login Page ──────────────────────────────────────────── */
 function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [shake, setShake] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,62 +32,132 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
       localStorage.setItem('accessToken', res.data.accessToken);
       onLogin();
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed. Check your credentials.');
+      setError(err.response?.data?.error || 'Invalid credentials. Please try again.');
+      setShake(true);
+      setTimeout(() => setShake(false), 600);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
-        <div className="bg-blue-600 p-8 text-white">
-          <h1 className="text-3xl font-black tracking-tighter">RESTOFLOW</h1>
-          <p className="opacity-80 mt-1 font-medium">Sign in to your vendor dashboard</p>
+    <div className="min-h-screen flex bg-slate-950">
+      {/* Left Brand Panel */}
+      <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center relative overflow-hidden px-16 py-12"
+        style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #2563eb 100%)' }}>
+        <div className="absolute inset-0" style={{ background: 'radial-gradient(circle at 30% 70%, rgba(99,102,241,0.3) 0%, transparent 60%)' }} />
+        <div className="absolute inset-0" style={{ background: 'radial-gradient(circle at 80% 20%, rgba(16,185,129,0.15) 0%, transparent 50%)' }} />
+        
+        <div className="relative z-10 text-white text-center">
+          <div className="w-20 h-20 bg-white/10 backdrop-blur-sm rounded-3xl flex items-center justify-center mx-auto mb-8 float border border-white/20">
+            <UtensilsCrossed size={36} className="text-white" />
+          </div>
+          <h1 className="text-5xl font-black tracking-tight mb-3" style={{ fontFamily: 'Space Grotesk, Inter, sans-serif' }}>
+            RestoFlow
+          </h1>
+          <p className="text-blue-200 text-lg font-medium mb-12">The modern restaurant OS</p>
+
+          <div className="space-y-4 text-left w-full max-w-sm">
+            {[
+              { icon: '🍽️', title: 'Table Session Management', desc: 'Intelligent open-ticket system' },
+              { icon: '📊', title: 'Real-time order pipeline', desc: 'CRM-grade live operations' },
+              { icon: '🧾', title: 'GST-compliant billing', desc: 'Auto calculator with CGST/SGST' },
+            ].map((f, i) => (
+              <div key={i} className="flex items-start gap-4 bg-white/5 border border-white/10 rounded-2xl p-4">
+                <span className="text-2xl mt-0.5">{f.icon}</span>
+                <div>
+                  <p className="font-bold text-white text-sm">{f.title}</p>
+                  <p className="text-blue-200 text-xs mt-0.5">{f.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <form onSubmit={handleSubmit} className="p-8 flex flex-col gap-5">
-          {error && <div className="bg-red-50 text-red-700 px-4 py-3 rounded-xl text-sm font-semibold border border-red-100">{error}</div>}
-          <div>
-            <label className="text-sm font-bold text-gray-700 block mb-2">Email Address</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
-              className="w-full border-2 border-gray-200 p-3.5 rounded-xl font-medium focus:border-blue-600 outline-none transition-colors"
-              placeholder="owner@restaurant.com" autoFocus />
-          </div>
-          <div>
-            <label className="text-sm font-bold text-gray-700 block mb-2">Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
-              className="w-full border-2 border-gray-200 p-3.5 rounded-xl font-medium focus:border-blue-600 outline-none transition-colors" />
-          </div>
-          <button type="submit" disabled={loading}
-            className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl flex justify-center items-center gap-2 hover:bg-blue-700 disabled:opacity-60 mt-2 transition-all shadow-md active:scale-[0.98]">
-            <LogIn size={20} /> {loading ? 'Signing In...' : 'Sign In'}
-          </button>
-        </form>
       </div>
+
+      {/* Right Form Panel */}
+      <div className="flex-1 flex items-center justify-center p-6 bg-slate-950">
+        <div className={`w-full max-w-md ${shake ? 'animate-[shake_0.4s_ease]' : ''}`}>
+          {/* Mobile logo */}
+          <div className="lg:hidden flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+              <UtensilsCrossed size={20} className="text-white" />
+            </div>
+            <span className="text-white font-black text-xl" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>RestoFlow</span>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8">
+            <h2 className="text-2xl font-black text-white mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+              Sign in
+            </h2>
+            <p className="text-slate-400 text-sm mb-8">Access your vendor dashboard</p>
+
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl text-sm font-medium mb-6 flex items-center gap-2 fade-in">
+                <span>⚠</span> {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Email Address</label>
+                <input
+                  type="email" value={email} onChange={e => setEmail(e.target.value)} required autoFocus
+                  placeholder="owner@restaurant.com"
+                  className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 px-4 py-3.5 rounded-xl font-medium focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Password</label>
+                <input
+                  type="password" value={password} onChange={e => setPassword(e.target.value)} required
+                  placeholder="••••••••"
+                  className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 px-4 py-3.5 rounded-xl font-medium focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                />
+              </div>
+
+              <div className="bg-slate-800 rounded-xl p-3 text-xs text-slate-400">
+                <p className="font-bold text-slate-300 mb-0.5">Demo Credentials</p>
+                <p>Email: <span className="text-blue-400 font-mono">owner@dineflow.demo</span></p>
+                <p>Password: <span className="text-blue-400 font-mono">demo1234</span></p>
+              </div>
+
+              <button
+                type="submit" disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-600/30 active:scale-[0.98] mt-2"
+              >
+                {loading ? <Loader2 size={18} className="animate-spin" /> : <LogIn size={18} />}
+                {loading ? 'Signing In...' : 'Sign In to Dashboard'}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          20% { transform: translateX(-8px); }
+          40% { transform: translateX(8px); }
+          60% { transform: translateX(-4px); }
+          80% { transform: translateX(4px); }
+        }
+      `}</style>
     </div>
   );
 }
 
+/* ─── Dashboard Shell with Sidebar ───────────────────────── */
 function DashboardShell() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [profileOpen, setProfileOpen] = useState(false);
-  const profileRef = useRef<HTMLDivElement>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [liveOrderCount, setLiveOrderCount] = useState(0);
 
   const [businessQuery, billingQuery] = useQueries({
     queries: [
-      {
-        queryKey: ['settings-business'],
-        queryFn: async () => (await api.get('/settings/business')).data,
-        retry: false,
-        staleTime: 1000 * 30,
-      },
-      {
-        queryKey: ['billing-summary'],
-        queryFn: async () => (await api.get('/billing')).data,
-        retry: false,
-        staleTime: 1000 * 30,
-      },
+      { queryKey: ['settings-business'], queryFn: async () => (await api.get('/settings/business')).data, retry: false, staleTime: 1000 * 30 },
+      { queryKey: ['billing-summary'], queryFn: async () => (await api.get('/billing')).data, retry: false, staleTime: 1000 * 30 },
     ],
   });
 
@@ -93,106 +166,112 @@ function DashboardShell() {
   const isLoading = businessQuery.isLoading || billingQuery.isLoading;
 
   useEffect(() => {
-    const closeOnOutside = (event: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
-        setProfileOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', closeOnOutside);
-    return () => document.removeEventListener('mousedown', closeOnOutside);
-  }, []);
+    api.get('/orders').then(r => setLiveOrderCount(Array.isArray(r.data) ? r.data.length : 0)).catch(() => {});
+  }, [location.pathname]);
 
-  if (isLoading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-gray-400">Loading Configuration...</div>;
+  if (isLoading) return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <Loader2 size={32} className="text-blue-500 animate-spin" />
+        <p className="text-slate-400 text-sm font-medium">Loading workspace...</p>
+      </div>
+    </div>
+  );
 
-  // Protect routes based on onboarding status
-  if (business?.onboardingCompleted === false && location.pathname !== '/onboarding') {
-    return <Navigate to="/onboarding" replace />;
-  }
+  if (business?.onboardingCompleted === false && location.pathname !== '/onboarding') return <Navigate to="/onboarding" replace />;
+  if (business?.onboardingCompleted === true && location.pathname === '/onboarding') return <Navigate to="/" replace />;
+  if (location.pathname === '/onboarding') return <Onboarding />;
 
-  // Prevent accessing onboarding if completed
-  if (business?.onboardingCompleted === true && location.pathname === '/onboarding') {
-    return <Navigate to="/" replace />;
-  }
-
-  // Render just onboarding if matching
-  if (location.pathname === '/onboarding') {
-    return <Onboarding />;
-  }
+  const navItems = [
+    { to: '/', label: 'Menu', icon: <UtensilsCrossed size={18} /> },
+    { to: '/tables', label: 'Tables & QR', icon: <LayoutDashboard size={18} /> },
+    { to: '/orders', label: 'Live Orders', icon: <Receipt size={18} />, badge: liveOrderCount },
+    { to: '/billing', label: 'Billing', icon: <CreditCard size={18} /> },
+    { to: '/analytics', label: 'Analytics', icon: <BarChart3 size={18} /> },
+    { to: '/settings', label: 'Settings', icon: <Settings2 size={18} /> },
+  ];
 
   return (
-    <div className="min-h-[100dvh] bg-gray-50 flex flex-col font-sans text-gray-900">
-      <header className="bg-white border-b px-8 py-5 flex items-center justify-between shadow-sm relative z-10">
-        <h1 className="text-2xl font-black tracking-tighter text-blue-600 flex items-center gap-2">
-          RESTOFLOW <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-widest translate-y-[-2px]">Vendor</span>
-        </h1>
-        <div className="flex gap-6">
-          {[
-            { to: '/', label: 'Menus', icon: <UtensilsCrossed size={18} strokeWidth={2.5} /> },
-            { to: '/tables', label: 'Tables & QR', icon: <LayoutDashboard size={18} strokeWidth={2.5} /> },
-            { to: '/orders', label: 'Live Orders', icon: <Receipt size={18} strokeWidth={2.5} /> },
-            { to: '/billing', label: 'Billing', icon: <CreditCard size={18} strokeWidth={2.5} /> },
-          ].map(({ to, label, icon }) => (
-            <Link key={to} to={to} className={`flex items-center gap-2 text-sm font-bold transition-all relative ${location.pathname === to ? 'text-blue-600' : 'text-gray-500 hover:text-gray-900'}`}>
-              {icon} {label}
-              {location.pathname === to && <div className="absolute -bottom-[22px] left-0 right-0 h-1 bg-blue-600 rounded-t-full"></div>}
-            </Link>
-          ))}
-        </div>
-        <div className="relative" ref={profileRef}>
-          <button
-            onClick={() => setProfileOpen((prev) => !prev)}
-            className="flex items-center gap-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 px-3 py-2 rounded-xl transition-colors"
-          >
-            <UserCircle2 size={16} />
-            <span className="text-sm font-bold">Profile</span>
-            <ChevronDown size={14} className={`transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
-          </button>
-          {profileOpen && (
-            <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-xl p-1 z-50">
-              <button
-                onClick={() => {
-                  setProfileOpen(false);
-                  navigate('/settings');
-                }}
-                className="w-full text-left px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg"
-              >
-                Settings
-              </button>
-              <button
-                onClick={() => {
-                  setProfileOpen(false);
-                  navigate('/analytics');
-                }}
-                className="w-full text-left px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg"
-              >
-                Analytics
-              </button>
-              <button
-                onClick={() => {
-                  setProfileOpen(false);
-                  navigate('/billing');
-                }}
-                className="w-full text-left px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg"
-              >
-                Bill Counter
-              </button>
-              <div className="px-3 py-2.5 text-sm font-semibold text-gray-500 bg-gray-50 rounded-lg">
-                Subscription: {billing?.plan || 'FREE'}
-              </div>
-              <button
-                onClick={() => {
-                  localStorage.removeItem('accessToken');
-                  window.location.reload();
-                }}
-                className="w-full text-left px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg"
-              >
-                Logout
-              </button>
-            </div>
+    <div className="min-h-[100dvh] bg-slate-50 flex font-sans text-gray-900">
+      {/* ── Sidebar ── */}
+      <aside className={`flex-shrink-0 h-screen sticky top-0 bg-slate-900 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-[64px]' : 'w-[220px]'}`}>
+        {/* Logo */}
+        <div className="px-4 py-5 border-b border-slate-800 flex items-center gap-3">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+            <UtensilsCrossed size={16} className="text-white" />
+          </div>
+          {!sidebarCollapsed && (
+            <span className="font-black text-white text-lg tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+              RestoFlow
+            </span>
           )}
         </div>
-      </header>
-      <main className="flex-1 flex overflow-hidden">
+
+        {/* Restaurant info */}
+        {!sidebarCollapsed && business?.businessName && (
+          <div className="px-4 py-3 border-b border-slate-800">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Store size={13} className="text-blue-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-white truncate">{business.businessName}</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider">{billing?.plan || 'Free'} plan</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Nav items */}
+        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
+          {navItems.map(({ to, label, icon, badge }) => {
+            const active = location.pathname === to;
+            return (
+              <Link key={to} to={to}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all relative group ${
+                  active
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <span className="flex-shrink-0">{icon}</span>
+                {!sidebarCollapsed && <span className="truncate">{label}</span>}
+                {badge != null && badge > 0 && (
+                  <span className={`ml-auto text-[10px] font-black px-1.5 py-0.5 rounded-full ${active ? 'bg-white/20 text-white' : 'bg-red-500 text-white'}`}>
+                    {badge}
+                  </span>
+                )}
+                {sidebarCollapsed && (
+                  <div className="absolute left-full ml-2 px-2 py-1 bg-slate-700 text-white text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                    {label}
+                  </div>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Collapse toggle + Logout */}
+        <div className="p-2 border-t border-slate-800 space-y-1">
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-white hover:bg-slate-800 text-sm font-medium transition-all"
+          >
+            <ChevronRight size={18} className={`transition-transform ${sidebarCollapsed ? '' : 'rotate-180'}`} />
+            {!sidebarCollapsed && <span>Collapse</span>}
+          </button>
+          <button
+            onClick={() => { localStorage.removeItem('accessToken'); window.location.reload(); }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-400 hover:bg-red-500/10 hover:text-red-300 text-sm font-medium transition-all"
+          >
+            <LogIn size={18} className="rotate-180" />
+            {!sidebarCollapsed && <span>Logout</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* ── Main content ── */}
+      <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Routes>
           <Route path="/" element={<MenuBuilder />} />
           <Route path="/tables" element={<FloorPlan />} />
@@ -206,18 +285,11 @@ function DashboardShell() {
   );
 }
 
+/* ─── Root App ─────────────────────────────────────────────── */
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('accessToken'));
-
-  // Root commander pipeline completely bypassing tenant bounds naturally over local port checks.
-  if (window.location.pathname === '/admin') {
-    return <Admin />;
-  }
-
-  if (!isLoggedIn) {
-    return <LoginPage onLogin={() => setIsLoggedIn(true)} />;
-  }
-
+  if (window.location.pathname === '/admin') return <Admin />;
+  if (!isLoggedIn) return <LoginPage onLogin={() => setIsLoggedIn(true)} />;
   return <DashboardShell />;
 }
 

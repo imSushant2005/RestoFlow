@@ -1,79 +1,97 @@
 import { useMutation } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { format } from 'date-fns';
 import { Clock } from 'lucide-react';
+
+const STATUS_CONFIG: Record<string, { stripe: string; label: string; bright: string }> = {
+  NEW:       { stripe: 'bg-gradient-to-r from-blue-500 to-indigo-500', label: 'New',       bright: 'text-blue-400' },
+  ACCEPTED:  { stripe: 'bg-gradient-to-r from-blue-500 to-indigo-500', label: 'Accepted',  bright: 'text-blue-400' },
+  PREPARING: { stripe: 'bg-gradient-to-r from-amber-400 to-orange-500', label: 'Preparing', bright: 'text-amber-400' },
+  READY:     { stripe: 'bg-gradient-to-r from-emerald-400 to-teal-500', label: 'Ready',     bright: 'text-emerald-400' },
+};
+
+const NEXT_STATUS: Record<string, string> = {
+  NEW: 'PREPARING', ACCEPTED: 'PREPARING', PREPARING: 'READY', READY: 'SERVED',
+};
+
+const ACTION_LABEL: Record<string, string> = {
+  NEW: 'Start Preparing', ACCEPTED: 'Start Preparing',
+  PREPARING: 'Mark as Ready', READY: 'Mark Served ✓',
+};
 
 export function OrderCard({ order }: { order: any }) {
   const statusMutation = useMutation({
     mutationFn: (status: string) => api.patch(`/orders/${order.id}/status`, { status }),
   });
 
-  const nextStatusMap: Record<string, string> = {
-    'NEW': 'PREPARING',
-    'ACCEPTED': 'PREPARING',
-    'PREPARING': 'READY',
-    'READY': 'SERVED'
-  };
-
-  const statusColors: Record<string, string> = {
-    'NEW': 'bg-blue-600',
-    'ACCEPTED': 'bg-blue-600',
-    'PREPARING': 'bg-yellow-600',
-    'READY': 'bg-green-600'
-  };
+  const config = STATUS_CONFIG[order.status] || STATUS_CONFIG.NEW;
+  const elapsedMin = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000);
+  const isUrgent = elapsedMin >= 15 && (order.status === 'NEW' || order.status === 'PREPARING');
 
   return (
-    <div className="bg-gray-800 border border-gray-600 rounded-lg shadow-lg overflow-hidden flex flex-col animate-in fade-in duration-300">
-      <div className={`px-4 py-2 flex justify-between items-center ${statusColors[order.status] || 'bg-gray-700'}`}>
-        <span className="font-bold text-white uppercase text-sm">
-          {order.table ? `Table ${order.table.name}` : 'Takeaway'}
-        </span>
-        <span className="text-white/90 text-xs font-semibold">#{order.id.slice(-6).toUpperCase()}</span>
-      </div>
-      
-      <div className="p-4 flex-1">
-        {(order.customerName || order.customerPhone) && (
-          <div className="flex flex-col gap-0.5 mb-3 bg-gray-900/50 p-2.5 rounded-lg border border-gray-700">
-            {order.customerName && <span className="text-sm font-bold text-gray-200 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>{order.customerName}</span>}
-            {order.customerPhone && <span className="text-xs font-semibold text-gray-400 pl-3.5">{order.customerPhone}</span>}
-          </div>
-        )}
-        <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-4 font-medium">
-          <Clock size={12} /> Ordered {format(new Date(order.createdAt), 'MMM d, h:mm a')}
+    <div className={`card-enter flex flex-col bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 shadow-xl transition-all duration-200 hover:border-slate-600 ${isUrgent ? 'urgent' : ''}`}>
+      {/* Color stripe */}
+      <div className={`h-1.5 w-full ${config.stripe} flex-shrink-0`} />
+
+      {/* Header */}
+      <div className="px-4 pt-3 pb-2 flex justify-between items-center">
+        <div>
+          <span className="font-black text-white text-base tracking-tight">
+            {order.table ? `Table ${order.table.name}` : 'Takeaway'}
+          </span>
+          <span className="ml-2 text-slate-500 text-xs font-mono">#{order.id.slice(-6).toUpperCase()}</span>
         </div>
-        
-        <ul className="flex flex-col gap-3">
-          {order.items.map((item: any) => (
-            <li key={item.id} className="text-gray-200">
-              <div className="flex justify-between items-start gap-2">
-                <div className="flex gap-2 font-semibold">
-                  <span className="text-blue-400">{item.quantity}x</span>
-                  <span>{item.menuItem.name}</span>
-                </div>
-              </div>
-              {item.modifiers?.length > 0 && (
-                <div className="pl-6 text-sm text-gray-400 mt-1">
-                  {item.modifiers.map((m: any) => `+ ${m.modifier.name}`).join(', ')}
-                </div>
-              )}
-              {item.notes && (
-                <div className="pl-6 text-sm text-yellow-500 mt-1 italic font-medium">
-                  Note: {item.notes}
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+        <span className={`text-xs font-bold uppercase tracking-wider ${config.bright}`}>{config.label}</span>
       </div>
 
-      <div className="p-3 bg-gray-900 border-t border-gray-700">
+      {/* Time */}
+      <div className={`flex items-center gap-1.5 px-4 pb-3 text-xs font-semibold ${isUrgent ? 'text-red-400' : 'text-slate-500'}`}>
+        <Clock size={11} />
+        {elapsedMin === 0 ? 'Just now' : `${elapsedMin} min ago`}
+        {isUrgent && <span className="ml-1 text-red-400 font-black">⚠ OVERDUE</span>}
+      </div>
+
+      {/* Customer info */}
+      {(order.customerName || order.customerPhone) && (
+        <div className="mx-4 mb-3 bg-slate-900/60 border border-slate-700 rounded-xl px-3 py-2">
+          {order.customerName && <p className="text-sm font-bold text-slate-200">{order.customerName}</p>}
+          {order.customerPhone && <p className="text-xs text-slate-500 font-medium mt-0.5">{order.customerPhone}</p>}
+        </div>
+      )}
+
+      {/* Items */}
+      <ul className="flex flex-col gap-2.5 px-4 pb-4">
+        {order.items.map((item: any) => (
+          <li key={item.id} className="flex gap-3 items-start">
+            <span className="bg-slate-700 text-white text-xs font-black px-2 py-0.5 rounded-lg min-w-[28px] text-center flex-shrink-0 mt-0.5">
+              {item.quantity}x
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-slate-100 font-semibold text-sm leading-tight">{item.menuItem?.name || item.name}</p>
+              {item.modifiers?.length > 0 && (
+                <p className="text-xs text-slate-500 mt-0.5">{item.modifiers.map((m: any) => `+ ${m.modifier?.name}`).join(', ')}</p>
+              )}
+              {item.notes && (
+                <p className="text-xs text-amber-400 mt-0.5 font-medium">📝 {item.notes}</p>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {/* CTA */}
+      <div className="px-3 pb-3">
         <button
-          onClick={() => statusMutation.mutate(nextStatusMap[order.status] || 'SERVED')}
-          className="w-full py-2.5 rounded text-white font-bold bg-white/10 hover:bg-white/20 transition-colors"
+          onClick={() => statusMutation.mutate(NEXT_STATUS[order.status] || 'SERVED')}
+          disabled={statusMutation.isPending}
+          className={`w-full py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.97] disabled:opacity-50 ${
+            order.status === 'READY'
+              ? 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/30'
+              : order.status === 'PREPARING'
+              ? 'bg-amber-500 hover:bg-amber-400 text-white shadow-lg shadow-amber-500/30'
+              : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30'
+          }`}
         >
-          {order.status === 'NEW' || order.status === 'ACCEPTED' ? 'Start Preparing' : ''}
-          {order.status === 'PREPARING' ? 'Mark as Ready' : ''}
-          {order.status === 'READY' ? 'Complete Order' : ''}
+          {statusMutation.isPending ? '...' : ACTION_LABEL[order.status] || 'Advance'}
         </button>
       </div>
     </div>

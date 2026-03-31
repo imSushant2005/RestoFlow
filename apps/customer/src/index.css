@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,9 +7,9 @@
   --font-main: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --bg-primary: #FAFAFA;
   --bg-secondary: #FFFFFF;
-  --text-primary: #111827;
-  --text-secondary: #6B7280;
-  --border-primary: #F3F4F6;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --border-primary: #f1f5f9;
 }
 
 .dark {
@@ -20,47 +20,110 @@
   --border-primary: #1F2937;
 }
 
-* { -webkit-tap-highlight-color: transparent; }
+* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { font-family: var(--font-main); background: var(--bg-primary); color: var(--text-primary); transition: background-color 0.3s ease, color 0.3s ease; }
+body {
+  font-family: var(--font-main);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
 
-.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+/* ─── Scrollbars ─────────────────────────────────────────── */
+.custom-scrollbar::-webkit-scrollbar { width: 3px; height: 3px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 99px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 99px; }
 
+/* ─── Skeleton shimmer ───────────────────────────────────── */
 @keyframes shimmer {
-  0% { background-position: -400px 0; }
+  0%   { background-position: -400px 0; }
   100% { background-position: 400px 0; }
 }
 .shimmer {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
   background-size: 400px 100%;
   animation: shimmer 1.4s infinite linear;
 }
 
+/* ─── Animations ─────────────────────────────────────────── */
 @keyframes slide-up {
   from { transform: translateY(100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(0); opacity: 1; }
 }
-.slide-up { animation: slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+.slide-up { animation: slide-up 0.32s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
 
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .fade-in { animation: fade-in 0.4s ease forwards; }
 
-.cart-badge {
-  animation: pop 0.2s cubic-bezier(0.36, 0.07, 0.19, 0.97);
-}
-@keyframes pop {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.35); }
+@keyframes cart-pop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.4); }
+  70%  { transform: scale(0.9); }
   100% { transform: scale(1); }
 }
+.cart-badge { animation: cart-pop 0.3s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
 
 @keyframes scale-up {
-  from { opacity: 0; transform: scale(0.8); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; transform: scale(0.88); }
+  to   { opacity: 1; transform: scale(1); }
 }
-.scale-up { animation: scale-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.scale-up { animation: scale-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.6; transform: scale(1.4); }
+}
+.pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+
+/* ─── Progress step bar ──────────────────────────────────── */
+@keyframes progress-fill {
+  from { width: 0%; }
+  to   { width: var(--progress-w, 0%); }
+}
+.progress-fill { animation: progress-fill 0.6s cubic-bezier(0.16,1,0.3,1) forwards; }
+
+/* ─── Steps connector line ───────────────────────────────── */
+.step-line {
+  position: absolute;
+  top: 24px;
+  left: calc(50% + 24px);
+  right: calc(-50% + 24px);
+  height: 2px;
+  background: #f1f5f9;
+  z-index: 0;
+}
+.step-line-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f97316, #ea580c);
+  transition: width 0.6s cubic-bezier(0.16,1,0.3,1);
+}
+
+/* ─── Item card add button ───────────────────────────────── */
+.add-btn-press {
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.add-btn-press:active {
+  transform: scale(0.88);
+  box-shadow: 0 0 0 4px rgba(249,115,22,0.2);
+}
+
+/* ─── Cart CTA bar ───────────────────────────────────────── */
+.cart-bar-enter {
+  animation: slide-up 0.35s cubic-bezier(0.32,0.72,0,1) both;
+}
+
+/* ─── Glass card for tracking ────────────────────────────── */
+.glass-card {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.6);
+}
+
+/* ─── Bottom nav ─────────────────────────────────────────── */
+.bottom-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }

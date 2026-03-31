@@ -1,47 +1,52 @@
 import { useState } from 'react';
-import { Sparkles, Upload, Wand2, Check, X, Loader2, AlertCircle } from 'lucide-react';
+import { Sparkles, Check, X, Loader2, AlertCircle, Copy, ArrowRight, FileJson } from 'lucide-react';
 import { api } from '../lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 
 export function AiMenuImporter({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<'UPLOAD' | 'PROCESSING' | 'REVIEW'>('UPLOAD');
-  const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [step, setStep] = useState<'INSTRUCTIONS' | 'PASTE_JSON' | 'REVIEW'>('INSTRUCTIONS');
+  const [jsonInput, setJsonInput] = useState('');
   const [extractedData, setExtractedData] = useState<any>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      setPreviewUrl(URL.createObjectURL(selectedFile));
-    }
+  const CHATGPT_PROMPT = `Please read the attached menu photo(s) and output a JSON list of categories and items exactly in this format. Output ONLY pure JSON without any markdown formatting blocks or explanations:
+
+[
+  {
+    "name": "Starters",
+    "items": [
+      {
+        "name": "Spring Rolls",
+        "price": 120,
+        "description": "Crispy rolls with sweet chili sauce",
+        "isVeg": true
+      }
+    ]
+  }
+]`;
+
+  const copyPrompt = () => {
+    navigator.clipboard.writeText(CHATGPT_PROMPT);
   };
 
-  const processImage = async () => {
-    if (!file) return;
-    setStep('PROCESSING');
-    setError(null);
-
+  const handleParseJson = () => {
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async () => {
-        const base64 = reader.result as string;
-        try {
-          const res = await api.post('/ai/process-image', { image: base64 });
-          setExtractedData(res.data.menu);
-          setStep('REVIEW');
-        } catch (err: any) {
-          setError(err.response?.data?.error || 'Failed to analyze menu. Please try a clearer photo.');
-          setStep('UPLOAD');
-        }
-      };
-    } catch (err) {
-      setError('Failed to read file');
-      setStep('UPLOAD');
+      let cleanJson = jsonInput.trim();
+      // Remove markdown blocks if ChatGPT still added them
+      if (cleanJson.startsWith('```json')) cleanJson = cleanJson.replace('```json', '');
+      if (cleanJson.startsWith('```')) cleanJson = cleanJson.replace('```', '');
+      if (cleanJson.endsWith('```')) cleanJson = cleanJson.slice(0, -3);
+
+      const parsed = JSON.parse(cleanJson);
+      if (!Array.isArray(parsed)) throw new Error('JSON must be an array of categories.');
+      
+      setExtractedData({ categories: parsed });
+      setStep('REVIEW');
+      setError(null);
+    } catch (err: any) {
+      setError('Invalid JSON format. Please ensure it exactly matches the required structure. ' + err.message);
     }
   };
 
@@ -68,8 +73,8 @@ export function AiMenuImporter({ onClose }: { onClose: () => void }) {
               <Sparkles size={20} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">AI Magic Importer</h2>
-              <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Photo to Digital Menu in seconds</p>
+              <h2 className="text-xl font-bold text-gray-900">Assisted Menu Importer</h2>
+              <p className="text-xs text-gray-500 font-medium tracking-wider">Zero API dependency JSON setup</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
@@ -86,74 +91,77 @@ export function AiMenuImporter({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          {step === 'UPLOAD' && (
-            <div className="space-y-6">
-              <div 
-                className={`border-3 border-dashed rounded-[32px] p-12 flex flex-col items-center justify-center text-center transition-all ${previewUrl ? 'border-purple-200 bg-purple-50/30' : 'border-gray-100 hover:border-purple-300 hover:bg-purple-50/10'}`}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const droppedFile = e.dataTransfer.files?.[0];
-                  if (droppedFile) {
-                    setFile(droppedFile);
-                    setPreviewUrl(URL.createObjectURL(droppedFile));
-                  }
-                }}
-              >
-                {previewUrl ? (
-                  <div className="relative group">
-                    <img src={previewUrl} className="max-h-64 rounded-2xl shadow-lg border-4 border-white" alt="Menu preview" />
-                    <button 
-                      onClick={() => { setFile(null); setPreviewUrl(null); }}
-                      className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full p-1.5 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="w-20 h-20 rounded-3xl bg-gray-50 flex items-center justify-center text-gray-300 mb-4">
-                      <Upload size={32} />
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">Upload Menu Photo</h3>
-                    <p className="text-sm text-gray-500 mb-6 max-w-xs">Take a clear picture of your physical menu or upload a PDF/Image</p>
-                    <label className="bg-white border-2 border-gray-200 hover:border-purple-600 hover:text-purple-600 px-6 py-2.5 rounded-xl font-bold transition-all cursor-pointer">
-                      Select File
-                      <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
-                    </label>
-                  </>
-                )}
+          {step === 'INSTRUCTIONS' && (
+            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+              <div className="bg-purple-50/50 border border-purple-100 p-6 rounded-2xl">
+                <h3 className="font-bold text-gray-900 mb-2 text-lg">Step 1: Get data from ChatGPT</h3>
+                <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                  We allow you to quickly import your menu without paying for expensive AI software! Just copy the specific prompt below, provide ChatGPT with clear photos of your physical menu, and it will generate the JSON code for you automatically.
+                </p>
+                
+                <div className="relative group">
+                  <pre className="bg-gray-900 text-purple-200 p-4 rounded-xl text-xs overflow-x-auto border border-gray-800 font-mono leading-relaxed whitespace-pre-wrap">
+                    {CHATGPT_PROMPT}
+                  </pre>
+                  <button 
+                    onClick={copyPrompt}
+                    className="absolute top-3 right-3 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold transition flex flex-row"
+                  >
+                    <Copy size={12} />
+                    Copy Prompt
+                  </button>
+                </div>
               </div>
-              
+
               <button
-                disabled={!file}
-                onClick={processImage}
-                className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:hover:bg-purple-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-purple-200 transition-all active:scale-[0.98]"
+                onClick={() => setStep('PASTE_JSON')}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-purple-200 transition-all active:scale-[0.98]"
               >
-                <Wand2 size={20} />
-                Analyze with Gemini AI
+                I have my JSON Ready <ArrowRight size={18} />
               </button>
             </div>
           )}
 
-          {step === 'PROCESSING' && (
-            <div className="h-64 flex flex-col items-center justify-center text-center">
-              <div className="relative mb-6">
-                <div className="absolute inset-0 bg-purple-200 rounded-full blur-2xl animate-pulse" />
-                <Loader2 size={48} className="text-purple-600 animate-spin relative" />
+          {step === 'PASTE_JSON' && (
+            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 mb-1">Step 2: Paste ChatGPT output</h3>
+                <p className="text-sm text-gray-500 mb-4 max-w-sm">Paste the exact JSON code returned by ChatGPT here.</p>
+                <textarea
+                  value={jsonInput}
+                  onChange={(e) => setJsonInput(e.target.value)}
+                  placeholder={`[\n  {\n    "name": "Category",\n    "items": [...]\n  }\n]`}
+                  className="w-full h-64 bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 font-mono text-sm focus:border-purple-500 focus:ring-0 outline-none resize-none"
+                />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Gemini is reading your menu...</h3>
-              <p className="text-sm text-gray-500 max-w-xs">Our AI is extracting categories, items, and prices with high precision.</p>
+              
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setStep('INSTRUCTIONS')}
+                  className="px-6 py-4 border-2 border-gray-200 hover:bg-gray-50 text-gray-600 rounded-2xl font-bold transition-all"
+                >
+                  Back
+                </button>
+                <button
+                  disabled={!jsonInput.trim()}
+                  onClick={handleParseJson}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-purple-200 transition-all active:scale-[0.98]"
+                >
+                  <FileJson size={18} />
+                  Validate & Preview
+                </button>
+              </div>
             </div>
           )}
 
           {step === 'REVIEW' && extractedData && (
-            <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
+            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-gray-900">Extracted Menu Structure</h3>
-                <span className="text-xs font-black px-2.5 py-1 bg-green-100 text-green-600 rounded-full uppercase">AI Verified</span>
+                <h3 className="font-bold text-gray-900">Step 3: Preview Structure</h3>
+                <span className="text-xs font-black px-2.5 py-1 bg-green-100 text-green-600 rounded-full uppercase">Valid JSON</span>
               </div>
-              <div className="space-y-4">
+              
+              <div className="space-y-4 max-h-[40vh] overflow-y-auto custom-scrollbar pr-2">
                 {extractedData.categories?.map((cat: any, i: number) => (
                   <div key={i} className="border border-gray-100 rounded-2xl p-4 bg-gray-50/50">
                     <h4 className="font-bold text-purple-700 text-sm mb-3 flex items-center gap-2">
@@ -179,17 +187,17 @@ export function AiMenuImporter({ onClose }: { onClose: () => void }) {
 
         {/* Footer */}
         {step === 'REVIEW' && (
-          <div className="p-8 border-t bg-gray-50 flex gap-4">
+          <div className="p-6 border-t bg-gray-50 flex gap-4">
             <button
-              onClick={() => setStep('UPLOAD')}
-              className="flex-1 px-6 py-4 border-2 border-gray-200 hover:bg-white text-gray-600 rounded-2xl font-bold transition-all"
+              onClick={() => setStep('PASTE_JSON')}
+              className="px-6 py-4 border-2 border-gray-200 hover:bg-white text-gray-600 rounded-2xl font-bold transition-all"
             >
               Back
             </button>
             <button
               onClick={handleImport}
               disabled={isImporting}
-              className="flex-[2] bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-purple-200 transition-all disabled:opacity-50"
+              className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-purple-200 transition-all disabled:opacity-50"
             >
               {isImporting ? <Loader2 className="animate-spin" /> : <Check size={20} />}
               Confirm & Import Menu

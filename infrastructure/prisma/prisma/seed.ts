@@ -176,7 +176,7 @@ async function main() {
         orderNumber: '#DEMO' + i,
         tenantId: tenant.id,
         tableId: tables[i % tables.length].id,
-        status: 'COMPLETED',
+        status: 'RECEIVED' as any,
         subtotal: 14.99,
         totalAmount: 14.99,
         createdAt: sampleOrderDates[i],
