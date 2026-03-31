@@ -54,6 +54,8 @@ model Tenant {
   staffInvites    StaffInvite[]
   analytics       DailyAnalytics[]
   bills           Bill[]
+  gstin           String?
+  fssai           String?
 }
 
 // ─── USERS (Staff/Owners) ──────────────────────────────────
@@ -64,7 +66,7 @@ model User {
   name          String
   email         String
   passwordHash  String
-  role          UserRole @default(STAFF)
+  role          UserRole @default(WAITER)
   avatarUrl     String?
   isActive      Boolean  @default(true)
   lastLoginAt   DateTime?
@@ -292,7 +294,7 @@ model DiningSession {
   customerId      String
   customer        Customer       @relation(fields: [customerId], references: [id])
   partySize       Int            @default(1)
-  sessionStatus   SessionStatus  @default(INITIATED)
+  sessionStatus   SessionStatus  @default(OPEN)
   source          String         @default("qr")
   openedAt        DateTime       @default(now())
   closedAt        DateTime?
@@ -315,15 +317,28 @@ model Bill {
   tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   sessionId       String    @unique
   session         DiningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  invoiceNumber   String?   @unique
+  
   subtotal        Float
-  taxAmount       Float     @default(0)
+  itemDiscount    Float     @default(0)
+  taxableAmount   Float     @default(0)
+  cgst            Float     @default(0)
+  sgst            Float     @default(0)
   serviceCharge   Float     @default(0)
-  discountAmount  Float     @default(0)
-  totalAmount     Float
+  roundOff        Float     @default(0)
+  grandTotal      Float
+  
   paymentStatus   String    @default("UNPAID") // UNPAID | PAID | PARTIAL
   paymentMethod   String?   // cash | upi | card
   paidAt          DateTime?
   generatedAt     DateTime  @default(now())
+  
+  // Snapshots
+  businessName    String?
+  businessAddress String?
+  gstin           String?
+  fssai           String?
 
   @@index([tenantId])
   @@index([sessionId])
@@ -342,7 +357,7 @@ model Order {
   diningSession       DiningSession?   @relation(fields: [diningSessionId], references: [id])
   orderNumber         String      // human-readable: "#SN7N3KJN" - unique per tenant
   orderType           OrderType   @default(DINE_IN) // DINE_IN | TAKEAWAY | ROAMING
-  status              OrderStatus @default(PENDING)
+  status              OrderStatus @default(NEW)
   placedBy            String      @default("customer") // customer | vendor
   
   // Pricing
@@ -472,8 +487,9 @@ enum Plan {
 enum UserRole {
   OWNER
   MANAGER
-  STAFF
+  CASHIER
   KITCHEN
+  WAITER
 }
 
 enum TableShape {
@@ -485,35 +501,29 @@ enum TableShape {
 enum TableStatus {
   AVAILABLE
   OCCUPIED
-  ORDERING
-  ACTIVE_MEAL
+  ORDERING_OPEN
+  KITCHEN_ACTIVE
   AWAITING_BILL
   PAYMENT_PENDING
-  RESERVED
   CLEANING
-  BLOCKED
 }
 
 enum SessionStatus {
-  INITIATED
-  SEATED
-  ORDERING
-  KITCHEN_ACTIVE
-  AWAITING_COMPLETION
-  BILL_GENERATED
-  PAYMENT_PENDING
-  COMPLETED
+  OPEN
+  PARTIALLY_SENT
+  ACTIVE
+  AWAITING_BILL
+  CLOSED
   CANCELLED
 }
 
 enum OrderStatus {
-  DRAFT
-  PENDING
+  NEW
   ACCEPTED
   PREPARING
   READY
   SERVED
-  COMPLETED
+  RECEIVED
   CANCELLED
 }
 
