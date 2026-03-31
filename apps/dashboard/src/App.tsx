@@ -7,6 +7,7 @@ import { Settings } from './pages/Settings'
 import { Onboarding } from './pages/Onboarding'
 import { Billing } from './pages/Billing'
 import { Admin } from './pages/Admin'
+import { WaiterPage } from './pages/WaiterPage'
 import {
   LayoutDashboard, UtensilsCrossed, Receipt, CreditCard, LogIn,
   BarChart3, Settings2, ChevronRight, Store, Loader2
@@ -30,6 +31,7 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
     try {
       const res = await api.post('/auth/login', { email, password });
       localStorage.setItem('accessToken', res.data.accessToken);
+      localStorage.setItem('userRole', res.data.user.role);
       onLogin();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Invalid credentials. Please try again.');
@@ -169,17 +171,25 @@ function DashboardShell() {
     api.get('/orders').then(r => setLiveOrderCount(Array.isArray(r.data) ? r.data.length : 0)).catch(() => {});
   }, [location.pathname]);
 
+  const role = localStorage.getItem('userRole');
+
   if (isLoading) return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
         <Loader2 size={32} className="text-blue-500 animate-spin" />
-        <p className="text-slate-400 text-sm font-medium">Loading workspace...</p>
+        <p className="text-slate-400 text-sm font-medium">Syncing profile...</p>
       </div>
     </div>
   );
 
   if (business?.onboardingCompleted === false && location.pathname !== '/onboarding') return <Navigate to="/onboarding" replace />;
   if (business?.onboardingCompleted === true && location.pathname === '/onboarding') return <Navigate to="/" replace />;
+  
+  // Waiter Redirect Logic
+  if (role === 'WAITER' && location.pathname !== '/waiter') return <Navigate to="/waiter" replace />;
+  if (role === 'WAITER' && location.pathname === '/waiter') return <WaiterPage />;
+  if (role !== 'WAITER' && location.pathname === '/waiter') return <Navigate to="/" replace />;
+
   if (location.pathname === '/onboarding') return <Onboarding />;
 
   const navItems = [
@@ -279,6 +289,7 @@ function DashboardShell() {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/billing" element={<Billing />} />
+          <Route path="/waiter" element={<WaiterPage />} />
         </Routes>
       </main>
     </div>

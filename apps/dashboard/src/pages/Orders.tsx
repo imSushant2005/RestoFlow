@@ -385,7 +385,7 @@ export function Orders() {
       )}
       
       {activeTab === 'PIPELINE' ? (
-        <div className="flex-1 overflow-x-auto custom-scrollbar p-6 flex gap-4 h-full bg-slate-50/50">
+        <div className="flex-1 overflow-x-auto custom-scrollbar p-6 flex gap-6 h-full bg-[#f1f5f9]/50">
           {[
             { label: 'NEW ORDERS', color: 'text-blue-700', bg: 'bg-blue-50 border-b border-blue-100', badge: 'bg-blue-100 text-blue-800', filter: (o: any) => o.status === 'NEW', stripe: 'stripe-new', pulse: true },
             { label: 'IN KITCHEN', color: 'text-amber-700', bg: 'bg-amber-50 border-b border-amber-100', badge: 'bg-amber-100 text-amber-800', filter: (o: any) => o.status === 'ACCEPTED' || o.status === 'PREPARING', stripe: 'stripe-preparing', pulse: false },
@@ -395,12 +395,19 @@ export function Orders() {
             const colOrders = liveOrders.filter(filter);
             return (
               <div key={label} className="kanban-col flex-shrink-0">
-                <div className={`kanban-col-header ${bg}`}>
-                  <span className={`font-black text-xs tracking-widest ${color} flex items-center gap-2`}>
-                    {pulse && colOrders.length > 0 && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
-                    {label}
-                  </span>
-                  <span className={`text-[11px] font-black px-2 py-0.5 rounded-full ${badge}`}>{colOrders.length}</span>
+                <div className={`kanban-col-header shadow-sm z-10 ${bg}`}>
+                  <div className="flex items-center gap-2.5">
+                    {pulse && colOrders.length > 0 && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                      </span>
+                    )}
+                    <span className={`font-black text-[11px] tracking-[0.15em] ${color}`}>
+                      {label}
+                    </span>
+                  </div>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${badge}`}>{colOrders.length}</span>
                 </div>
                 <div className="kanban-col-body custom-scrollbar">
                   {colOrders.map((order: any) => <PipelineCard key={order.id} order={order} />)}

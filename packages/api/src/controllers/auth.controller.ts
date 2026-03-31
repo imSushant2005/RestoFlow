@@ -32,7 +32,7 @@ export const register = async (req: Request, res: Response) => {
     const hashedPassword = await hashPassword(validatedData.password);
     const slug = validatedData.tenantName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx: any) => { // Use 'any' only for the internal tx object if prisma types are stale
       const tenant = await tx.tenant.create({
         data: {
           businessName: validatedData.tenantName,
@@ -89,7 +89,7 @@ export const register = async (req: Request, res: Response) => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: (error as any).errors });
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
     }
     console.error('Register error:', error);
     return res.status(500).json({ error: 'Internal server error' });
@@ -148,9 +148,13 @@ export const login = async (req: Request, res: Response) => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: (error as any).errors });
+      return res.status(400).json({ 
+        error: 'Validation failed', 
+        details: error.issues 
+      });
     }
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Login Error:', error);
+    return res.status(500).json({ error: 'Internal server error. Please try again later.' });
   }
 };
 
