@@ -14,10 +14,10 @@ interface StepConfig {
 }
 
 const STEPS: StepConfig[] = [
-  { label: 'Order Placed', icon: <Clock3 size={20} />, statuses: ['PENDING'] },
+  { label: 'Order Placed', icon: <Clock3 size={20} />, statuses: ['NEW'] },
   { label: 'Cooking', icon: <ChefHat size={20} />, statuses: ['ACCEPTED', 'PREPARING'] },
-  { label: 'Ready', icon: <Bell size={20} />, statuses: ['READY'] },
-  { label: 'Done', icon: <CheckCircle2 size={20} />, statuses: ['COMPLETED'] },
+  { label: 'Ready', icon: <Bell size={20} />, statuses: ['READY', 'SERVED'] },
+  { label: 'Done', icon: <CheckCircle2 size={20} />, statuses: ['RECEIVED'] },
 ];
 
 function getStepIndex(status: string) {
@@ -28,19 +28,19 @@ function getStepIndex(status: string) {
 }
 
 function isActiveOrder(status?: string) {
-  return status !== 'COMPLETED' && status !== 'CANCELLED';
+  return status !== 'RECEIVED' && status !== 'CANCELLED';
 }
 
 function statusBadgeClass(status?: string) {
   switch (status) {
-    case 'PENDING':
+    case 'NEW':
       return 'bg-amber-50 text-amber-700 border-amber-200';
     case 'ACCEPTED':
     case 'PREPARING':
       return 'bg-blue-50 text-blue-700 border-blue-200';
     case 'READY':
       return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    case 'COMPLETED':
+    case 'RECEIVED':
       return 'bg-green-50 text-green-700 border-green-200';
     case 'CANCELLED':
       return 'bg-rose-50 text-rose-700 border-rose-200';
@@ -101,7 +101,7 @@ export function OrderStatus() {
 
   // USP 4: ETA calculation
   const getETA = (order: any) => {
-    if (!order?.createdAt || order.status === 'READY' || order.status === 'COMPLETED') return null;
+    if (!order?.createdAt || order.status === 'READY' || order.status === 'SERVED' || order.status === 'RECEIVED') return null;
     const items = Array.isArray(order.items) ? order.items : [];
     const totalPrepMin = items.reduce((sum: number, i: any) => sum + (Number(i?.menuItem?.prepTimeMinutes) || 8), 0);
     const avgPrepMin = items.length > 0 ? Math.ceil(totalPrepMin / items.length) + Math.min(items.length * 2, 10) : 15;
@@ -119,7 +119,7 @@ export function OrderStatus() {
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
   };
   const latestCompletedWithoutReview = useMemo(
-    () => historyOrders.find((o: any) => o.status === 'COMPLETED' && !o.hasReview),
+    () => historyOrders.find((o: any) => o.status === 'RECEIVED' && !o.hasReview),
     [historyOrders],
   );
 
@@ -129,7 +129,7 @@ export function OrderStatus() {
     }
   }, [activeOrders.length, historyOrders.length]);
 
-  const statusesLive = activeOrders.length > 0 ? activeOrders : historyOrders.filter((o: any) => o.status === 'COMPLETED');
+  const statusesLive = activeOrders.length > 0 ? activeOrders : historyOrders.filter((o: any) => o.status === 'RECEIVED');
   const currentStepIndex = statusesLive.length > 0 ? Math.max(...statusesLive.map((o: any) => getStepIndex(o.status))) : 0;
   const latestOrder = activeOrders[0] || historyOrders[0] || null;
   const trackingTotal = activeOrders.reduce((sum: number, o: any) => sum + Number(o.totalAmount || 0), 0);

@@ -18,7 +18,7 @@ export const getAnalytics = async (req: Request, res: Response) => {
       prisma.order.aggregate({
         where: {
           tenantId,
-          status: 'COMPLETED',
+          status: 'RECEIVED' as any,
           createdAt: { gte: thirtyDaysAgo }
         },
         _count: { id: true },
@@ -39,7 +39,7 @@ export const getAnalytics = async (req: Request, res: Response) => {
         where: {
           order: {
             tenantId,
-            status: 'COMPLETED',
+            status: 'RECEIVED' as any,
             createdAt: { gte: thirtyDaysAgo }
           }
         },
@@ -62,7 +62,7 @@ export const getAnalytics = async (req: Request, res: Response) => {
           COUNT(*)::bigint as count 
         FROM "Order" 
         WHERE "tenantId" = ${tenantId} 
-          AND "status" = 'COMPLETED' 
+          AND "status" = 'RECEIVED' 
           AND "createdAt" >= ${thirtyDaysAgo} 
         GROUP BY hour 
         ORDER BY hour ASC
@@ -75,7 +75,7 @@ export const getAnalytics = async (req: Request, res: Response) => {
           SUM("totalAmount")::float as revenue
         FROM "Order" 
         WHERE "tenantId" = ${tenantId} 
-          AND "status" = 'COMPLETED' 
+          AND "status" = 'RECEIVED' 
           AND "createdAt" >= ${thirtyDaysAgo} 
         GROUP BY date 
         ORDER BY date ASC
@@ -85,8 +85,8 @@ export const getAnalytics = async (req: Request, res: Response) => {
     // Data Transformation for UI consumption
     const formattedTopItems = topItems.map(item => ({
       name: item.name,
-      count: item._sum.quantity || 0,
-      revenue: item._sum.totalPrice || 0
+      count: item._sum?.quantity || 0,
+      revenue: item._sum?.totalPrice || 0
     }));
 
     // Fill missing hours with zeros for even chart distribution
@@ -100,8 +100,8 @@ export const getAnalytics = async (req: Request, res: Response) => {
       count
     }));
 
-    const totalOrders = summary._count.id || 0;
-    const totalRevenue = summary._sum.totalAmount || 0;
+    const totalOrders = (summary._count as any)?.id || 0;
+    const totalRevenue = (summary._sum as any)?.totalAmount || 0;
 
     // Funnel Logic
     const funnelSteps = [

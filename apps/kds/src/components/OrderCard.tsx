@@ -9,14 +9,14 @@ export function OrderCard({ order }: { order: any }) {
   });
 
   const nextStatusMap: Record<string, string> = {
-    'PENDING': 'PREPARING',
+    'NEW': 'PREPARING',
     'ACCEPTED': 'PREPARING',
     'PREPARING': 'READY',
-    'READY': 'COMPLETED'
+    'READY': 'SERVED'
   };
 
   const statusColors: Record<string, string> = {
-    'PENDING': 'bg-blue-600',
+    'NEW': 'bg-blue-600',
     'ACCEPTED': 'bg-blue-600',
     'PREPARING': 'bg-yellow-600',
     'READY': 'bg-green-600'
@@ -68,10 +68,10 @@ export function OrderCard({ order }: { order: any }) {
 
       <div className="p-3 bg-gray-900 border-t border-gray-700">
         <button
-          onClick={() => statusMutation.mutate(nextStatusMap[order.status] || 'COMPLETED')}
+          onClick={() => statusMutation.mutate(nextStatusMap[order.status] || 'SERVED')}
           className="w-full py-2.5 rounded text-white font-bold bg-white/10 hover:bg-white/20 transition-colors"
         >
-          {order.status === 'PENDING' || order.status === 'ACCEPTED' ? 'Start Preparing' : ''}
+          {order.status === 'NEW' || order.status === 'ACCEPTED' ? 'Start Preparing' : ''}
           {order.status === 'PREPARING' ? 'Mark as Ready' : ''}
           {order.status === 'READY' ? 'Complete Order' : ''}
         </button>

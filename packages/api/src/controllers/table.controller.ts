@@ -13,7 +13,7 @@ export const getZones = async (req: Request, res: Response) => {
           include: {
             orders: {
               where: {
-                status: { in: ['PENDING', 'ACCEPTED', 'PREPARING'] }
+                status: { in: ['NEW', 'ACCEPTED', 'PREPARING'] }
               }
             }
           }

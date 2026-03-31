@@ -8,9 +8,9 @@ const router: Router = Router();
 
 router.use(requireAuth);
 
-// router.post('/', requireAuth, requireRoles([UserRole.OWNER, UserRole.MANAGER, UserRole.STAFF]), OrderController.createOrder); // TODO: implement explicitly
-router.get('/', requireRoles([UserRole.OWNER, UserRole.MANAGER, UserRole.STAFF, UserRole.KITCHEN]), OrderController.getOrders);
+// router.post('/', requireAuth, requireRoles([UserRole.OWNER, UserRole.MANAGER, UserRole.CASHIER, UserRole.WAITER]), OrderController.createOrder); // TODO: implement explicitly
+router.get('/', requireRoles([UserRole.OWNER, UserRole.MANAGER, UserRole.CASHIER, UserRole.WAITER, UserRole.KITCHEN]), OrderController.getOrders);
 router.get('/history', requireRoles([UserRole.OWNER, UserRole.MANAGER]), OrderController.getOrderHistory);
-router.patch('/:id/status', requireRoles([UserRole.OWNER, UserRole.MANAGER, UserRole.STAFF, UserRole.KITCHEN]), OrderController.updateOrderStatus);
+router.patch('/:id/status', requireRoles([UserRole.OWNER, UserRole.MANAGER, UserRole.CASHIER, UserRole.WAITER, UserRole.KITCHEN]), OrderController.updateOrderStatus);
 
 export default router;

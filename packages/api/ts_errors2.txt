@@ -1,0 +1,21 @@
+src/controllers/customer.controller.ts(104,9): error TS2322: Type '"COMPLETED"' is not assignable to type 'EnumSessionStatusFilter<"DiningSession"> | SessionStatus | undefined'.
+src/controllers/order.controller.ts(11,27): error TS2322: Type '"COMPLETED"' is not assignable to type 'OrderStatus'.
+src/controllers/order.controller.ts(47,9): error TS2322: Type '{ tenantId: string | undefined; status: { in: Array<"COMPLETED" | "CANCELLED">; }; }' is not assignable to type 'OrderWhereInput'.
+  Types of property 'status' are incompatible.
+    Type '{ in: Array<"COMPLETED" | "CANCELLED">; }' is not assignable to type 'EnumOrderStatusFilter<"Order"> | OrderStatus | undefined'.
+      Type '{ in: Array<"COMPLETED" | "CANCELLED">; }' is not assignable to type 'EnumOrderStatusFilter<"Order">'.
+        Types of property 'in' are incompatible.
+          Type '("CANCELLED" | "COMPLETED")[]' is not assignable to type 'OrderStatus[] | FieldRef<"Order", "OrderStatus[]"> | undefined'.
+            Type '("CANCELLED" | "COMPLETED")[]' is not assignable to type 'OrderStatus[]'.
+              Type '"CANCELLED" | "COMPLETED"' is not assignable to type 'OrderStatus'.
+                Type '"COMPLETED"' is not assignable to type 'OrderStatus'.
+src/controllers/order.controller.ts(57,9): error TS2322: Type '{ tenantId: string | undefined; status: { in: Array<"COMPLETED" | "CANCELLED">; }; }' is not assignable to type 'OrderWhereInput'.
+  Types of property 'status' are incompatible.
+    Type '{ in: Array<"COMPLETED" | "CANCELLED">; }' is not assignable to type 'EnumOrderStatusFilter<"Order"> | OrderStatus | undefined'.
+      Type '{ in: Array<"COMPLETED" | "CANCELLED">; }' is not assignable to type 'EnumOrderStatusFilter<"Order">'.
+        Types of property 'in' are incompatible.
+          Type '("CANCELLED" | "COMPLETED")[]' is not assignable to type 'OrderStatus[] | FieldRef<"Order", "OrderStatus[]"> | undefined'.
+            Type '("CANCELLED" | "COMPLETED")[]' is not assignable to type 'OrderStatus[]'.
+              Type '"CANCELLED" | "COMPLETED"' is not assignable to type 'OrderStatus'.
+                Type '"COMPLETED"' is not assignable to type 'OrderStatus'.
+src/controllers/session.controller.ts(225,17): error TS2322: Type '"KITCHEN_ACTIVE"' is not assignable to type 'SessionStatus | EnumSessionStatusFieldUpdateOperationsInput | undefined'.

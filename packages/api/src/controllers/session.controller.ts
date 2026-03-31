@@ -23,7 +23,7 @@ export const createSession = async (req: Request, res: Response) => {
         where: {
           tableId,
           tenantId: tenant.id,
-          sessionStatus: { notIn: ['COMPLETED', 'CANCELLED'] },
+          sessionStatus: { notIn: ['CLOSED' as any, 'CANCELLED' as any] },
         },
       });
       if (existingSession) {
@@ -53,7 +53,7 @@ export const createSession = async (req: Request, res: Response) => {
           tableId: tableId || null,
           customerId,
           partySize,
-          sessionStatus: 'SEATED',
+          sessionStatus: 'OPEN' as any,
           source: 'qr',
         },
         include: {
@@ -80,8 +80,8 @@ export const createSession = async (req: Request, res: Response) => {
     getIO().to(getTenantRoom(tenant.id)).emit('session:new', {
       id: session.id,
       tableId: session.tableId,
-      tableName: session.table?.name,
-      customerName: session.customer?.name,
+      tableName: (session as any).table?.name,
+      customerName: (session as any).customer?.name,
       partySize: session.partySize,
       openedAt: session.openedAt,
     });
@@ -158,7 +158,7 @@ export const addOrderToSession = async (req: Request, res: Response) => {
     // Verify session is still open
     const session = await prisma.diningSession.findUnique({ where: { id: sessionId } });
     if (!session) return res.status(404).json({ error: 'Session not found' });
-    if (['COMPLETED', 'CANCELLED', 'BILL_GENERATED'].includes(session.sessionStatus)) {
+    if (['CLOSED', 'CANCELLED', 'AWAITING_BILL'].includes(session.sessionStatus)) {
       return res.status(400).json({ error: 'Session is closed. No more orders can be added.' });
     }
 
@@ -205,7 +205,7 @@ export const addOrderToSession = async (req: Request, res: Response) => {
           diningSessionId: sessionId,
           orderNumber,
           orderType: 'DINE_IN',
-          status: 'PENDING',
+          status: 'NEW' as any,
           placedBy: placedBy || 'customer',
           subtotal,
           taxAmount,
@@ -222,14 +222,14 @@ export const addOrderToSession = async (req: Request, res: Response) => {
       // Update session status
       await tx.diningSession.update({
         where: { id: sessionId },
-        data: { sessionStatus: 'KITCHEN_ACTIVE' },
+        data: { sessionStatus: 'ACTIVE' as any },
       });
 
       // Update table status
       if (session.tableId) {
         await tx.table.update({
           where: { id: session.tableId },
-          data: { status: 'ORDERING', currentOrderId: newOrder.id },
+          data: { status: 'ORDERING_OPEN' as any, currentOrderId: newOrder.id },
         });
       }
 
@@ -269,14 +269,23 @@ export const finishSession = async (req: Request, res: Response) => {
     });
 
     if (!session) return res.status(404).json({ error: 'Session not found' });
-    if (['COMPLETED', 'CANCELLED', 'BILL_GENERATED'].includes(session.sessionStatus)) {
+    if (['CLOSED', 'CANCELLED', 'AWAITING_BILL'].includes(session.sessionStatus)) {
       return res.status(400).json({ error: 'Session is already closed' });
     }
 
     // Calculate bill from all non-cancelled orders
     const subtotal = session.orders.reduce((sum: number, o: any) => sum + o.subtotal, 0);
     const taxAmount = session.orders.reduce((sum: number, o: any) => sum + o.taxAmount, 0);
-    const totalAmount = session.orders.reduce((sum: number, o: any) => sum + o.totalAmount, 0);
+
+    const cgst = taxAmount / 2;
+    const sgst = taxAmount / 2;
+    const taxableAmount = subtotal;
+
+    const rawTotal = subtotal + taxAmount;
+    const grandTotal = Math.round(rawTotal);
+    const roundOff = grandTotal - rawTotal;
+
+    const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
 
     const result = await prisma.$transaction(async (tx) => {
       // Create bill
@@ -285,16 +294,24 @@ export const finishSession = async (req: Request, res: Response) => {
           tenantId: tenant.id,
           sessionId,
           subtotal,
-          taxAmount,
-          totalAmount,
-        },
+          taxableAmount,
+          cgst,
+          sgst,
+          roundOff,
+          grandTotal,
+          invoiceNumber,
+          businessName: tenant.businessName,
+          businessAddress: tenant.address,
+          gstin: (tenant as any).gstin,
+          fssai: (tenant as any).fssai,
+        } as any,
       });
 
       // Update session
       const updatedSession = await tx.diningSession.update({
         where: { id: sessionId },
         data: {
-          sessionStatus: 'BILL_GENERATED',
+          sessionStatus: 'AWAITING_BILL' as any,
           isBillGenerated: true,
           billGeneratedAt: new Date(),
         },
@@ -321,8 +338,8 @@ export const finishSession = async (req: Request, res: Response) => {
     // Notify vendor
     getIO().to(getTenantRoom(tenant.id)).emit('session:finished', {
       sessionId: result.id,
-      tableName: result.table?.name,
-      totalAmount: result.bill?.totalAmount,
+      tableName: (result as any).table?.name,
+      totalAmount: (result as any).bill?.totalAmount,
     });
 
     res.json(result);
@@ -345,7 +362,7 @@ export const completeSession = async (req: Request, res: Response) => {
       const session = await tx.diningSession.update({
         where: { id: sessionId },
         data: {
-          sessionStatus: 'COMPLETED',
+          sessionStatus: 'CLOSED' as any,
           closedAt: new Date(),
         },
       });
@@ -365,7 +382,7 @@ export const completeSession = async (req: Request, res: Response) => {
       // Mark all orders as completed
       await tx.order.updateMany({
         where: { diningSessionId: sessionId, status: { notIn: ['CANCELLED'] } },
-        data: { status: 'COMPLETED', completedAt: new Date(), isPaid: true, paymentMethod },
+        data: { status: 'RECEIVED' as any, completedAt: new Date(), isPaid: true, paymentMethod },
       });
 
       // Free up table
@@ -436,7 +453,7 @@ export const getActiveSession = async (req: Request, res: Response) => {
       where: {
         tableId,
         tenantId: tenant.id,
-        sessionStatus: { notIn: ['COMPLETED', 'CANCELLED'] },
+        sessionStatus: { notIn: ['CLOSED' as any, 'CANCELLED' as any] },
       },
       include: {
         customer: { select: { id: true, name: true, phone: true } },

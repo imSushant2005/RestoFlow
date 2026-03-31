@@ -37,7 +37,7 @@ export function Orders() {
       return res.data;
     },
     onSuccess: (updatedOrder: any) => {
-      if (updatedOrder.status === 'COMPLETED' || updatedOrder.status === 'CANCELLED') {
+      if (updatedOrder.status === 'RECEIVED' || updatedOrder.status === 'CANCELLED') {
         queryClient.setQueryData(['live-orders'], (old: any[] = []) =>
           old.filter((order) => order.id !== updatedOrder.id)
         );
@@ -59,12 +59,12 @@ export function Orders() {
     socket.on('order:update', (updatedOrder) => {
       queryClient.setQueryData(['live-orders'], (old: any) => {
         if (!old) return old;
-        if (updatedOrder.status === 'COMPLETED' || updatedOrder.status === 'CANCELLED') {
+        if (updatedOrder.status === 'RECEIVED' || updatedOrder.status === 'CANCELLED') {
           return old.filter((o: any) => o.id !== updatedOrder.id);
         }
         return old.map((o: any) => o.id === updatedOrder.id ? updatedOrder : o);
       });
-      if (updatedOrder.status === 'COMPLETED' || updatedOrder.status === 'CANCELLED') {
+      if (updatedOrder.status === 'RECEIVED' || updatedOrder.status === 'CANCELLED') {
         queryClient.invalidateQueries({ queryKey: ['order-history'] });
         queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
       }
@@ -193,17 +193,18 @@ export function Orders() {
                   }
                 }}
                 className={`w-full text-xs rounded-lg font-bold border-0 ring-1 ring-inset px-3 py-2 outline-none cursor-pointer ${
-                  order.status === 'PENDING' ? 'bg-blue-50 text-blue-700 ring-blue-200' :
+                  order.status === 'NEW' ? 'bg-blue-50 text-blue-700 ring-blue-200' :
                   order.status === 'PREPARING' ? 'bg-yellow-50 text-yellow-700 ring-yellow-200' :
                   order.status === 'READY' ? 'bg-green-50 text-green-700 ring-green-200' :
                   'bg-gray-100 text-gray-700 ring-gray-200'
                 }`}
               >
-                <option value="PENDING">Status: Pending</option>
+                <option value="NEW">Status: New</option>
                 <option value="ACCEPTED">Status: Accepted</option>
                 <option value="PREPARING">Status: Preparing</option>
                 <option value="READY">Status: Ready</option>
-                <option value="COMPLETED">Status: Completed</option>
+                <option value="SERVED">Status: Served</option>
+                <option value="RECEIVED">Status: Received</option>
                 <option value="CANCELLED">Status: Cancelled</option>
               </select>
             </div>
@@ -235,8 +236,8 @@ export function Orders() {
           </button>
           <button
             onClick={() => {
-              if (confirm('Close ALL live orders? This will mark them as Completed.')) {
-                liveOrders.forEach((o: any) => statusMutation.mutate({ id: o.id, status: 'COMPLETED' }));
+              if (confirm('Close ALL live kitchen batches? This will mark them as Served.')) {
+                liveOrders.forEach((o: any) => statusMutation.mutate({ id: o.id, status: 'SERVED' }));
               }
             }}
             disabled={liveOrders.length === 0}

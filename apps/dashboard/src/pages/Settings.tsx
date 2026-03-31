@@ -162,7 +162,8 @@ export function Settings() {
               <input name="email" type="email" placeholder="Email Address" required className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-medium" />
               <input name="password" type="password" placeholder="Temporary Password" required className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-medium" />
               <select name="role" className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer">
-                <option value="STAFF">Staff (POS & Tables)</option>
+                <option value="WAITER">Waiter (Orders & Tables)</option>
+                <option value="CASHIER">Cashier (Billing & POS)</option>
                 <option value="KITCHEN">Kitchen (KDS Only)</option>
                 <option value="MANAGER">Manager (Full Access)</option>
               </select>

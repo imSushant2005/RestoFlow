@@ -8,7 +8,7 @@ export const getOrders = async (req: Request, res: Response) => {
     const orders = await prisma.order.findMany({
       where: { 
         tenantId: req.tenantId,
-        status: { notIn: ['COMPLETED', 'CANCELLED'] } // Only active orders
+        status: { notIn: ['RECEIVED' as any, 'CANCELLED' as any] } // Only active orders
       },
       include: {
         table: true,
@@ -34,9 +34,9 @@ export const getOrderHistory = async (req: Request, res: Response) => {
     const statusQuery = (req.query.status as string | undefined)?.toUpperCase();
     const skip = (page - 1) * limit;
     const statusFilter =
-      statusQuery === 'COMPLETED' || statusQuery === 'CANCELLED'
-        ? { in: [statusQuery] as Array<'COMPLETED' | 'CANCELLED'> }
-        : { in: ['COMPLETED', 'CANCELLED'] as Array<'COMPLETED' | 'CANCELLED'> };
+      statusQuery === 'RECEIVED' || statusQuery === 'CANCELLED'
+        ? { in: [statusQuery] as Array<any> }
+        : { in: ['RECEIVED', 'CANCELLED'] as Array<any> };
     const whereClause = {
       tenantId: req.tenantId,
       status: statusFilter,
@@ -87,7 +87,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
 
     const dataToUpdate: any = { status };
     if (cancelReason !== undefined) dataToUpdate.cancellationReason = cancelReason;
-    if (status === 'COMPLETED') dataToUpdate.completedAt = new Date();
+    if (status === 'RECEIVED') dataToUpdate.completedAt = new Date();
     if (status === 'CANCELLED') dataToUpdate.cancelledAt = new Date();
     if (status === 'ACCEPTED') dataToUpdate.acceptedAt = new Date();
     if (status === 'PREPARING') dataToUpdate.preparingAt = new Date();
@@ -112,7 +112,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     }
 
     // Auto Table Update on Completion
-    if ((status === 'COMPLETED' || status === 'CANCELLED') && order.tableId) {
+    if ((status === 'RECEIVED' || status === 'CANCELLED') && order.tableId) {
       await prisma.table.update({
         where: { id: order.tableId },
         data: { status: 'CLEANING', currentOrderId: null, occupiedSeats: [] }

@@ -101,7 +101,7 @@ export const getHistory = async (req: Request, res: Response) => {
     const sessions = await prisma.diningSession.findMany({
       where: {
         customerId,
-        sessionStatus: 'COMPLETED',
+        sessionStatus: 'CLOSED' as any,
       },
       include: {
         tenant: {

@@ -4,12 +4,12 @@ import { publicApi } from '../lib/api';
 import { Plus, Receipt, ChefHat, Clock, CheckCircle2, UtensilsCrossed, X } from 'lucide-react';
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = {
-  PENDING: { label: 'Received', color: 'text-blue-500', icon: Clock },
+  NEW: { label: 'Received', color: 'text-blue-500', icon: Clock },
   ACCEPTED: { label: 'Accepted', color: 'text-indigo-500', icon: CheckCircle2 },
   PREPARING: { label: 'Preparing', color: 'text-yellow-500', icon: ChefHat },
   READY: { label: 'Ready!', color: 'text-green-500', icon: UtensilsCrossed },
   SERVED: { label: 'Served', color: 'text-emerald-500', icon: CheckCircle2 },
-  COMPLETED: { label: 'Done', color: 'text-gray-400', icon: CheckCircle2 },
+  RECEIVED: { label: 'Done', color: 'text-gray-400', icon: CheckCircle2 },
   CANCELLED: { label: 'Cancelled', color: 'text-red-500', icon: X },
 };
 
@@ -67,7 +67,7 @@ export function SessionTracker() {
     </div>
   );
 
-  const isClosed = ['COMPLETED', 'CANCELLED', 'BILL_GENERATED'].includes(session.sessionStatus);
+  const isClosed = ['CLOSED', 'CANCELLED', 'AWAITING_BILL'].includes(session.sessionStatus);
 
   return (
     <div className="min-h-[100dvh] bg-[color:var(--bg-primary)] flex flex-col pb-32">
@@ -103,7 +103,7 @@ export function SessionTracker() {
         )}
 
         {session.orders?.map((order: any, idx: number) => {
-          const status = STATUS_MAP[order.status] || STATUS_MAP.PENDING;
+          const status = STATUS_MAP[order.status] || STATUS_MAP.NEW;
           const StatusIcon = status.icon;
           return (
             <div key={order.id} className="bg-[color:var(--bg-secondary)] rounded-2xl border border-[color:var(--border-primary)] p-4 shadow-sm">
