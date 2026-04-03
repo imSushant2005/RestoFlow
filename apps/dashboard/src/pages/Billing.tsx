@@ -163,11 +163,23 @@ function InvoiceModal({
   });
 
   const printInvoice = () => window.print();
-  const downloadInvoice = () => window.print();
-  const shareInvoice = () => {
+  const downloadInvoice = () => {
+    const invoiceContent = `Invoice ${order.orderNumber || order.id.slice(-8).toUpperCase()}\n${businessName}\n\nTotal: ${formatINR(total)}`;
+    const blob = new Blob([invoiceContent], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `invoice-${order.orderNumber || order.id.slice(-8)}.txt`;
+    a.click();
+  };
+  const shareInvoice = async () => {
     const msg = `Invoice ${order.orderNumber || order.id.slice(-8).toUpperCase()} • Total ${formatINR(total)}`;
-    navigator.clipboard?.writeText(msg);
-    alert('Invoice summary copied to clipboard');
+    try {
+      await navigator.clipboard?.writeText(msg);
+      alert('Invoice summary copied to clipboard');
+    } catch (err) {
+      alert('Failed to copy to clipboard');
+    }
   };
 
   return (

@@ -87,7 +87,11 @@ export function Orders() {
     socket.on('waiter:call', (call: any) => {
       setWaiterCalls(prev => [{ ...call, id: Date.now() }, ...prev].slice(0, 10));
       // Play sound
-      try { new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczLjt0otf/mGEcFkl/sOLbfTcRJWuY1OOURBcRUIC06M1xKRAna6DM5aRaGhhAhb3e0okyDDBwpN77jl0ZJGqk2P+hXxcTRYe84tN5LQ0nbaXb+5JYGSNqpND/pFkUFEmIvuPXeS0NLW6m3v6SVxokZaXR/6RYGRUAAA==').play(); } catch {}  
+      try {
+        new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczLjt0otf/mGEcFkl/sOLbfTcRJWuY1OOURBcRUIC06M1xKRAna6DM5aRaGhhAhb3e0okyDDBwpN77jl0ZJGqk2P+hXxcTRYe84tN5LQ0nbaXb+5JYGSNqpND/pFkUFEmIvuPXeS0NLW6m3v6SVxokZaXR/6RYGRUAAA==').play();
+      } catch (err) {
+        console.warn('Waiter call sound failed:', err);
+      }
     });
 
     return () => { socket.disconnect() };
@@ -126,7 +130,7 @@ export function Orders() {
         };
       }
       acc[gId].orders.push(order);
-      acc[gId].totalAmount += order.totalAmount;
+      acc[gId].totalAmount += Number(order.totalAmount || 0);
       return acc;
     }, {})
   ).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -146,8 +150,8 @@ export function Orders() {
         if (!slug) throw new Error('Tenant slug not found');
         await api.post(`/public/${slug}/sessions/${ticket.sessionId}/finish`);
         queryClient.invalidateQueries({ queryKey: ['live-orders'] });
-      } catch {
-        alert('Failed to close session');
+      } catch (err: any) {
+        alert(err?.response?.data?.error || err?.message || 'Failed to close session');
       }
     };
 

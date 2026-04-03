@@ -181,11 +181,13 @@ export function ItemList({ categoryId }: { categoryId: string }) {
   const toggleMutation = useMutation({
     mutationFn: ({ id, isAvailable }: any) => api.patch(`/menus/items/${id}/availability`, { isAvailable }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['items'] }),
+    onError: (err: any) => alert(err?.response?.data?.error || 'Failed to update item visibility'),
   });
 
   const reorderMutation = useMutation({
     mutationFn: (orderIds: string[]) => api.put('/menus/items/reorder', { orderIds }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['items'] }),
+    onError: (err: any) => alert(err?.response?.data?.error || 'Failed to reorder items'),
   });
 
   const inlineEditMutation = useMutation({
@@ -194,6 +196,7 @@ export function ItemList({ categoryId }: { categoryId: string }) {
       queryClient.invalidateQueries({ queryKey: ['items'] });
       setEditingId(null);
     },
+    onError: (err: any) => alert(err?.response?.data?.error || 'Failed to save item'),
   });
 
   const bulkVisibilityMutation = useMutation({
@@ -203,6 +206,7 @@ export function ItemList({ categoryId }: { categoryId: string }) {
       queryClient.invalidateQueries({ queryKey: ['items'] });
       setSelectedIds([]);
     },
+    onError: (err: any) => alert(err?.response?.data?.error || 'Failed to update items'),
   });
 
   useEffect(() => {
@@ -228,6 +232,7 @@ export function ItemList({ categoryId }: { categoryId: string }) {
     setOrderedItems((current) => {
       const oldIndex = current.findIndex((item) => item.id === active.id);
       const newIndex = current.findIndex((item) => item.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return current; // Guard against invalid indices
       const next = arrayMove(current, oldIndex, newIndex);
       reorderMutation.mutate(next.map((item) => item.id));
       return next;
@@ -239,6 +244,7 @@ export function ItemList({ categoryId }: { categoryId: string }) {
   };
 
   const startInlineEdit = (item: any) => {
+    if (!item) return; // Guard against null item
     setEditingId(item.id);
     setDraft({
       name: item.name || '',

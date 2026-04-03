@@ -86,7 +86,7 @@ export function Analytics() {
 
     if (data.topItems?.length > 3) {
       const lowest = data.topItems[data.topItems.length - 1];
-      if (lowest?.count < 5) {
+      if (lowest && lowest.count < 5) {
         tips.push({ icon: <TrendingDown size={16} />, text: `"${lowest.name}" is underperforming (${lowest.count} orders). Test a promo or revise placement.`, type: 'warning' });
       }
     }
@@ -221,9 +221,10 @@ export function Analytics() {
                   itemStyle={{ fontWeight: 800, color: '#1e293b' }}
                 />
                 <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                  {data.peakHours.map((entry: any, index: number) => {
-                    const max = Math.max(...data.peakHours.map((d: any) => d.count));
-                    const intensity = entry.count / (max || 1);
+                  {data.peakHours?.map((entry: any, index: number) => {
+                    const peakValues = data.peakHours?.map((d: any) => d.count) || [];
+                    const max = peakValues.length > 0 ? Math.max(...peakValues) : 1;
+                    const intensity = entry.count / max;
                     return <Cell key={`cell-${index}`} fill={intensity > 0.7 ? '#ef4444' : intensity > 0.4 ? '#f97316' : '#60a5fa'} />;
                   })}
                 </Bar>

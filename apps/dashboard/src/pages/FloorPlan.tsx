@@ -18,7 +18,8 @@ export function FloorPlan() {
 
   const createZoneMutation = useMutation({
     mutationFn: (name: string) => api.post('/venue/zones', { name, width: 800, height: 600 }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['zones'] })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['zones'] }),
+    onError: (err: any) => alert(err?.response?.data?.error || 'Failed to create zone'),
   });
 
   if (isLoading) return (
@@ -34,7 +35,7 @@ export function FloorPlan() {
 
   const zones = data?.zones || [];
   const tenantSlug = data?.tenantSlug || '';
-  const selectedZone = zones.find((z: any) => z.id === selectedZoneId) || zones[0];
+  const selectedZone = zones.length > 0 ? (zones.find((z: any) => z.id === selectedZoneId) || zones[0]) : null;
 
   // Compute live table stats across all zones
   const allTables = zones.flatMap((z: any) => z.tables || []);

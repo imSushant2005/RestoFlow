@@ -16,7 +16,7 @@ export function ItemModal({ isOpen, onClose, categoryId, editingItem }: any) {
     setIsGenerating(true);
     try {
       const res = await api.post('/ai/generate-description', { name, category: 'Restaurant Dish' });
-      if (res.data.description) {
+      if (res.data?.description) {
         setDescription(res.data.description);
       }
     } catch (e) {
@@ -43,19 +43,24 @@ export function ItemModal({ isOpen, onClose, categoryId, editingItem }: any) {
 
   const mutation = useMutation({
     mutationFn: (data: any) => {
-      // MVP: Always create.
+      // Create if new, update if editing
+      if (editingItem?.id) {
+        return api.patch(`/menus/items/${editingItem.id}`, data);
+      }
       return api.post('/menus/items', data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items'] });
       onClose();
-    }
+    },
+    onError: (err: any) => alert(err?.response?.data?.error || 'Failed to save item'),
   });
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!categoryId) return alert('Category is required');
     mutation.mutate({ name, description, price: Number(price), imageUrl, categoryId });
   };
 
@@ -97,7 +102,7 @@ export function ItemModal({ isOpen, onClose, categoryId, editingItem }: any) {
             />
             {imageUrl && (
               <div className="mt-2 rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
-                <img src={imageUrl} alt="Preview" className="w-full h-28 object-cover" />
+                <img src={imageUrl} alt="Preview" className="w-full h-28 object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
               </div>
             )}
           </div>
