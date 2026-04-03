@@ -41,5 +41,6 @@ const router = (0, express_1.Router)();
 router.post('/upsell', AIController.getUpsellRecommendations);
 // Strictly protected for authorized dashboard Administrators crafting the menus
 router.post('/generate-description', auth_middleware_1.requireAuth, (0, auth_middleware_1.requireRole)(['OWNER', 'MANAGER']), AIController.generateDescription);
+router.post('/process-image', auth_middleware_1.requireAuth, (0, auth_middleware_1.requireRole)(['OWNER', 'MANAGER']), AIController.processMenuImage);
 exports.default = router;
 //# sourceMappingURL=ai.routes.js.map

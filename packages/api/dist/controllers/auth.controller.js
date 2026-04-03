@@ -79,7 +79,7 @@ const register = async (req, res) => {
     }
     catch (error) {
         if (error instanceof zod_1.z.ZodError) {
-            return res.status(400).json({ error: error.errors });
+            return res.status(400).json({ error: 'Validation failed', details: error.issues });
         }
         console.error('Register error:', error);
         return res.status(500).json({ error: 'Internal server error' });
@@ -131,9 +131,13 @@ const login = async (req, res) => {
     }
     catch (error) {
         if (error instanceof zod_1.z.ZodError) {
-            return res.status(400).json({ error: error.errors });
+            return res.status(400).json({
+                error: 'Validation failed',
+                details: error.issues
+            });
         }
-        return res.status(500).json({ error: 'Internal server error' });
+        console.error('Login Error:', error);
+        return res.status(500).json({ error: 'Internal server error. Please try again later.' });
     }
 };
 exports.login = login;

@@ -9,10 +9,11 @@ const getOrders = async (req, res) => {
         const orders = await prisma_1.prisma.order.findMany({
             where: {
                 tenantId: req.tenantId,
-                status: { notIn: ['COMPLETED', 'CANCELLED'] } // Only active orders
+                status: { notIn: ['RECEIVED', 'CANCELLED'] } // Only active orders
             },
             include: {
                 table: true,
+                diningSession: { include: { customer: true } },
                 items: {
                     include: {
                         menuItem: true
@@ -34,9 +35,9 @@ const getOrderHistory = async (req, res) => {
         const limit = parseInt(req.query.limit) || 50;
         const statusQuery = req.query.status?.toUpperCase();
         const skip = (page - 1) * limit;
-        const statusFilter = statusQuery === 'COMPLETED' || statusQuery === 'CANCELLED'
+        const statusFilter = statusQuery === 'RECEIVED' || statusQuery === 'CANCELLED'
             ? { in: [statusQuery] }
-            : { in: ['COMPLETED', 'CANCELLED'] };
+            : { in: ['RECEIVED', 'CANCELLED'] };
         const whereClause = {
             tenantId: req.tenantId,
             status: statusFilter,
@@ -85,7 +86,7 @@ const updateOrderStatus = async (req, res) => {
         const dataToUpdate = { status };
         if (cancelReason !== undefined)
             dataToUpdate.cancellationReason = cancelReason;
-        if (status === 'COMPLETED')
+        if (status === 'RECEIVED')
             dataToUpdate.completedAt = new Date();
         if (status === 'CANCELLED')
             dataToUpdate.cancelledAt = new Date();
@@ -112,7 +113,7 @@ const updateOrderStatus = async (req, res) => {
             (0, socket_1.getIO)().to((0, socket_1.getSessionRoom)(req.tenantId, order.sessionId)).emit('order:update', order);
         }
         // Auto Table Update on Completion
-        if ((status === 'COMPLETED' || status === 'CANCELLED') && order.tableId) {
+        if ((status === 'RECEIVED' || status === 'CANCELLED') && order.tableId) {
             await prisma_1.prisma.table.update({
                 where: { id: order.tableId },
                 data: { status: 'CLEANING', currentOrderId: null, occupiedSeats: [] }

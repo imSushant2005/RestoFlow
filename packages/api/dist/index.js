@@ -27,6 +27,8 @@ const billing_routes_1 = __importDefault(require("./routes/billing.routes"));
 const payment_routes_1 = __importDefault(require("./routes/payment.routes"));
 const ai_routes_1 = __importDefault(require("./routes/ai.routes"));
 const notification_routes_1 = __importDefault(require("./routes/notification.routes"));
+const customer_routes_1 = __importDefault(require("./routes/customer.routes"));
+const session_routes_1 = __importDefault(require("./routes/session.routes"));
 const socket_1 = require("./socket");
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
@@ -67,6 +69,8 @@ app.use('/billing', billing_routes_1.default);
 app.use('/payments', payment_routes_1.default);
 app.use('/ai', ai_routes_1.default);
 app.use('/notifications', notification_routes_1.default);
+app.use('/customer', customer_routes_1.default);
+app.use('/public', session_routes_1.default);
 // Global Error Handler must be the LAST middleware
 app.use(error_middleware_1.globalErrorHandler);
 httpServer.listen(port, () => {

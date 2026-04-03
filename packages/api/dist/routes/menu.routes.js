@@ -45,6 +45,7 @@ router.post('/categories', (0, role_middleware_1.requireRoles)([prisma_1.UserRol
 router.put('/categories/reorder', (0, role_middleware_1.requireRoles)([prisma_1.UserRole.OWNER, prisma_1.UserRole.MANAGER]), MenuController.reorderCategories);
 router.get('/items', MenuController.getMenuItems);
 router.post('/items', (0, role_middleware_1.requireRoles)([prisma_1.UserRole.OWNER, prisma_1.UserRole.MANAGER]), MenuController.createMenuItem);
-router.patch('/items/:id/availability', (0, role_middleware_1.requireRoles)([prisma_1.UserRole.OWNER, prisma_1.UserRole.MANAGER, prisma_1.UserRole.STAFF, prisma_1.UserRole.KITCHEN]), MenuController.toggleItemAvailability);
+router.patch('/items/:id/availability', (0, role_middleware_1.requireRoles)([prisma_1.UserRole.OWNER, prisma_1.UserRole.MANAGER, prisma_1.UserRole.CASHIER, prisma_1.UserRole.WAITER, prisma_1.UserRole.KITCHEN]), MenuController.toggleItemAvailability);
+router.post('/bulk-import', (0, role_middleware_1.requireRoles)([prisma_1.UserRole.OWNER, prisma_1.UserRole.MANAGER]), MenuController.bulkImportMenu);
 exports.default = router;
 //# sourceMappingURL=menu.routes.js.map

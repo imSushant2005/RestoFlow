@@ -45,6 +45,7 @@ router.post('/:tenantSlug/orders', PublicController.createOrder);
 router.get('/:tenantSlug/sessions/:sessionToken/orders', PublicController.getSessionOrders);
 router.get('/:tenantSlug/orders/:id', PublicController.getOrderInfo);
 router.post('/orders/:id/feedback', PublicController.submitFeedback);
+router.post('/:tenantSlug/waiter-call', PublicController.waiterCall);
 router.post('/tables/:id/session', TableController.createSession);
 exports.default = router;
 //# sourceMappingURL=public.routes.js.map

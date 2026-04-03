@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.submitFeedback = exports.getSessionOrders = exports.getOrderInfo = exports.createOrder = exports.resolveCustomDomain = exports.getPublicMenu = void 0;
+exports.waiterCall = exports.submitFeedback = exports.getSessionOrders = exports.getOrderInfo = exports.createOrder = exports.resolveCustomDomain = exports.getPublicMenu = void 0;
 const prisma_1 = require("../db/prisma");
 const socket_1 = require("../socket");
 const cache_service_1 = require("../services/cache.service");
@@ -254,13 +254,20 @@ const createOrder = async (req, res) => {
 exports.createOrder = createOrder;
 const getOrderInfo = async (req, res) => {
     try {
-        const { id, tenantSlug } = req.params;
+        const { id } = req.params;
+        // Cache for 2 minutes since orders don't change status *that* frequently 
+        // and live updates are handled by Socket.io anyway.
+        const cacheKey = `order_info_${id}`;
+        const cachedOrder = await (0, cache_service_1.getCache)(cacheKey);
+        if (cachedOrder)
+            return res.json(cachedOrder);
         const order = await prisma_1.prisma.order.findUnique({
             where: { id },
             include: { table: true, items: { include: { menuItem: true } } }
         });
         if (!order)
             return res.status(404).json({ error: 'Order not found' });
+        await (0, cache_service_1.setCache)(cacheKey, order, 120);
         res.json(order);
     }
     catch (error) {
@@ -288,6 +295,10 @@ const getSessionOrders = async (req, res) => {
             select: { id: true }
         });
         const sessionIds = [...new Set([sessionToken, ...matchingSessions.map((session) => session.id)])];
+        const cacheKey = `session_orders_${sessionToken}`;
+        const cachedOrders = await (0, cache_service_1.getCache)(cacheKey);
+        if (cachedOrders)
+            return res.json(cachedOrders);
         const orders = await prisma_1.prisma.order.findMany({
             where: {
                 tenantId: tenant.id,
@@ -304,6 +315,7 @@ const getSessionOrders = async (req, res) => {
                 modifiers: typeof i.selectedModifiers === 'string' ? JSON.parse(i.selectedModifiers) : i.selectedModifiers
             }))
         }));
+        await (0, cache_service_1.setCache)(cacheKey, parsedOrders, 30); // 30-second cache
         res.json(parsedOrders);
     }
     catch (error) {
@@ -323,7 +335,7 @@ const submitFeedback = async (req, res) => {
             data: {
                 tenantId: order.tenantId,
                 orderId: order.id,
-                sessionId: order.sessionId,
+                diningSessionId: order.diningSessionId,
                 overallRating: rating,
                 comment: feedback,
             }
@@ -340,4 +352,32 @@ const submitFeedback = async (req, res) => {
     }
 };
 exports.submitFeedback = submitFeedback;
+const waiterCall = async (req, res) => {
+    try {
+        const { tenantSlug } = req.params;
+        const { tableId, type } = req.body; // type: WAITER | BILL | HELP
+        const tenant = await prisma_1.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+        if (!tenant)
+            return res.status(404).json({ error: 'Restaurant not found' });
+        let tableName = 'Unknown';
+        if (tableId) {
+            const table = await prisma_1.prisma.table.findUnique({ where: { id: tableId } });
+            if (table)
+                tableName = table.name;
+        }
+        // Emit to dashboard and KDS via Socket.io
+        (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(tenant.id)).emit('waiter:call', {
+            tableId,
+            tableName,
+            type: type || 'WAITER',
+            timestamp: new Date().toISOString(),
+        });
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error('waiterCall error:', error);
+        res.status(500).json({ error: 'Failed to send waiter call' });
+    }
+};
+exports.waiterCall = waiterCall;
 //# sourceMappingURL=public.controller.js.map

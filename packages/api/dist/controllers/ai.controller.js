@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getUpsellRecommendations = exports.generateDescription = void 0;
+exports.processMenuImage = exports.getUpsellRecommendations = exports.generateDescription = void 0;
 const crypto_1 = __importDefault(require("crypto"));
 const prisma_1 = require("../db/prisma");
 const ai_service_1 = require("../services/ai.service");
@@ -75,4 +75,19 @@ const getUpsellRecommendations = async (req, res) => {
     }
 };
 exports.getUpsellRecommendations = getUpsellRecommendations;
+const processMenuImage = async (req, res) => {
+    try {
+        const { image } = req.body; // base64
+        if (!image) {
+            return res.status(400).json({ success: false, error: 'No image provided' });
+        }
+        const menuJson = await (0, ai_service_1.extractMenuFromImage)(image);
+        res.json({ success: true, menu: menuJson });
+    }
+    catch (error) {
+        logger_1.logger.error({ error }, 'Menu Image Process Controller Failed');
+        res.status(500).json({ success: false, error: error.message || 'AI Menu Extraction Failed' });
+    }
+};
+exports.processMenuImage = processMenuImage;
 //# sourceMappingURL=ai.controller.js.map

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.toggleItemAvailability = exports.createMenuItem = exports.getMenuItems = exports.reorderCategories = exports.createCategory = exports.getCategories = void 0;
+exports.bulkImportMenu = exports.toggleItemAvailability = exports.createMenuItem = exports.getMenuItems = exports.reorderCategories = exports.createCategory = exports.getCategories = void 0;
 const prisma_1 = require("../db/prisma");
 const socket_1 = require("../socket");
 const plans_1 = require("../config/plans");
@@ -138,4 +138,50 @@ const toggleItemAvailability = async (req, res) => {
     }
 };
 exports.toggleItemAvailability = toggleItemAvailability;
+const bulkImportMenu = async (req, res) => {
+    try {
+        const { categories } = req.body; // { categories: [{ name, items: [{ name, price, description, isVeg }] }] }
+        if (!Array.isArray(categories)) {
+            return res.status(400).json({ error: 'Invalid data format' });
+        }
+        const tenantId = req.tenantId;
+        await prisma_1.prisma.$transaction(async (tx) => {
+            for (const catData of categories) {
+                // Find or create category
+                let category = await tx.category.findFirst({
+                    where: { name: catData.name, tenantId }
+                });
+                if (!category) {
+                    category = await tx.category.create({
+                        data: {
+                            name: catData.name,
+                            tenantId
+                        }
+                    });
+                }
+                if (Array.isArray(catData.items)) {
+                    for (const itemData of catData.items) {
+                        await tx.menuItem.create({
+                            data: {
+                                name: itemData.name,
+                                description: itemData.description || '',
+                                price: Number(itemData.price) || 0,
+                                isVeg: !!itemData.isVeg,
+                                categoryId: category.id,
+                                tenantId
+                            }
+                        });
+                    }
+                }
+            }
+        });
+        await invalidateMenuCache(tenantId);
+        res.json({ success: true, message: 'Menu imported successfully' });
+    }
+    catch (error) {
+        console.error('Bulk import error', error);
+        res.status(500).json({ error: 'Failed to import menu' });
+    }
+};
+exports.bulkImportMenu = bulkImportMenu;
 //# sourceMappingURL=menu.controller.js.map
