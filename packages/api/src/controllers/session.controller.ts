@@ -309,6 +309,14 @@ export const finishSession = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Session is already closed' });
     }
 
+    // Validate session has orders
+    if (session.orders.length === 0) {
+      return res.status(400).json({
+        error: 'Cannot finish session with no orders',
+        sessionId
+      });
+    }
+
     // Calculate bill from all non-cancelled orders
     const subtotal = session.orders.reduce((sum: number, o: any) => sum + o.subtotal, 0);
     const taxAmount = session.orders.reduce((sum: number, o: any) => sum + o.taxAmount, 0);

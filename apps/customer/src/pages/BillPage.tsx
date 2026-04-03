@@ -76,7 +76,7 @@ export function BillPage() {
     );
   }
 
-  if (!session?.bill) {
+  if (!session?.bill || typeof session.bill.totalAmount !== 'number') {
     return (
       <div className="min-h-[100dvh] bg-[color:var(--bg-primary)] flex flex-col items-center justify-center gap-4 p-6">
         <p className="text-[color:var(--text-secondary)] font-bold">Bill not found or not generated yet</p>

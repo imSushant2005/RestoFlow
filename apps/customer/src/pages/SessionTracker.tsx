@@ -47,12 +47,20 @@ export function SessionTracker() {
 
   const handleFinish = async () => {
     if (!confirm('Finish dining? No more items can be added after this.')) return;
+
+    const orders = session?.orders || [];
+    if (orders.length === 0) {
+      alert('Cannot finish session with no orders. Add items first.');
+      return;
+    }
+
     setFinishing(true);
     try {
       await publicApi.post(`/${tenantSlug}/sessions/${sessionId}/finish`);
       navigate(`/order/${tenantSlug}/session/${sessionId}/bill`);
-    } catch {
-      alert('Failed to finish session');
+    } catch (err: any) {
+      const errorMsg = err?.response?.data?.error || 'Failed to finish session';
+      alert(errorMsg);
     } finally {
       setFinishing(false);
     }
