@@ -4,7 +4,12 @@ import { prisma } from '../db/prisma';
 export const getAnalytics = async (req: Request, res: Response) => {
   try {
     const tenantId = req.tenantId!;
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const daysParam = Number(req.query.days || 30);
+    const fromParam = typeof req.query.from === 'string' ? new Date(req.query.from) : null;
+    const toParam = typeof req.query.to === 'string' ? new Date(req.query.to) : null;
+    const days = Number.isFinite(daysParam) && daysParam > 0 ? daysParam : 30;
+    const fromDate = fromParam && !Number.isNaN(fromParam.getTime()) ? fromParam : new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const toDate = toParam && !Number.isNaN(toParam.getTime()) ? toParam : new Date();
 
     // Parallelize queries for maximum throughput
     const [
@@ -19,17 +24,17 @@ export const getAnalytics = async (req: Request, res: Response) => {
         where: {
           tenantId,
           status: 'RECEIVED' as any,
-          createdAt: { gte: thirtyDaysAgo }
+          createdAt: { gte: fromDate, lte: toDate }
         },
         _count: { id: true },
         _sum: { totalAmount: true }
       }),
 
       // 2. Traffic Analysis
-      prisma.customerSession.count({
+      prisma.diningSession.count({
         where: {
           tenantId,
-          startedAt: { gte: thirtyDaysAgo }
+          openedAt: { gte: fromDate, lte: toDate }
         }
       }),
 
@@ -40,7 +45,7 @@ export const getAnalytics = async (req: Request, res: Response) => {
           order: {
             tenantId,
             status: 'RECEIVED' as any,
-            createdAt: { gte: thirtyDaysAgo }
+            createdAt: { gte: fromDate, lte: toDate }
           }
         },
         _sum: {
@@ -63,7 +68,8 @@ export const getAnalytics = async (req: Request, res: Response) => {
         FROM "Order" 
         WHERE "tenantId" = ${tenantId} 
           AND "status" = 'RECEIVED' 
-          AND "createdAt" >= ${thirtyDaysAgo} 
+          AND "createdAt" >= ${fromDate}
+          AND "createdAt" <= ${toDate}
         GROUP BY hour 
         ORDER BY hour ASC
       `,
@@ -76,7 +82,8 @@ export const getAnalytics = async (req: Request, res: Response) => {
         FROM "Order" 
         WHERE "tenantId" = ${tenantId} 
           AND "status" = 'RECEIVED' 
-          AND "createdAt" >= ${thirtyDaysAgo} 
+          AND "createdAt" >= ${fromDate}
+          AND "createdAt" <= ${toDate}
         GROUP BY date 
         ORDER BY date ASC
       `
@@ -118,11 +125,15 @@ export const getAnalytics = async (req: Request, res: Response) => {
       topItems: formattedTopItems,
       peakHours: formattedPeakHours,
       revenueChart: dailyRevenueRaw,
-      funnelSteps
+      funnelSteps,
+      dateRange: {
+        from: fromDate.toISOString(),
+        to: toDate.toISOString(),
+        days,
+      }
     });
   } catch (error) {
     console.error('RESTOFLOW_ANALYTICS_FAILURE:', error);
     res.status(500).json({ error: 'Failed to synthesize dashboard analytics' });
   }
 };
-

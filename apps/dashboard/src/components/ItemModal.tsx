@@ -8,6 +8,7 @@ export function ItemModal({ isOpen, onClose, categoryId, editingItem }: any) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState(0);
+  const [imageUrl, setImageUrl] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleGenerateAI = async () => {
@@ -31,10 +32,12 @@ export function ItemModal({ isOpen, onClose, categoryId, editingItem }: any) {
       setName(editingItem.name);
       setDescription(editingItem.description || '');
       setPrice(editingItem.price);
+      setImageUrl(editingItem?.images?.[0] || editingItem?.imageUrl || '');
     } else {
       setName('');
       setDescription('');
       setPrice(0);
+      setImageUrl('');
     }
   }, [editingItem, isOpen]);
 
@@ -53,7 +56,7 @@ export function ItemModal({ isOpen, onClose, categoryId, editingItem }: any) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    mutation.mutate({ name, description, price: Number(price), categoryId });
+    mutation.mutate({ name, description, price: Number(price), imageUrl, categoryId });
   };
 
   return (
@@ -84,7 +87,21 @@ export function ItemModal({ isOpen, onClose, categoryId, editingItem }: any) {
             <label className="block text-sm font-medium mb-1">Price (₹)</label>
             <input type="number" step="0.01" required value={price} onChange={e => setPrice(Number(e.target.value))} className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
           </div>
-          
+          <div>
+            <label className="block text-sm font-medium mb-1">Image URL</label>
+            <input
+              value={imageUrl}
+              onChange={e => setImageUrl(e.target.value)}
+              className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="https://..."
+            />
+            {imageUrl && (
+              <div className="mt-2 rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
+                <img src={imageUrl} alt="Preview" className="w-full h-28 object-cover" />
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-3 mt-5">
             <button type="button" onClick={onClose} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancel</button>
             <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">Save Item</button>

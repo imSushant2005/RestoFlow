@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.bulkImportMenu = exports.toggleItemAvailability = exports.createMenuItem = exports.getMenuItems = exports.reorderCategories = exports.createCategory = exports.getCategories = void 0;
+exports.bulkImportMenu = exports.toggleItemAvailability = exports.bulkUpdateAvailability = exports.reorderMenuItems = exports.updateMenuItem = exports.createMenuItem = exports.getMenuItems = exports.reorderCategories = exports.createCategory = exports.getCategories = void 0;
 const prisma_1 = require("../db/prisma");
 const socket_1 = require("../socket");
 const plans_1 = require("../config/plans");
@@ -76,7 +76,7 @@ const getMenuItems = async (req, res) => {
 exports.getMenuItems = getMenuItems;
 const createMenuItem = async (req, res) => {
     try {
-        const { name, description, price, categoryId, dietaryTags } = req.body;
+        const { name, description, price, categoryId, dietaryTags, imageUrl, images } = req.body;
         const tenant = await prisma_1.prisma.tenant.findUnique({ where: { id: req.tenantId } });
         if (!tenant)
             return res.status(404).json({ error: 'Tenant not found' });
@@ -98,6 +98,7 @@ const createMenuItem = async (req, res) => {
                 isVeg,
                 isVegan,
                 isGlutenFree,
+                images: Array.isArray(images) ? images.filter(Boolean) : imageUrl ? [imageUrl] : [],
                 tenantId: req.tenantId,
             },
             include: {
@@ -115,6 +116,100 @@ const createMenuItem = async (req, res) => {
     }
 };
 exports.createMenuItem = createMenuItem;
+const updateMenuItem = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, description, price, imageUrl, images, isAvailable, isPopular, isChefSpecial, isBestSeller, isNew, isVeg, isVegan, isGlutenFree, } = req.body || {};
+        const data = {};
+        if (name !== undefined)
+            data.name = name;
+        if (description !== undefined)
+            data.description = description;
+        if (price !== undefined)
+            data.price = Number(price);
+        if (isAvailable !== undefined)
+            data.isAvailable = !!isAvailable;
+        if (isPopular !== undefined)
+            data.isPopular = !!isPopular;
+        if (isChefSpecial !== undefined)
+            data.isChefSpecial = !!isChefSpecial;
+        if (isBestSeller !== undefined)
+            data.isBestSeller = !!isBestSeller;
+        if (isNew !== undefined)
+            data.isNew = !!isNew;
+        if (isVeg !== undefined)
+            data.isVeg = isVeg;
+        if (isVegan !== undefined)
+            data.isVegan = !!isVegan;
+        if (isGlutenFree !== undefined)
+            data.isGlutenFree = !!isGlutenFree;
+        if (Array.isArray(images))
+            data.images = images.filter(Boolean);
+        else if (imageUrl !== undefined)
+            data.images = imageUrl ? [imageUrl] : [];
+        const updated = await prisma_1.prisma.menuItem.updateMany({
+            where: { id, tenantId: req.tenantId },
+            data,
+        });
+        if (updated.count === 0)
+            return res.status(404).json({ error: 'Item not found' });
+        const item = await prisma_1.prisma.menuItem.findUnique({
+            where: { id },
+            include: { modifierGroups: { include: { modifiers: true } } },
+        });
+        await invalidateMenuCache(req.tenantId);
+        res.json(item);
+    }
+    catch (error) {
+        console.error('updateMenuItem error', error);
+        res.status(500).json({ error: 'Failed to update menu item' });
+    }
+};
+exports.updateMenuItem = updateMenuItem;
+const reorderMenuItems = async (req, res) => {
+    try {
+        const { orderIds } = req.body;
+        if (!Array.isArray(orderIds) || orderIds.length === 0) {
+            return res.status(400).json({ error: 'orderIds required' });
+        }
+        await prisma_1.prisma.$transaction(orderIds.map((id, index) => prisma_1.prisma.menuItem.updateMany({
+            where: { id, tenantId: req.tenantId },
+            data: { sortOrder: index },
+        })));
+        await invalidateMenuCache(req.tenantId);
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error('reorderMenuItems error', error);
+        res.status(500).json({ error: 'Failed to reorder menu items' });
+    }
+};
+exports.reorderMenuItems = reorderMenuItems;
+const bulkUpdateAvailability = async (req, res) => {
+    try {
+        const { itemIds, isAvailable } = req.body;
+        if (!Array.isArray(itemIds) || itemIds.length === 0) {
+            return res.status(400).json({ error: 'itemIds required' });
+        }
+        await prisma_1.prisma.menuItem.updateMany({
+            where: { tenantId: req.tenantId, id: { in: itemIds } },
+            data: { isAvailable: !!isAvailable },
+        });
+        for (const id of itemIds) {
+            (0, socket_1.getIO)().to(`tenant_${req.tenantId}`).emit('menu:availability_changed', {
+                itemId: id,
+                isAvailable: !!isAvailable,
+            });
+        }
+        await invalidateMenuCache(req.tenantId);
+        res.json({ success: true, itemIds, isAvailable: !!isAvailable });
+    }
+    catch (error) {
+        console.error('bulkUpdateAvailability error', error);
+        res.status(500).json({ error: 'Failed to bulk update item availability' });
+    }
+};
+exports.bulkUpdateAvailability = bulkUpdateAvailability;
 const toggleItemAvailability = async (req, res) => {
     try {
         const { id } = req.params;

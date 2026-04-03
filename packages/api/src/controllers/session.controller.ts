@@ -166,6 +166,15 @@ export const addOrderToSession = async (req: Request, res: Response) => {
     const menuItemIds = items.map((i: any) => i.menuItemId);
     const menuItems = await prisma.menuItem.findMany({
       where: { id: { in: menuItemIds }, tenantId: tenant.id },
+      include: {
+        modifierGroups: {
+          include: {
+            modifiers: {
+              where: { isAvailable: true },
+            },
+          },
+        },
+      },
     });
     const menuMap = new Map(menuItems.map(m => [m.id, m]));
 
@@ -173,7 +182,34 @@ export const addOrderToSession = async (req: Request, res: Response) => {
     const orderItems = items.map((item: any) => {
       const menuItem = menuMap.get(item.menuItemId);
       if (!menuItem) throw new Error(`Menu item ${item.menuItemId} not found`);
-      const unitPrice = menuItem.price;
+      const incomingModifiers = Array.isArray(item.selectedModifiers)
+        ? item.selectedModifiers
+        : Array.isArray(item.modifiers)
+          ? item.modifiers
+          : [];
+      const modifierMap = new Map(
+        (menuItem.modifierGroups || [])
+          .flatMap((group) =>
+            (group.modifiers || []).map((modifier) => [
+              modifier.id,
+              {
+                id: modifier.id,
+                name: modifier.name,
+                groupName: group.name,
+                priceAdjustment: Number(modifier.priceAdjustment || 0),
+              },
+            ])
+          )
+      );
+      let unitPrice = menuItem.price;
+      const selectedModifiers = incomingModifiers
+        .map((modifier: any) => {
+          const dbModifier = modifier?.id ? modifierMap.get(modifier.id) : null;
+          if (!dbModifier) return null;
+          unitPrice += dbModifier.priceAdjustment;
+          return dbModifier;
+        })
+        .filter(Boolean);
       const qty = item.quantity || 1;
       const totalPrice = unitPrice * qty;
       subtotal += totalPrice;
@@ -185,7 +221,7 @@ export const addOrderToSession = async (req: Request, res: Response) => {
         unitPrice,
         quantity: qty,
         totalPrice,
-        selectedModifiers: item.selectedModifiers || [],
+        selectedModifiers,
         specialNote: item.specialNote || null,
         isVeg: menuItem.isVeg,
       };
@@ -277,28 +313,21 @@ export const finishSession = async (req: Request, res: Response) => {
     const subtotal = session.orders.reduce((sum: number, o: any) => sum + o.subtotal, 0);
     const taxAmount = session.orders.reduce((sum: number, o: any) => sum + o.taxAmount, 0);
 
-    const cgst = taxAmount / 2;
-    const sgst = taxAmount / 2;
-    const taxableAmount = subtotal;
-
-    const rawTotal = subtotal + taxAmount;
-    const grandTotal = Math.round(rawTotal);
-    const roundOff = grandTotal - rawTotal;
+    const discountAmount = 0;
+    const totalAmount = subtotal + taxAmount - discountAmount;
 
     const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
 
     const result = await prisma.$transaction(async (tx) => {
       // Create bill
-      const bill = await tx.bill.create({
+      await tx.bill.create({
         data: {
           tenantId: tenant.id,
           sessionId,
           subtotal,
-          taxableAmount,
-          cgst,
-          sgst,
-          roundOff,
-          grandTotal,
+          taxAmount,
+          discountAmount,
+          totalAmount,
           invoiceNumber,
           businessName: tenant.businessName,
           businessAddress: tenant.address,

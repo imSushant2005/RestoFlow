@@ -78,7 +78,7 @@ const updateOrderStatus = async (req, res) => {
         const { status, cancelReason } = req.body;
         const existingOrder = await prisma_1.prisma.order.findFirst({
             where: { id, tenantId: req.tenantId },
-            select: { id: true, tableId: true, sessionId: true, customerPhone: true, customerName: true, orderNumber: true }
+            select: { id: true, tableId: true, diningSessionId: true, customerPhone: true, customerName: true, orderNumber: true }
         });
         if (!existingOrder) {
             return res.status(404).json({ error: 'Order not found' });
@@ -109,8 +109,8 @@ const updateOrderStatus = async (req, res) => {
             }
         });
         (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(req.tenantId)).emit('order:update', order);
-        if (order.sessionId) {
-            (0, socket_1.getIO)().to((0, socket_1.getSessionRoom)(req.tenantId, order.sessionId)).emit('order:update', order);
+        if (order.diningSessionId) {
+            (0, socket_1.getIO)().to((0, socket_1.getSessionRoom)(req.tenantId, order.diningSessionId)).emit('order:update', order);
         }
         // Auto Table Update on Completion
         if ((status === 'RECEIVED' || status === 'CANCELLED') && order.tableId) {

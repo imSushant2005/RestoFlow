@@ -37,6 +37,13 @@ export function Storefront() {
 
   const createSessionMutation = useMutation({
     mutationFn: (data: { sessionId: string; seat?: string }) => publicApi.post(`/tables/${tableId}/session`, data),
+    onSuccess: (res: any) => {
+      const createdSessionId = res?.data?.sessionId;
+      if (createdSessionId) {
+        localStorage.setItem('restoflow_session', createdSessionId);
+        localStorage.setItem('rf_active_session', createdSessionId);
+      }
+    },
     onError: (err: any) => console.error('Failed to create session:', err),
   });
 
@@ -59,6 +66,15 @@ export function Storefront() {
   const logoUrl = menuData?.logoUrl || '';
   const brandColor = menuData?.primaryColor || '#f97316';
   const accentColor = menuData?.accentColor || '#111827';
+  const recommendedItems = categories
+    .flatMap((category: any) =>
+      (Array.isArray(category?.menuItems) ? category.menuItems : []).map((item: any) => ({
+        ...item,
+        _categoryId: category.id,
+      }))
+    )
+    .filter((item: any) => item?.isPopular || item?.isBestSeller || item?.isChefSpecial)
+    .slice(0, 8);
 
   if (isLoading) {
     return (
@@ -267,7 +283,13 @@ export function Storefront() {
               )}
             </div>
           </div>
-          <button onClick={() => navigate(`/order/${tenantSlug}/status`)} className="text-xs font-bold text-gray-400 hover:text-gray-700 transition-colors">
+          <button
+            onClick={() => {
+              if (activeSessionId) navigate(`/order/${tenantSlug}/session/${activeSessionId}`);
+              else navigate(`/order/${tenantSlug}/status`);
+            }}
+            className="text-xs font-bold text-gray-400 hover:text-gray-700 transition-colors"
+          >
             My Orders
           </button>
         </div>
@@ -303,6 +325,44 @@ export function Storefront() {
           <LoyaltyBanner tenantSlug={tenantSlug || ''} />
         </div>
         <div className="px-4 py-5 space-y-10">
+          {recommendedItems.length > 0 && (
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-black text-[color:var(--text-primary)]">Recommended for you</h2>
+                <span className="text-xs font-bold text-[color:var(--text-secondary)]">Based on popular picks</span>
+              </div>
+              <div className="flex gap-3 overflow-x-auto custom-scrollbar pb-2">
+                {recommendedItems.map((item: any) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      const el = document.getElementById(`category-${item._categoryId}`);
+                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                    className="min-w-[190px] bg-[color:var(--bg-secondary)] border border-[color:var(--border-primary)] rounded-2xl overflow-hidden text-left shadow-sm hover:shadow-md transition-all"
+                  >
+                    <div className="h-24 bg-gray-100 overflow-hidden">
+                      <img
+                        src={item?.imageUrl || item?.images?.[0] || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80'}
+                        alt={item?.name || 'Item'}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                    <div className="p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-bold text-sm text-[color:var(--text-primary)] line-clamp-1">{item?.name || 'Dish'}</p>
+                        <span className="text-xs font-black text-brand">Popular</span>
+                      </div>
+                      <p className="text-xs text-[color:var(--text-secondary)] mt-1 line-clamp-2">{item?.description || 'Chef recommended.'}</p>
+                      <p className="text-sm font-black mt-2 text-[color:var(--text-primary)]">{formatINR(Number(item?.price || 0))}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
           {filteredCategories.map((category: any, index: number) => (
             <div key={category?.id || `category-${index}`} id={`category-${category?.id}`} className="scroll-mt-28">
               <MenuSection category={category} />

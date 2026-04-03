@@ -12,6 +12,18 @@ export function Orders() {
   const [activeTab, setActiveTab] = useState<'PIPELINE' | 'SESSIONS' | 'HISTORY'>('PIPELINE');
   const [busyMode, setBusyMode] = useState(false);
   const [waiterCalls, setWaiterCalls] = useState<any[]>([]);
+  const openTestOrder = () => {
+    try {
+      const restaurant = JSON.parse(localStorage.getItem('restaurant') || '{}');
+      if (!restaurant?.slug) {
+        alert('Tenant slug missing. Complete business setup first.');
+        return;
+      }
+      window.open(`/order/${restaurant.slug}`, '_blank', 'noopener,noreferrer');
+    } catch {
+      alert('Unable to open test order flow right now.');
+    }
+  };
 
   const { data: liveOrders = [], isLoading } = useQuery<any[]>({
     queryKey: ['live-orders'],
@@ -22,7 +34,7 @@ export function Orders() {
     staleTime: 1000 * 10,
   });
 
-  const { data: historyResponse = [] } = useQuery<any[]>({
+  const { data: historyResponse } = useQuery<any>({
     queryKey: ['order-history'],
     queryFn: async () => {
       const res = await api.get('/orders/history');
@@ -30,6 +42,7 @@ export function Orders() {
     },
     staleTime: 1000 * 30,
   });
+  const historyOrders = historyResponse?.data || [];
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, status, cancelReason }: any) => {
@@ -412,8 +425,15 @@ export function Orders() {
                 <div className="kanban-col-body custom-scrollbar">
                   {colOrders.map((order: any) => <PipelineCard key={order.id} order={order} />)}
                   {colOrders.length === 0 && (
-                    <div className="flex items-center justify-center h-full py-16 text-center">
-                      <p className="text-slate-400 text-sm font-medium">Nothing here</p>
+                    <div className="flex flex-col items-center justify-center h-full py-16 text-center px-4">
+                      <p className="text-slate-500 text-sm font-semibold">No orders yet 👀</p>
+                      <p className="text-slate-400 text-xs mt-1">Start by scanning a QR or placing a test order.</p>
+                      <button
+                        onClick={openTestOrder}
+                        className="mt-3 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold"
+                      >
+                        Create Test Order
+                      </button>
                     </div>
                   )}
                 </div>
@@ -427,9 +447,16 @@ export function Orders() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
             {groupedLive.map((ticket: any) => <TicketCard key={ticket.id} ticket={ticket} />)}
             {groupedLive.length === 0 && (
-              <div className="col-span-full flex flex-col items-center justify-center mt-20 opacity-50">
+              <div className="col-span-full flex flex-col items-center justify-center mt-20">
                 <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-4"><span className="text-2xl">🍽️</span></div>
-                <p className="text-gray-500 font-bold text-lg">No active sessions.</p>
+                <p className="text-gray-600 font-bold text-lg">No active sessions</p>
+                <p className="text-gray-400 text-sm mt-1">Start by scanning a QR or placing a test order.</p>
+                <button
+                  onClick={openTestOrder}
+                  className="mt-3 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold"
+                >
+                  Create Test Order
+                </button>
               </div>
             )}
           </div>
@@ -437,8 +464,13 @@ export function Orders() {
       ) : (
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50/50 p-6 rounded-3xl border border-gray-100">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
-            {historyResponse.map((order: any) => <TicketCard key={`history_${order.id}`} ticket={{ ...order, isSession: false, orders: [order] }} />)}
-            {historyResponse.length === 0 && <div className="col-span-full text-center text-gray-400 font-medium mt-20">No completed orders yet.</div>}
+            {historyOrders.map((order: any) => <TicketCard key={`history_${order.id}`} ticket={{ ...order, isSession: false, orders: [order] }} />)}
+            {historyOrders.length === 0 && (
+              <div className="col-span-full text-center mt-20">
+                <p className="text-gray-500 font-semibold">No completed orders yet</p>
+                <p className="text-gray-400 text-sm mt-1">Complete a live order to populate billing and history.</p>
+              </div>
+            )}
           </div>
         </div>
       )}

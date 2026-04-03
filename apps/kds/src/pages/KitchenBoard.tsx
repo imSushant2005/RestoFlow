@@ -15,7 +15,8 @@ const COLS = [
     headerClass: 'bg-blue-950/60 border-blue-800/50',
     labelClass: 'text-blue-400',
     badgeClass: 'bg-blue-500/20 text-blue-300',
-    emptyText: 'No new tickets',
+    emptyText: 'No tickets yet 👀',
+    emptyHint: 'Start by scanning a QR or placing a test order.',
     pulse: true,
   },
   {
@@ -27,6 +28,7 @@ const COLS = [
     labelClass: 'text-amber-400',
     badgeClass: 'bg-amber-500/20 text-amber-300',
     emptyText: 'Nothing cooking',
+    emptyHint: 'As soon as an order is accepted, it will appear here.',
   },
   {
     id: 'ready',
@@ -37,6 +39,7 @@ const COLS = [
     labelClass: 'text-emerald-400',
     badgeClass: 'bg-emerald-500/20 text-emerald-300',
     emptyText: 'Nothing ready yet',
+    emptyHint: 'Mark preparing items as ready to serve.',
   },
   {
     id: 'served',
@@ -47,12 +50,48 @@ const COLS = [
     labelClass: 'text-slate-400',
     badgeClass: 'bg-slate-600/30 text-slate-400',
     emptyText: 'Nothing served yet',
+    emptyHint: 'Served tickets appear here before completion.',
   },
 ];
 
 export function KitchenBoard() {
   const queryClient = useQueryClient();
   const [clock, setClock] = useState(new Date());
+  const playAlert = () => {
+    const audio = new Audio('/notification.mp3');
+    audio.play().catch(() => {
+      try {
+        const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.type = 'sine';
+        oscillator.frequency.value = 880;
+        gain.gain.setValueAtTime(0.001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.start();
+        oscillator.stop(ctx.currentTime + 0.24);
+      } catch {
+        // ignore fallback beep failures
+      }
+    });
+  };
+  const openTestOrder = () => {
+    try {
+      const restaurant = JSON.parse(localStorage.getItem('restaurant') || '{}');
+      if (!restaurant?.slug) {
+        alert('Tenant slug missing. Complete dashboard setup first.');
+        return;
+      }
+      window.open(`/order/${restaurant.slug}`, '_blank', 'noopener,noreferrer');
+    } catch {
+      alert('Unable to open test order flow right now.');
+    }
+  };
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['live-orders'],
@@ -63,7 +102,7 @@ export function KitchenBoard() {
   });
 
   useEffect(() => {
-    const t = setInterval(() => setClock(new Date()), 30000);
+    const t = setInterval(() => setClock(new Date()), 10000);
     return () => clearInterval(t);
   }, []);
 
@@ -73,7 +112,7 @@ export function KitchenBoard() {
 
     socket.on('order:new', (order) => {
       queryClient.setQueryData(['live-orders'], (old: any) => [...(old || []), order]);
-      new Audio('/notification.mp3').play().catch(() => {});
+      playAlert();
     });
     socket.on('order:update', (updated) => {
       queryClient.setQueryData(['live-orders'], (old: any) => {
@@ -165,7 +204,14 @@ export function KitchenBoard() {
                   {colOrders.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full py-12 text-center">
                       <span className="text-3xl mb-3 opacity-30">{col.id === 'incoming' ? '🔔' : col.id === 'ready' ? '✅' : '🍳'}</span>
-                      <p className="text-slate-600 text-sm font-medium">{col.emptyText}</p>
+                      <p className="text-slate-500 text-sm font-semibold">{col.emptyText}</p>
+                      <p className="text-slate-600/80 text-xs mt-1 max-w-[220px]">{(col as any).emptyHint}</p>
+                      <button
+                        onClick={openTestOrder}
+                        className="mt-3 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold"
+                      >
+                        Create Test Order
+                      </button>
                     </div>
                   )}
                 </div>

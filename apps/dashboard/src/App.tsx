@@ -1,4 +1,4 @@
-import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom'
+import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
 import { MenuBuilder } from './pages/MenuBuilder'
 import { FloorPlan } from './pages/FloorPlan'
 import { Orders } from './pages/Orders'
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { useQueries } from '@tanstack/react-query'
 import { api } from './lib/api'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 /* ─── Login Page ──────────────────────────────────────────── */
 function LoginPage({ onLogin }: { onLogin: () => void }) {
@@ -152,7 +152,6 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
 /* ─── Dashboard Shell with Sidebar ───────────────────────── */
 function DashboardShell() {
   const location = useLocation();
-  const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [liveOrderCount, setLiveOrderCount] = useState(0);
 
@@ -204,7 +203,7 @@ function DashboardShell() {
   return (
     <div className="min-h-[100dvh] bg-slate-50 flex font-sans text-gray-900">
       {/* ── Sidebar ── */}
-      <aside className={`flex-shrink-0 h-screen sticky top-0 bg-slate-900 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-[64px]' : 'w-[220px]'}`}>
+      <aside className={`flex-shrink-0 h-screen sticky top-0 bg-slate-900 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-[68px]' : 'w-[228px]'}`}>
         {/* Logo */}
         <div className="px-4 py-5 border-b border-slate-800 flex items-center gap-3">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -238,13 +237,16 @@ function DashboardShell() {
             const active = location.pathname === to;
             return (
               <Link key={to} to={to}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all relative group ${
+                className={`flex items-center ${sidebarCollapsed ? 'justify-center' : ''} gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all relative group ${
                   active
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 ring-1 ring-blue-300/40'
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                 }`}
               >
-                <span className="flex-shrink-0">{icon}</span>
+                <span className="flex-shrink-0 relative">
+                  {icon}
+                  {active && <span className="absolute -inset-1.5 rounded-lg bg-blue-400/25 blur-sm -z-10" />}
+                </span>
                 {!sidebarCollapsed && <span className="truncate">{label}</span>}
                 {badge != null && badge > 0 && (
                   <span className={`ml-auto text-[10px] font-black px-1.5 py-0.5 rounded-full ${active ? 'bg-white/20 text-white' : 'bg-red-500 text-white'}`}>
@@ -265,10 +267,15 @@ function DashboardShell() {
         <div className="p-2 border-t border-slate-800 space-y-1">
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-white hover:bg-slate-800 text-sm font-medium transition-all"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-white hover:bg-slate-800 text-sm font-medium transition-all relative group"
           >
             <ChevronRight size={18} className={`transition-transform ${sidebarCollapsed ? '' : 'rotate-180'}`} />
             {!sidebarCollapsed && <span>Collapse</span>}
+            {sidebarCollapsed && (
+              <div className="absolute left-full ml-2 px-2 py-1 bg-slate-700 text-white text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                Expand Sidebar
+              </div>
+            )}
           </button>
           <button
             onClick={() => { localStorage.removeItem('accessToken'); window.location.reload(); }}

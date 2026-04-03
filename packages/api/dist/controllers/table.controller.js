@@ -128,35 +128,56 @@ exports.updateTableStatus = updateTableStatus;
 const createSession = async (req, res) => {
     try {
         const { id } = req.params;
-        const { sessionId, name, phoneNumber, seat } = req.body;
+        const { name, phoneNumber, seat } = req.body;
         const table = await prisma_1.prisma.table.findUnique({ where: { id } });
         if (!table)
             return res.status(404).json({ error: 'Table not found' });
-        // V2: Actually create the CustomerSession row
-        let session;
-        try {
-            session = await prisma_1.prisma.customerSession.create({
+        const activeSession = await prisma_1.prisma.diningSession.findFirst({
+            where: {
+                tenantId: table.tenantId,
+                tableId: table.id,
+                sessionStatus: { notIn: ['CLOSED', 'CANCELLED'] },
+            },
+            orderBy: { openedAt: 'desc' },
+            select: { id: true },
+        });
+        if (activeSession) {
+            return res.json({ success: true, sessionId: activeSession.id, anonymousId: activeSession.id });
+        }
+        const normalizedPhone = typeof phoneNumber === 'string' && phoneNumber.trim().length > 0
+            ? phoneNumber.trim()
+            : `guest_${table.id}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        let customer = await prisma_1.prisma.customer.findUnique({ where: { phone: normalizedPhone } });
+        if (!customer) {
+            customer = await prisma_1.prisma.customer.create({
                 data: {
-                    tenantId: table.tenantId,
-                    tableId: table.id,
-                    anonymousId: sessionId || Math.random().toString(36).substring(7),
-                }
+                    phone: normalizedPhone,
+                    name: typeof name === 'string' && name.trim().length > 0 ? name.trim() : null,
+                },
             });
         }
-        catch (sessionError) {
-            console.error('Session create minimal error', sessionError);
-            return res.json({
-                success: true,
-                sessionId: sessionId || null,
-                anonymousId: sessionId || null
+        else if (name && name.trim().length > 0) {
+            customer = await prisma_1.prisma.customer.update({
+                where: { id: customer.id },
+                data: { name: name.trim(), lastSeenAt: new Date() },
             });
         }
+        const session = await prisma_1.prisma.diningSession.create({
+            data: {
+                tenantId: table.tenantId,
+                tableId: table.id,
+                customerId: customer.id,
+                partySize: 1,
+                sessionStatus: 'OPEN',
+                source: 'legacy_table_session',
+            },
+        });
         if (seat) {
             const currentOccupied = table.occupiedSeats || [];
             if (!currentOccupied.includes(seat.toString())) {
                 const updatedTable = await prisma_1.prisma.table.update({
                     where: { id: table.id },
-                    data: { occupiedSeats: { push: seat.toString() } }
+                    data: { occupiedSeats: { push: seat.toString() }, currentSessionId: session.id, status: 'OCCUPIED' }
                 });
                 (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(table.tenantId)).emit('table:status_change', { tableId: table.id, status: updatedTable.status });
             }
@@ -165,12 +186,12 @@ const createSession = async (req, res) => {
             if (table.status !== 'OCCUPIED') {
                 await prisma_1.prisma.table.update({
                     where: { id: table.id },
-                    data: { status: 'OCCUPIED' }
+                    data: { status: 'OCCUPIED', currentSessionId: session.id }
                 });
                 (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(table.tenantId)).emit('table:status_change', { tableId: table.id, status: 'OCCUPIED' });
             }
         }
-        res.json({ success: true, sessionId: session.id, anonymousId: session.anonymousId });
+        res.json({ success: true, sessionId: session.id, anonymousId: session.id });
     }
     catch (error) {
         console.error('Session create error', error);

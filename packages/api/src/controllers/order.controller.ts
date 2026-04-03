@@ -78,7 +78,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     const { status, cancelReason } = req.body;
     const existingOrder = await prisma.order.findFirst({
       where: { id, tenantId: req.tenantId },
-      select: { id: true, tableId: true, sessionId: true, customerPhone: true, customerName: true, orderNumber: true }
+      select: { id: true, tableId: true, diningSessionId: true, customerPhone: true, customerName: true, orderNumber: true }
     });
 
     if (!existingOrder) {
@@ -107,8 +107,8 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     });
 
     getIO().to(getTenantRoom(req.tenantId!)).emit('order:update', order);
-    if (order.sessionId) {
-      getIO().to(getSessionRoom(req.tenantId!, order.sessionId)).emit('order:update', order);
+    if (order.diningSessionId) {
+      getIO().to(getSessionRoom(req.tenantId!, order.diningSessionId)).emit('order:update', order);
     }
 
     // Auto Table Update on Completion

@@ -5,7 +5,12 @@ const prisma_1 = require("../db/prisma");
 const getAnalytics = async (req, res) => {
     try {
         const tenantId = req.tenantId;
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const daysParam = Number(req.query.days || 30);
+        const fromParam = typeof req.query.from === 'string' ? new Date(req.query.from) : null;
+        const toParam = typeof req.query.to === 'string' ? new Date(req.query.to) : null;
+        const days = Number.isFinite(daysParam) && daysParam > 0 ? daysParam : 30;
+        const fromDate = fromParam && !Number.isNaN(fromParam.getTime()) ? fromParam : new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+        const toDate = toParam && !Number.isNaN(toParam.getTime()) ? toParam : new Date();
         // Parallelize queries for maximum throughput
         const [summary, totalSessions, topItems, peakHoursRaw, dailyRevenueRaw] = await Promise.all([
             // 1. Core Summary: Aggregated counts and sums
@@ -13,16 +18,16 @@ const getAnalytics = async (req, res) => {
                 where: {
                     tenantId,
                     status: 'RECEIVED',
-                    createdAt: { gte: thirtyDaysAgo }
+                    createdAt: { gte: fromDate, lte: toDate }
                 },
                 _count: { id: true },
                 _sum: { totalAmount: true }
             }),
             // 2. Traffic Analysis
-            prisma_1.prisma.customerSession.count({
+            prisma_1.prisma.diningSession.count({
                 where: {
                     tenantId,
-                    startedAt: { gte: thirtyDaysAgo }
+                    openedAt: { gte: fromDate, lte: toDate }
                 }
             }),
             // 3. Most Popular Items (Snapshot from OrderItems)
@@ -32,7 +37,7 @@ const getAnalytics = async (req, res) => {
                     order: {
                         tenantId,
                         status: 'RECEIVED',
-                        createdAt: { gte: thirtyDaysAgo }
+                        createdAt: { gte: fromDate, lte: toDate }
                     }
                 },
                 _sum: {
@@ -54,7 +59,8 @@ const getAnalytics = async (req, res) => {
         FROM "Order" 
         WHERE "tenantId" = ${tenantId} 
           AND "status" = 'RECEIVED' 
-          AND "createdAt" >= ${thirtyDaysAgo} 
+          AND "createdAt" >= ${fromDate}
+          AND "createdAt" <= ${toDate}
         GROUP BY hour 
         ORDER BY hour ASC
       `,
@@ -66,7 +72,8 @@ const getAnalytics = async (req, res) => {
         FROM "Order" 
         WHERE "tenantId" = ${tenantId} 
           AND "status" = 'RECEIVED' 
-          AND "createdAt" >= ${thirtyDaysAgo} 
+          AND "createdAt" >= ${fromDate}
+          AND "createdAt" <= ${toDate}
         GROUP BY date 
         ORDER BY date ASC
       `
@@ -104,7 +111,12 @@ const getAnalytics = async (req, res) => {
             topItems: formattedTopItems,
             peakHours: formattedPeakHours,
             revenueChart: dailyRevenueRaw,
-            funnelSteps
+            funnelSteps,
+            dateRange: {
+                from: fromDate.toISOString(),
+                to: toDate.toISOString(),
+                days,
+            }
         });
     }
     catch (error) {

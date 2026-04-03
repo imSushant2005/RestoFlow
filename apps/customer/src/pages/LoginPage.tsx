@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { publicApi } from '../lib/api';
-import { Phone, User, ArrowRight, ChefHat } from 'lucide-react';
+import { api, publicApi } from '../lib/api';
+import { Phone, User, ArrowRight, ChefHat, AlertCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
 export function LoginPage() {
   const { tenantSlug, tableId } = useParams();
@@ -10,6 +11,31 @@ export function LoginPage() {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
+  const rememberKey = `rf_login_pref_${tenantSlug || 'default'}`;
+
+  const { data: tenantMenu } = useQuery({
+    queryKey: ['tenant-login-brand', tenantSlug],
+    queryFn: async () => {
+      const res = await publicApi.get(`/${tenantSlug}/menu`);
+      return res.data;
+    },
+    enabled: !!tenantSlug,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  useEffect(() => {
+    const raw = localStorage.getItem(rememberKey);
+    if (!raw) return;
+    try {
+      const data = JSON.parse(raw);
+      if (typeof data?.phone === 'string') setPhone(data.phone);
+      if (typeof data?.name === 'string') setName(data.name);
+      if (typeof data?.rememberMe === 'boolean') setRememberMe(data.rememberMe);
+    } catch {
+      // ignore invalid local storage payload
+    }
+  }, [rememberKey]);
 
   const handleLogin = async () => {
     if (phone.length < 10) {
@@ -21,14 +47,28 @@ export function LoginPage() {
     setError('');
 
     try {
-      const res = await publicApi.post('/customer/login', { phone, name: name || undefined });
+      const res = await api.post('/customer/login', { phone, name: name || undefined });
       localStorage.setItem('rf_customer_token', res.data.token);
       localStorage.setItem('rf_customer_id', res.data.customer.id);
       localStorage.setItem('rf_customer_name', res.data.customer.name || '');
       localStorage.setItem('rf_customer_phone', res.data.customer.phone);
+      if (rememberMe) {
+        localStorage.setItem(
+          rememberKey,
+          JSON.stringify({
+            phone,
+            name,
+            rememberMe: true,
+          })
+        );
+      } else {
+        localStorage.removeItem(rememberKey);
+      }
       navigate(`/order/${tenantSlug}/${tableId}/party`);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed. Please try again.');
+      const status = err?.response?.status;
+      const message = err.response?.data?.error || 'Login failed. Please try again.';
+      setError(status === 400 ? message : `Unable to log in right now. ${message}`);
     } finally {
       setLoading(false);
     }
@@ -42,9 +82,15 @@ export function LoginPage() {
       <div className="relative px-6 pt-16 pb-24 text-white text-center">
         {/* Floating icon */}
         <div className="w-20 h-20 bg-white/15 backdrop-blur-sm rounded-3xl flex items-center justify-center mx-auto mb-5 border border-white/30 float shadow-xl">
-          <ChefHat size={36} className="text-white" />
+          {tenantMenu?.logoUrl ? (
+            <img src={tenantMenu.logoUrl} alt={`${tenantMenu?.businessName || 'Restaurant'} logo`} className="w-full h-full object-cover rounded-3xl" />
+          ) : (
+            <ChefHat size={36} className="text-white" />
+          )}
         </div>
-        <h1 className="text-3xl font-black tracking-tight mb-2">Welcome!</h1>
+        <h1 className="text-3xl font-black tracking-tight mb-2">
+          {tenantMenu?.businessName || tenantMenu?.name || 'Welcome!'}
+        </h1>
         <p className="text-orange-100 text-base font-medium">Enter your details to start dining</p>
 
         {/* Wave SVG */}
@@ -111,10 +157,16 @@ export function LoginPage() {
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-xl text-sm font-semibold fade-in">
-              {error}
+            <div className="bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-xl text-sm font-semibold fade-in flex items-start gap-2">
+              <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+              <span>{error}</span>
             </div>
           )}
+
+          <label className="flex items-center gap-2 text-sm font-medium text-gray-600 cursor-pointer">
+            <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
+            Remember me on this device
+          </label>
 
           {/* CTA */}
           <button

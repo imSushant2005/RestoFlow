@@ -47,7 +47,6 @@ model Tenant {
   tables          Table[]
   zones           Zone[]
   orders          Order[]
-  customerSessions CustomerSession[]
   diningSessions  DiningSession[]
   offers          Offer[]
   reviews         Review[]
@@ -243,34 +242,12 @@ model Table {
   updatedAt       DateTime    @updatedAt
 
   orders          Order[]
-  sessions        CustomerSession[]
   diningSessions  DiningSession[]
 
   @@index([tenantId, status])
 }
 
 // ─── CUSTOMER SESSIONS ────────────────────────────────────
-model CustomerSession {
-  id            String    @id @default(cuid())
-  tenantId      String
-  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tableId       String?
-  table         Table?    @relation(fields: [tableId], references: [id])
-  anonymousId   String    // generated client-side, stored in sessionStorage
-  phoneNumber   String?   // voluntarily provided for loyalty
-  name          String?   // optional name
-  deviceInfo    String?   // browser UA
-  ipAddress     String?
-  startedAt     DateTime  @default(now())
-  lastActivityAt DateTime @default(now())
-  endedAt       DateTime?
-
-  orders        Order[]
-
-  @@index([tenantId, anonymousId])
-  @@index([tableId])
-}
-
 // ─── CUSTOMERS (Lightweight, for login + history) ─────────
 model Customer {
   id          String    @id @default(cuid())
@@ -322,13 +299,9 @@ model Bill {
   invoiceNumber   String?   @unique
   
   subtotal        Float
-  itemDiscount    Float     @default(0)
-  taxableAmount   Float     @default(0)
-  cgst            Float     @default(0)
-  sgst            Float     @default(0)
-  serviceCharge   Float     @default(0)
-  roundOff        Float     @default(0)
-  grandTotal      Float
+  taxAmount       Float     @default(0)
+  discountAmount  Float     @default(0)
+  totalAmount     Float
   
   paymentStatus   String    @default("UNPAID") // UNPAID | PAID | PARTIAL
   paymentMethod   String?   // cash | upi | card
@@ -352,8 +325,6 @@ model Order {
   tenant              Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   tableId             String?
   table               Table?      @relation(fields: [tableId], references: [id])
-  sessionId           String?
-  session             CustomerSession? @relation(fields: [sessionId], references: [id])
   diningSessionId     String?
   diningSession       DiningSession?   @relation(fields: [diningSessionId], references: [id])
   orderNumber         String      // human-readable: "#SN7N3KJN" - unique per tenant
@@ -398,7 +369,6 @@ model Order {
   @@index([tenantId, status, createdAt])
   @@index([tenantId, tableId, status])
   @@index([tenantId, orderNumber])
-  @@index([sessionId])
   @@index([diningSessionId])
 }
 

@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const PublicController = __importStar(require("../controllers/public.controller"));
 const TableController = __importStar(require("../controllers/table.controller"));
+const CustomerController = __importStar(require("../controllers/customer.controller"));
 const router = (0, express_1.Router)();
 // Domain Resolution for White-Label SPA
 router.get('/resolve-domain', PublicController.resolveCustomDomain);
@@ -47,5 +48,6 @@ router.get('/:tenantSlug/orders/:id', PublicController.getOrderInfo);
 router.post('/orders/:id/feedback', PublicController.submitFeedback);
 router.post('/:tenantSlug/waiter-call', PublicController.waiterCall);
 router.post('/tables/:id/session', TableController.createSession);
+router.post('/customer/login', CustomerController.login); // Backward-compatible alias
 exports.default = router;
 //# sourceMappingURL=public.routes.js.map

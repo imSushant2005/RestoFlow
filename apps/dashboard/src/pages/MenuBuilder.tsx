@@ -22,7 +22,7 @@ export function MenuBuilder() {
   const { data: settings } = useQuery({
     queryKey: ['settings'],
     queryFn: async () => {
-      const res = await api.get('/settings');
+      const res = await api.get('/settings/business');
       return res.data;
     }
   });
@@ -39,8 +39,11 @@ export function MenuBuilder() {
     <div className="flex flex-col w-full h-full">
       {/* Top Action Bar */}
       <div className="px-6 py-3 border-b bg-white flex justify-between items-center shadow-xs">
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-gray-900 tracking-tight">Menu Management</h1>
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-gray-900 tracking-tight">Menu Management</h1>
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">Drag to reorder • Inline edit on cards • Bulk show/hide supported</p>
           {tenantSlug && (
             <a 
               href={`${getCustomerAppUrl()}/order/${tenantSlug}`} 

@@ -1,5 +1,4 @@
 import { Routes, Route } from 'react-router-dom'
-import { RestaurantHome } from './pages/RestaurantHome'
 import { LoginPage } from './pages/LoginPage'
 import { PartySizePage } from './pages/PartySizePage'
 import { Storefront } from './pages/Storefront'

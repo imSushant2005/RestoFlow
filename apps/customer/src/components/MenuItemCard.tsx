@@ -43,7 +43,7 @@ export function MenuItemCard({ item }: { item: any }) {
           )}
 
           <div className="absolute top-3 left-3 flex flex-wrap gap-1">
-            {item?.isBestSeller && (
+            {(item?.isBestSeller || item?.isPopular) && (
               <span className="bg-brand text-white text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-sm shadow-md">
                 Bestseller
               </span>

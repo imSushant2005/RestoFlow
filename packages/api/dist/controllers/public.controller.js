@@ -50,7 +50,8 @@ const getPublicMenu = async (req, res) => {
             coverImageUrl: tenant.coverImageUrl || null,
             categories: tenant.categories,
             primaryColor: tenant.primaryColor,
-            accentColor: tenant.accentColor
+            accentColor: tenant.accentColor,
+            taxRate: tenant.taxRate,
         };
         await (0, cache_service_1.setCache)(cacheKey, publicData, 3600); // 1-hour cache
         res.json(publicData);
@@ -103,63 +104,116 @@ const createOrder = async (req, res) => {
             });
             safeTableId = table?.id || null;
         }
-        let resolvedSessionId = null;
-        if (incomingSessionToken) {
-            let session = await prisma_1.prisma.customerSession.findFirst({
+        let resolvedSession = incomingSessionToken
+            ? await prisma_1.prisma.diningSession.findFirst({
+                where: {
+                    id: incomingSessionToken,
+                    tenantId: tenant.id,
+                    sessionStatus: { notIn: ['CLOSED', 'CANCELLED'] },
+                },
+            })
+            : null;
+        // If caller didn't pass a sessionId, try joining the active table session first.
+        if (!resolvedSession && safeTableId) {
+            resolvedSession = await prisma_1.prisma.diningSession.findFirst({
                 where: {
                     tenantId: tenant.id,
-                    OR: [
-                        { id: incomingSessionToken },
-                        { anonymousId: incomingSessionToken }
-                    ]
+                    tableId: safeTableId,
+                    sessionStatus: { notIn: ['CLOSED', 'CANCELLED'] },
                 },
-                orderBy: { startedAt: 'desc' },
-                select: { id: true }
+                orderBy: { openedAt: 'desc' },
             });
-            if (!session) {
-                try {
-                    session = await prisma_1.prisma.customerSession.create({
-                        data: {
-                            tenantId: tenant.id,
-                            tableId: safeTableId,
-                            anonymousId: incomingSessionToken,
-                        },
-                        select: { id: true }
-                    });
-                }
-                catch (sessionCreateError) {
-                    console.error('createOrder session create error:', sessionCreateError);
-                }
-            }
-            resolvedSessionId = session?.id || null;
         }
+        // Always anchor orders to a DiningSession (legacy CustomerSession removed from runtime flow).
+        if (!resolvedSession) {
+            const normalizedPhone = typeof customerPhone === 'string' && customerPhone.trim().length > 0
+                ? customerPhone.trim()
+                : `guest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            let customer = await prisma_1.prisma.customer.findUnique({ where: { phone: normalizedPhone } });
+            if (!customer) {
+                customer = await prisma_1.prisma.customer.create({
+                    data: {
+                        phone: normalizedPhone,
+                        name: typeof customerName === 'string' && customerName.trim().length > 0 ? customerName.trim() : null,
+                    },
+                });
+            }
+            resolvedSession = await prisma_1.prisma.diningSession.create({
+                data: {
+                    tenantId: tenant.id,
+                    tableId: safeTableId,
+                    customerId: customer.id,
+                    partySize: 1,
+                    sessionStatus: 'OPEN',
+                    source: 'public_order',
+                },
+            });
+        }
+        const menuItemIds = items
+            .map((item) => item?.menuItemId || item?.menuItem?.id)
+            .filter((id) => typeof id === 'string');
+        if (menuItemIds.length === 0) {
+            return res.status(400).json({ error: 'Order must include valid menu item ids' });
+        }
+        const menuItems = await prisma_1.prisma.menuItem.findMany({
+            where: { tenantId: tenant.id, id: { in: menuItemIds } },
+            include: {
+                modifierGroups: {
+                    include: {
+                        modifiers: {
+                            where: { isAvailable: true },
+                        },
+                    },
+                },
+            },
+        });
+        const menuMap = new Map(menuItems.map((m) => [m.id, m]));
         let subtotal = 0;
         const orderItemsCreate = items.map((item) => {
-            const menuItem = item?.menuItem;
-            if (!menuItem?.id || typeof menuItem.price !== 'number') {
-                throw new Error('Invalid menu item payload');
+            const menuItemId = item?.menuItemId || item?.menuItem?.id;
+            const menuItem = menuMap.get(menuItemId);
+            if (!menuItem) {
+                throw new Error(`Menu item not found: ${menuItemId}`);
             }
-            const modifiers = Array.isArray(item.modifiers) ? item.modifiers : [];
+            const modifiers = Array.isArray(item.selectedModifiers)
+                ? item.selectedModifiers
+                : Array.isArray(item.modifiers)
+                    ? item.modifiers
+                    : [];
             const quantity = Number(item.quantity) || 0;
             if (quantity <= 0) {
                 throw new Error('Invalid item quantity');
             }
             let unitPrice = menuItem.price;
+            const modifierMap = new Map((menuItem.modifierGroups || [])
+                .flatMap((group) => (group.modifiers || []).map((modifier) => [
+                modifier.id,
+                {
+                    id: modifier.id,
+                    name: modifier.name,
+                    groupName: group.name,
+                    priceAdjustment: Number(modifier.priceAdjustment || 0),
+                },
+            ])));
             const selectedMods = modifiers.map((mod) => {
-                unitPrice += mod.priceAdjustment || mod.price || 0;
+                const dbModifier = mod?.id ? modifierMap.get(mod.id) : null;
+                if (!dbModifier)
+                    return null;
+                unitPrice += dbModifier.priceAdjustment;
                 return {
-                    id: mod.id,
-                    name: mod.name,
-                    priceAdjustment: mod.priceAdjustment || mod.price || 0,
+                    id: dbModifier.id,
+                    name: dbModifier.name,
+                    groupName: dbModifier.groupName,
+                    priceAdjustment: dbModifier.priceAdjustment,
                 };
-            });
+            }).filter(Boolean);
             const totalPrice = unitPrice * quantity;
             subtotal += totalPrice;
             return {
                 menuItemId: menuItem.id,
-                name: menuItem.name || 'Item',
+                name: menuItem.name,
                 description: menuItem.description || '',
-                imageUrl: menuItem.imageUrl || null,
+                imageUrl: menuItem.images?.[0] || null,
                 unitPrice,
                 quantity,
                 totalPrice,
@@ -182,9 +236,9 @@ const createOrder = async (req, res) => {
         try {
             order = await prisma_1.prisma.order.create({
                 data: {
-                    sessionId: resolvedSessionId,
+                    diningSessionId: resolvedSession.id,
                     tenantId: tenant.id,
-                    tableId: safeTableId,
+                    tableId: safeTableId || resolvedSession.tableId,
                     customerName,
                     customerPhone,
                     orderNumber,
@@ -203,6 +257,8 @@ const createOrder = async (req, res) => {
             console.error('createOrder primary create error:', primaryCreateError);
             order = await prisma_1.prisma.order.create({
                 data: {
+                    diningSessionId: resolvedSession.id,
+                    tableId: safeTableId || resolvedSession.tableId,
                     tenantId: tenant.id,
                     customerName,
                     customerPhone,
@@ -222,25 +278,25 @@ const createOrder = async (req, res) => {
             });
         }
         // Table-sync failure should never turn a successful order into a client-visible 500.
-        if (safeTableId) {
+        const tableIdToUpdate = safeTableId || resolvedSession.tableId || null;
+        if (tableIdToUpdate) {
             try {
                 await prisma_1.prisma.table.update({
-                    where: { id: safeTableId },
-                    data: { status: 'OCCUPIED', currentOrderId: order.id }
+                    where: { id: tableIdToUpdate },
+                    data: { status: 'ORDERING_OPEN', currentOrderId: order.id, currentSessionId: resolvedSession.id }
                 });
-                (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(tenant.id)).emit('table:status_change', { tableId: safeTableId, status: 'OCCUPIED', orderNumber });
+                (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(tenant.id)).emit('table:status_change', { tableId: tableIdToUpdate, status: 'ORDERING_OPEN', orderNumber });
             }
             catch (tableError) {
                 console.error('createOrder table sync error:', tableError);
             }
         }
+        await prisma_1.prisma.diningSession.update({
+            where: { id: resolvedSession.id },
+            data: { sessionStatus: 'ACTIVE' },
+        });
         (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(tenant.id)).emit('order:new', order);
-        if (incomingSessionToken) {
-            (0, socket_1.getIO)().to((0, socket_1.getSessionRoom)(tenant.id, incomingSessionToken)).emit('order:new', order);
-        }
-        if (resolvedSessionId && resolvedSessionId !== incomingSessionToken) {
-            (0, socket_1.getIO)().to((0, socket_1.getSessionRoom)(tenant.id, resolvedSessionId)).emit('order:new', order);
-        }
+        (0, socket_1.getIO)().to((0, socket_1.getSessionRoom)(tenant.id, resolvedSession.id)).emit('order:new', order);
         res.status(201).json(order);
     }
     catch (error) {
@@ -284,17 +340,6 @@ const getSessionOrders = async (req, res) => {
         });
         if (!tenant)
             return res.status(404).json({ error: 'Vendor not found' });
-        const matchingSessions = await prisma_1.prisma.customerSession.findMany({
-            where: {
-                tenantId: tenant.id,
-                OR: [
-                    { id: sessionToken },
-                    { anonymousId: sessionToken }
-                ]
-            },
-            select: { id: true }
-        });
-        const sessionIds = [...new Set([sessionToken, ...matchingSessions.map((session) => session.id)])];
         const cacheKey = `session_orders_${sessionToken}`;
         const cachedOrders = await (0, cache_service_1.getCache)(cacheKey);
         if (cachedOrders)
@@ -302,7 +347,7 @@ const getSessionOrders = async (req, res) => {
         const orders = await prisma_1.prisma.order.findMany({
             where: {
                 tenantId: tenant.id,
-                sessionId: { in: sessionIds }
+                diningSessionId: sessionToken,
             },
             include: { table: true, items: { include: { menuItem: true } } },
             orderBy: { createdAt: 'desc' }

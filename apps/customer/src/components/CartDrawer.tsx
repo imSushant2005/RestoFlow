@@ -3,7 +3,7 @@ import { X, Trash2, ShoppingBag, Minus, Plus, Sparkles } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { formatINR } from '../lib/currency';
 import { api, publicApi } from '../lib/api';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { get, set } from 'idb-keyval';
 import { useNavigate } from 'react-router-dom';
 import { getApiBaseUrl } from '../lib/network';
@@ -31,6 +31,16 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
     staleTime: 1000 * 60 * 5,
   });
 
+  const { data: tenantMenuMeta } = useQuery({
+    queryKey: ['tenant-tax-meta', tenantSlug],
+    queryFn: async () => {
+      const res = await publicApi.get(`/${tenantSlug}/menu`);
+      return res.data;
+    },
+    enabled: !!tenantSlug,
+    staleTime: 1000 * 60 * 5,
+  });
+
   if (!isOpen) return null;
 
   const handleCheckout = async () => {
@@ -48,19 +58,11 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
         }
         const safeModifiers = Array.isArray(i?.modifiers) ? i.modifiers : [];
         return {
-          menuItem: {
-            id: i?.menuItem?.id,
-            price: Number(i?.menuItem?.price) || 0,
-            name: i?.menuItem?.name || 'Untitled Item',
-            description: i?.menuItem?.description || '',
-            imageUrl: i?.menuItem?.images?.[0] || i?.menuItem?.imageUrl || null,
-          },
+          menuItemId: i?.menuItem?.id,
           quantity: Number(i?.quantity) || 1,
           notes: finalNotes || undefined,
-          modifiers: safeModifiers.map((m: any) => ({
+          selectedModifiers: safeModifiers.map((m: any) => ({
             id: m?.id,
-            name: m?.name || 'Option',
-            priceAdjustment: Number(m?.priceAdjustment ?? m?.price ?? 0) || 0,
           })),
         };
       }),
@@ -68,13 +70,23 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
 
     try {
       if (!navigator.onLine) throw new Error('Network Error');
-      await publicApi.post(`/${tenantSlug}/orders`, payload);
+      const orderRes = await publicApi.post(`/${tenantSlug}/orders`, payload);
+      const createdSessionId = orderRes?.data?.diningSessionId;
+      if (createdSessionId) {
+        localStorage.setItem('rf_active_session', createdSessionId);
+        localStorage.setItem('restoflow_session', createdSessionId);
+      }
       clearCart();
       setShowSuccess(true);
       setTimeout(() => {
         onClose();
         setShowSuccess(false);
-        navigate(`/order/${tenantSlug}/status`);
+        const activeSessionId = localStorage.getItem('rf_active_session') || createdSessionId || sessionToken;
+        if (activeSessionId) {
+          navigate(`/order/${tenantSlug}/session/${activeSessionId}`);
+        } else {
+          navigate(`/order/${tenantSlug}/status`);
+        }
       }, 2000);
     } catch (error: any) {
       if (!navigator.onLine || error.message === 'Network Error') {
@@ -100,6 +112,17 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
   };
 
   const totalItems = safeItems.reduce((sum, i) => sum + (Number(i?.quantity) || 0), 0);
+  const subtotal = getCartTotal();
+  const taxRate = Number(tenantMenuMeta?.taxRate ?? 5);
+  const estimatedTax = subtotal * (taxRate / 100);
+  const estimatedTotal = subtotal + estimatedTax;
+  const prepEstimate = useMemo(() => {
+    if (safeItems.length === 0) return '0-0 min';
+    const itemMins = safeItems.map((item: any) => Number(item?.menuItem?.prepTimeMinutes || 12));
+    const base = Math.max(...itemMins);
+    const high = base + Math.max(4, Math.floor(safeItems.length * 1.5));
+    return `${base}-${high} min`;
+  }, [safeItems]);
 
   return (
     <div className="fixed inset-0 z-[100]" onClick={onClose}>
@@ -226,9 +249,23 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
 
         {safeItems.length > 0 && (
           <div className="px-5 pb-6 pt-4 border-t border-[color:var(--border-primary)] bg-[color:var(--bg-secondary)]" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-[color:var(--text-secondary)] font-semibold">Total</span>
-              <span className="text-2xl font-black text-[color:var(--text-primary)]">{formatINR(getCartTotal())}</span>
+            <div className="space-y-2 mb-4 text-sm">
+              <div className="flex justify-between items-center">
+                <span className="text-[color:var(--text-secondary)] font-semibold">Estimated Prep Time</span>
+                <span className="font-bold text-[color:var(--text-primary)]">{prepEstimate}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[color:var(--text-secondary)] font-semibold">Subtotal</span>
+                <span className="font-bold text-[color:var(--text-primary)]">{formatINR(subtotal)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[color:var(--text-secondary)] font-semibold">Tax ({taxRate.toFixed(0)}%)</span>
+                <span className="font-bold text-[color:var(--text-primary)]">{formatINR(estimatedTax)}</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-[color:var(--border-primary)] pt-2">
+                <span className="text-[color:var(--text-secondary)] font-semibold">Estimated Total</span>
+                <span className="text-2xl font-black text-[color:var(--text-primary)]">{formatINR(estimatedTotal)}</span>
+              </div>
             </div>
             <button
               onClick={handleCheckout}

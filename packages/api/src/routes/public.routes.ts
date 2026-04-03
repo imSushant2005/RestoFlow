@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as PublicController from '../controllers/public.controller';
 import * as TableController from '../controllers/table.controller';
+import * as CustomerController from '../controllers/customer.controller';
 
 const router: Router = Router();
 
@@ -15,5 +16,6 @@ router.get('/:tenantSlug/orders/:id', PublicController.getOrderInfo);
 router.post('/orders/:id/feedback', PublicController.submitFeedback);
 router.post('/:tenantSlug/waiter-call', PublicController.waiterCall);
 router.post('/tables/:id/session', TableController.createSession);
+router.post('/customer/login', CustomerController.login); // Backward-compatible alias
 
 export default router;

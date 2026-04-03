@@ -8,7 +8,20 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { io } from 'socket.io-client';
 import { getCustomerAppUrl, getSocketUrl } from '../lib/network';
 
-const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus }: any) => {
+const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus, highlight }: any) => {
+  const [showActions, setShowActions] = useState(false);
+  const actionRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!showActions) return;
+    const onClickOutside = (event: MouseEvent) => {
+      if (actionRef.current && !actionRef.current.contains(event.target as Node)) {
+        setShowActions(false);
+      }
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [showActions]);
   const occupiedList = table.occupiedSeats || [];
   const isAllSeatsTaken = occupiedList.length >= (table.seats || table.capacity || 4);
   const isGloballyOccupied = table.status === 'OCCUPIED';
@@ -55,7 +68,10 @@ const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus }: any) =
   const cols = Math.ceil(Math.sqrt(seatsTotal));
 
   return (
-    <div className={`relative min-w-[120px] min-h-[120px] rounded-2xl flex flex-col items-center justify-center hover:scale-105 shadow-sm hover:shadow-lg group border-4 transition-all duration-300 ${statusColor} overflow-hidden`}>
+    <div
+      className={`relative min-w-[120px] min-h-[120px] rounded-2xl flex flex-col items-center justify-center hover:scale-105 shadow-sm hover:shadow-lg group border-4 transition-all duration-300 ${statusColor} overflow-hidden ${highlight ? 'ring-4 ring-blue-300 animate-pulse' : ''}`}
+      onClick={() => setShowActions((v) => !v)}
+    >
       <div className="absolute inset-0 grid gap-1 p-1.5 pointer-events-none" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
         {seatsArray.map(seat => {
           const isSeatOccupied = occupiedList.includes(seat.toString()) || isGloballyOccupied;
@@ -77,26 +93,31 @@ const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus }: any) =
         {badgeText}
       </span>
       
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex flex-col gap-1 transition-opacity z-10">
-        <button 
-          onClick={(e) => { e.stopPropagation(); onToggleStatus(table); }}
-          className="bg-white text-gray-700 p-1.5 rounded-full shadow hover:bg-gray-100 transition-colors" title="Toggle Status"
-        >
-          <Power size={14} className={table.status === 'OCCUPIED' ? 'text-red-500' : 'text-green-500'} />
-        </button>
-        <button 
-          onClick={(e) => { e.stopPropagation(); setSelectedTable(table); }}
-          className="bg-white text-blue-600 p-1.5 rounded-full shadow hover:bg-gray-100 transition-colors" title="View QR Code"
-        >
-          <QrCode size={14} />
-        </button>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onDelete(table); }}
-          className="bg-white text-red-600 p-1.5 rounded-full shadow hover:bg-gray-100 transition-colors" title="Delete Table"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
+      {showActions && (
+        <div ref={actionRef} className="absolute bottom-2 left-2 right-2 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2 space-y-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleStatus(table); setShowActions(false); }}
+            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-xs font-bold text-gray-700 flex items-center gap-2"
+          >
+            <Power size={13} className={table.status === 'OCCUPIED' ? 'text-red-500' : 'text-green-500'} />
+            {table.status === 'OCCUPIED' ? 'Mark Available' : 'Mark Occupied'}
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setSelectedTable(table); setShowActions(false); }}
+            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-xs font-bold text-blue-700 flex items-center gap-2"
+          >
+            <QrCode size={13} />
+            View QR Code
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(table); setShowActions(false); }}
+            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-red-50 text-xs font-bold text-red-600 flex items-center gap-2"
+          >
+            <Trash2 size={13} />
+            Delete Table
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -105,6 +126,7 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
   const queryClient = useQueryClient();
   const [selectedTable, setSelectedTable] = useState<any>(null);
   const [selectedSeatQR, setSelectedSeatQR] = useState<number | 'FULL'>('FULL');
+  const [highlightedTableId, setHighlightedTableId] = useState<string | null>(null);
 
   // Real-time socket listener for table status changes
   useEffect(() => {
@@ -114,7 +136,11 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
       localStorage.getItem('accessToken');
     const socket = io(getSocketUrl(), { auth: { token } });
     
-    socket.on('table:status_change', () => {
+    socket.on('table:status_change', (payload: any) => {
+      if (payload?.tableId) {
+        setHighlightedTableId(payload.tableId);
+        setTimeout(() => setHighlightedTableId(null), 1800);
+      }
       // Invalidate the cache to trigger an immediate refetch when any table status changes
       queryClient.invalidateQueries({ queryKey: ['zones'] });
     });
@@ -251,6 +277,15 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
         </div>
       </div>
 
+      <div className="bg-white border border-gray-200 rounded-xl p-3 flex flex-wrap gap-3 text-xs font-semibold text-gray-600">
+        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Available</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Occupied</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Ordering</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Active Meal</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500" /> Awaiting Bill</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-500" /> Cleaning</span>
+      </div>
+
       {/* CSS Grid Floor Plan */}
       <div className="bg-slate-50 border border-gray-200 rounded-xl p-6 flex-1 shadow-inner overflow-y-auto">
         {zone.tables?.length === 0 ? (
@@ -268,6 +303,7 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
                   setSelectedTable={setSelectedTable} 
                   onDelete={handleDelete}
                   onToggleStatus={handleToggleStatus}
+                  highlight={highlightedTableId === table.id}
                 />
               </ErrorBoundary>
             ))}
