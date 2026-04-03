@@ -36,7 +36,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const PublicController = __importStar(require("../controllers/public.controller"));
 const TableController = __importStar(require("../controllers/table.controller"));
-const CustomerController = __importStar(require("../controllers/customer.controller"));
+// Lazy-load customer controller at request-time to avoid startup failure
+// if the compiled controller file is missing in some build contexts.
 const router = (0, express_1.Router)();
 // Domain Resolution for White-Label SPA
 router.get('/resolve-domain', PublicController.resolveCustomDomain);
@@ -48,6 +49,15 @@ router.get('/:tenantSlug/orders/:id', PublicController.getOrderInfo);
 router.post('/orders/:id/feedback', PublicController.submitFeedback);
 router.post('/:tenantSlug/waiter-call', PublicController.waiterCall);
 router.post('/tables/:id/session', TableController.createSession);
-router.post('/customer/login', CustomerController.login); // Backward-compatible alias
+router.post('/customer/login', async (req, res, next) => {
+    try {
+        const CustomerController = await Promise.resolve().then(() => __importStar(require('../controllers/customer.controller')));
+        return CustomerController.login(req, res);
+    }
+    catch (err) {
+        console.error('Customer controller load error:', err);
+        return res.status(500).json({ error: 'Customer login unavailable' });
+    }
+}); // Backward-compatible alias
 exports.default = router;
 //# sourceMappingURL=public.routes.js.map

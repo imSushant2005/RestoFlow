@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import * as PublicController from '../controllers/public.controller';
 import * as TableController from '../controllers/table.controller';
-import * as CustomerController from '../controllers/customer.controller';
+// Lazy-load customer controller at request-time to avoid startup failure
+// if the compiled controller file is missing in some build contexts.
 
 const router: Router = Router();
 
@@ -16,6 +17,14 @@ router.get('/:tenantSlug/orders/:id', PublicController.getOrderInfo);
 router.post('/orders/:id/feedback', PublicController.submitFeedback);
 router.post('/:tenantSlug/waiter-call', PublicController.waiterCall);
 router.post('/tables/:id/session', TableController.createSession);
-router.post('/customer/login', CustomerController.login); // Backward-compatible alias
+router.post('/customer/login', async (req, res, next) => {
+	try {
+		const CustomerController = await import('../controllers/customer.controller');
+		return CustomerController.login(req, res);
+	} catch (err) {
+		console.error('Customer controller load error:', err);
+		return res.status(500).json({ error: 'Customer login unavailable' });
+	}
+}); // Backward-compatible alias
 
 export default router;
