@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Clock, ChevronRight, Star, MapPin, Users } from 'lucide-react';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+import { api } from '../lib/api';
 
 export function HistoryPage() {
   const { tenantSlug } = useParams();
@@ -15,13 +14,10 @@ export function HistoryPage() {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const res = await fetch(`${API_BASE}/customer/history`, {
+        const { data } = await api.get('/customer/history', {
           headers: { 'Authorization': `Bearer ${token}` },
         });
-        if (res.ok) {
-          const data = await res.json();
-          setSessions(data);
-        }
+        setSessions(data);
       } catch {} finally {
         setLoading(false);
       }

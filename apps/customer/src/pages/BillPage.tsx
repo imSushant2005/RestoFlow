@@ -193,13 +193,13 @@ export function BillPage() {
 
         <div className="mt-4 grid grid-cols-2 gap-3 print:hidden">
           <button
-            onClick={() => navigate(`/order/${tenantSlug}/history`)}
+            onClick={() => navigate(`/order/${tenantSlug}/status`)}
             className="w-full text-center text-sm font-bold text-blue-500 py-3 rounded-2xl bg-blue-50"
           >
-            View Order History
+            View Order Status
           </button>
           <button
-            onClick={() => navigate(`/order/${tenantSlug}/review/${sessionId}`)}
+            onClick={() => navigate(`/order/${tenantSlug}/history`)}
             className="bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2"
           >
             <Star size={15} /> Rate Us
