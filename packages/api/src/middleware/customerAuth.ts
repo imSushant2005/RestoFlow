@@ -14,10 +14,15 @@ export const customerAuth = (req: Request, res: Response, next: NextFunction) =>
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, env.JWT_SECRET) as { customerId: string; phone: string };
+    const decoded = jwt.verify(token, env.JWT_SECRET) as {
+      customerId: string;
+      phone: string;
+      tenantSlug?: string | null;
+    };
 
     (req as any).customerId = decoded.customerId;
     (req as any).customerPhone = decoded.phone;
+    (req as any).customerTenantSlug = decoded.tenantSlug || null;
     next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired customer token' });

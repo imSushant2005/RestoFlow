@@ -36,13 +36,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_middleware_1 = require("../middlewares/auth.middleware");
 const role_middleware_1 = require("../middlewares/role.middleware");
-const prisma_1 = require("@dineflow/prisma");
 const OrderController = __importStar(require("../controllers/order.controller"));
+const rbac_1 = require("../constants/rbac");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.requireAuth);
 // router.post('/', requireAuth, requireRoles([UserRole.OWNER, UserRole.MANAGER, UserRole.CASHIER, UserRole.WAITER]), OrderController.createOrder); // TODO: implement explicitly
-router.get('/', (0, role_middleware_1.requireRoles)([prisma_1.UserRole.OWNER, prisma_1.UserRole.MANAGER, prisma_1.UserRole.CASHIER, prisma_1.UserRole.WAITER, prisma_1.UserRole.KITCHEN]), OrderController.getOrders);
-router.get('/history', (0, role_middleware_1.requireRoles)([prisma_1.UserRole.OWNER, prisma_1.UserRole.MANAGER]), OrderController.getOrderHistory);
-router.patch('/:id/status', (0, role_middleware_1.requireRoles)([prisma_1.UserRole.OWNER, prisma_1.UserRole.MANAGER, prisma_1.UserRole.CASHIER, prisma_1.UserRole.WAITER, prisma_1.UserRole.KITCHEN]), OrderController.updateOrderStatus);
+router.get('/', (0, role_middleware_1.requireRoles)(rbac_1.ORDER_ACCESS_ROLES), OrderController.getOrders);
+router.get('/history', (0, role_middleware_1.requireRoles)(rbac_1.ORDER_HISTORY_ROLES), OrderController.getOrderHistory);
+router.patch('/:id/status', (0, role_middleware_1.requireRoles)(rbac_1.ORDER_ACCESS_ROLES), OrderController.updateOrderStatus);
 exports.default = router;
 //# sourceMappingURL=order.routes.js.map

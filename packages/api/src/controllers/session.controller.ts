@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
-import { getIO, getTenantRoom } from '../socket';
+import { getIO, getSessionRoom, getTenantRoom } from '../socket';
 
 /**
  * POST /:tenantSlug/sessions
@@ -252,6 +252,11 @@ export const addOrderToSession = async (req: Request, res: Response) => {
         include: {
           items: { include: { menuItem: { select: { name: true } } } },
           table: { select: { name: true } },
+          diningSession: {
+            include: {
+              customer: true,
+            },
+          },
         },
       });
 
@@ -274,6 +279,11 @@ export const addOrderToSession = async (req: Request, res: Response) => {
 
     // Notify vendor dashboard + KDS
     getIO().to(getTenantRoom(tenant.id)).emit('order:new', order);
+    getIO().to(getTenantRoom(tenant.id)).emit('session:update', {
+      sessionId,
+      status: 'ACTIVE',
+      updatedAt: new Date().toISOString(),
+    });
 
     res.status(201).json(order);
   } catch (error: any) {
@@ -373,11 +383,30 @@ export const finishSession = async (req: Request, res: Response) => {
     });
 
     // Notify vendor
-    getIO().to(getTenantRoom(tenant.id)).emit('session:finished', {
+    const tenantRoom = getTenantRoom(tenant.id);
+    const sessionRoom = getSessionRoom(tenant.id, result.id);
+
+    const finishedPayload = {
       sessionId: result.id,
       tableName: (result as any).table?.name,
       totalAmount: (result as any).bill?.totalAmount,
-    });
+    };
+    const sessionUpdatePayload = {
+      sessionId: result.id,
+      status: 'AWAITING_BILL',
+      updatedAt: new Date().toISOString(),
+    };
+
+    getIO().to(tenantRoom).emit('session:finished', finishedPayload);
+    getIO().to(sessionRoom).emit('session:finished', finishedPayload);
+    getIO().to(tenantRoom).emit('session:update', sessionUpdatePayload);
+    getIO().to(sessionRoom).emit('session:update', sessionUpdatePayload);
+    if (result.tableId) {
+      getIO().to(tenantRoom).emit('table:status_change', {
+        tableId: result.tableId,
+        status: 'AWAITING_BILL',
+      });
+    }
 
     res.json(result);
   } catch (error) {
@@ -419,7 +448,7 @@ export const completeSession = async (req: Request, res: Response) => {
       // Mark all orders as completed
       await tx.order.updateMany({
         where: { diningSessionId: sessionId, status: { notIn: ['CANCELLED'] } },
-        data: { status: 'RECEIVED' as any, completedAt: new Date(), isPaid: true, paymentMethod },
+        data: { status: 'RECEIVED' as any, completedAt: new Date() },
       });
 
       // Free up table
@@ -432,6 +461,38 @@ export const completeSession = async (req: Request, res: Response) => {
 
       return session;
     });
+
+    const tenantRoom = getTenantRoom(result.tenantId);
+    const sessionRoom = getSessionRoom(result.tenantId, result.id);
+
+    const completedPayload = {
+      sessionId: result.id,
+      paymentMethod: paymentMethod || 'cash',
+      closedAt: result.closedAt || new Date().toISOString(),
+    };
+    const sessionUpdatePayload = {
+      sessionId: result.id,
+      status: 'CLOSED',
+      updatedAt: new Date().toISOString(),
+    };
+    const bulkStatusPayload = {
+      sessionId: result.id,
+      status: 'RECEIVED',
+      updatedAt: new Date().toISOString(),
+    };
+
+    getIO().to(tenantRoom).emit('session:completed', completedPayload);
+    getIO().to(sessionRoom).emit('session:completed', completedPayload);
+    getIO().to(tenantRoom).emit('session:update', sessionUpdatePayload);
+    getIO().to(sessionRoom).emit('session:update', sessionUpdatePayload);
+    getIO().to(tenantRoom).emit('orders:bulk_status', bulkStatusPayload);
+    getIO().to(sessionRoom).emit('orders:bulk_status', bulkStatusPayload);
+    if (result.tableId) {
+      getIO().to(tenantRoom).emit('table:status_change', {
+        tableId: result.tableId,
+        status: 'AVAILABLE',
+      });
+    }
 
     res.json(result);
   } catch (error) {
@@ -462,6 +523,7 @@ export const getBill = async (req: Request, res: Response) => {
           orderBy: { createdAt: 'asc' },
         },
         bill: true,
+        review: true,
       },
     });
 

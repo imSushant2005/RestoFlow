@@ -3,8 +3,8 @@ import { api } from '../lib/api';
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { OrderCard } from '../components/OrderCard';
-import { getSocketUrl } from '../lib/network';
-import { UtensilsCrossed, Clock, CheckCircle2, ChefHat, Flame } from 'lucide-react';
+import { getCustomerAppUrl, getSocketUrl } from '../lib/network';
+import { UtensilsCrossed, Clock, CheckCircle2, ChefHat, Flame, LogOut } from 'lucide-react';
 
 const COLS = [
   {
@@ -54,7 +54,7 @@ const COLS = [
   },
 ];
 
-export function KitchenBoard() {
+export function KitchenBoard({ onLogout }: { onLogout?: () => void }) {
   const queryClient = useQueryClient();
   const [clock, setClock] = useState(new Date());
   const playAlert = () => {
@@ -80,25 +80,50 @@ export function KitchenBoard() {
       }
     });
   };
-  const openTestOrder = () => {
+  const openTestOrder = async () => {
     try {
-      const restaurant = JSON.parse(localStorage.getItem('restaurant') || '{}');
-      if (!restaurant?.slug) {
+      let slug = '';
+
+      try {
+        const businessResponse = await api.get('/settings/business');
+        const candidate = businessResponse?.data?.slug;
+        if (typeof candidate === 'string') {
+          slug = candidate.trim();
+        }
+      } catch {
+        // fallback to local cache and zone payload below
+      }
+
+      if (!slug) {
+        const restaurant = JSON.parse(localStorage.getItem('restaurant') || '{}');
+        slug = typeof restaurant?.slug === 'string' ? restaurant.slug.trim() : '';
+      }
+
+      if (!slug) {
+        const zoneResponse = await api.get('/venue/zones');
+        slug = zoneResponse.data?.tenantSlug;
+        if (slug) {
+          localStorage.setItem('restaurant', JSON.stringify({ slug }));
+        }
+      }
+
+      if (!slug) {
         alert('Tenant slug missing. Complete dashboard setup first.');
         return;
       }
-      window.open(`/order/${restaurant.slug}`, '_blank', 'noopener,noreferrer');
+      window.open(`${getCustomerAppUrl()}/order/${slug}`, '_blank', 'noopener,noreferrer');
     } catch {
       alert('Unable to open test order flow right now.');
     }
   };
 
-  const { data: orders = [], isLoading } = useQuery({
+  const { data: orders = [], isLoading, isError, error } = useQuery({
     queryKey: ['live-orders'],
     queryFn: async () => {
       const res = await api.get('/orders');
       return res.data;
-    }
+    },
+    retry: false
   });
 
   useEffect(() => {
@@ -108,7 +133,13 @@ export function KitchenBoard() {
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
-    const socket = io(getSocketUrl(), { auth: { token } });
+    const socket = io(getSocketUrl(), {
+      auth: { token, client: 'kds' },
+      transports: ['websocket'],
+      rememberUpgrade: true,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 3000,
+    });
 
     socket.on('order:new', (order) => {
       queryClient.setQueryData(['live-orders'], (old: any) => [...(old || []), order]);
@@ -124,6 +155,44 @@ export function KitchenBoard() {
 
     return () => { socket.disconnect(); };
   }, [queryClient]);
+
+  if (isError) {
+    const apiError =
+      typeof (error as any)?.response?.data?.error === 'string'
+        ? (error as any).response.data.error
+        : 'Unable to load live orders.';
+    const isUnauthorized = (error as any)?.response?.status === 401 || (error as any)?.response?.status === 403;
+
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex items-center justify-center p-6">
+        <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-900 p-6">
+          <h2 className="text-xl font-black text-white tracking-tight">Kitchen board unavailable</h2>
+          <p className="mt-2 text-sm text-slate-400">{apiError}</p>
+          {isUnauthorized && (
+            <p className="mt-2 text-xs font-semibold text-amber-300">
+              Your session may be expired or missing KDS permission.
+            </p>
+          )}
+          <div className="mt-5 flex gap-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-sm font-bold text-white"
+            >
+              Retry
+            </button>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 px-4 py-2 text-sm font-bold text-slate-200"
+              >
+                Back to Login
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) return (
     <div className="flex flex-col h-screen overflow-hidden bg-slate-950">
@@ -164,17 +233,28 @@ export function KitchenBoard() {
             </span>
           </div>
         </div>
-        <div className="flex gap-4 text-xs font-medium text-slate-500">
-          {COLS.map(col => {
-            const count = (orders as any[]).filter(o => col.filter(o.status)).length;
-            return (
-              <div key={col.id} className="flex items-center gap-1.5">
-                <span className={col.labelClass}>{col.icon}</span>
-                <span>{col.label}</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${col.badgeClass}`}>{count}</span>
-              </div>
-            );
-          })}
+        <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
+          <div className="flex gap-4">
+            {COLS.map(col => {
+              const count = (orders as any[]).filter(o => col.filter(o.status)).length;
+              return (
+                <div key={col.id} className="flex items-center gap-1.5">
+                  <span className={col.labelClass}>{col.icon}</span>
+                  <span>{col.label}</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${col.badgeClass}`}>{count}</span>
+                </div>
+              );
+            })}
+          </div>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="ml-2 flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-[11px] font-bold text-slate-300 hover:bg-slate-700"
+            >
+              <LogOut size={12} />
+              Logout
+            </button>
+          )}
         </div>
       </header>
 

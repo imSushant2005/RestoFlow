@@ -1,12 +1,24 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.extractMenuFromImage = exports.analyzeCartForUpsell = exports.generateItemDescription = void 0;
-const genai_1 = require("@google/genai");
 const env_1 = require("../config/env");
 const logger_1 = require("../utils/logger");
-// Instantiate the SDK synchronously if the Token exists
-const ai = env_1.env.GEMINI_API_KEY ? new genai_1.GoogleGenAI({ apiKey: env_1.env.GEMINI_API_KEY }) : null;
+let aiClientPromise = null;
+async function getAiClient() {
+    if (!env_1.env.GEMINI_API_KEY)
+        return null;
+    if (!aiClientPromise) {
+        aiClientPromise = import('@google/genai')
+            .then(({ GoogleGenAI }) => new GoogleGenAI({ apiKey: env_1.env.GEMINI_API_KEY }))
+            .catch((error) => {
+            logger_1.logger.error({ error }, 'Failed to load Gemini SDK');
+            return null;
+        });
+    }
+    return aiClientPromise;
+}
 const generateItemDescription = async (name, category, ingredients) => {
+    const ai = await getAiClient();
     if (!ai)
         return 'A delicious, hand-crafted dish prepared fresh by our chefs just for you.';
     try {
@@ -27,6 +39,7 @@ Key Ingredients or notes: ${ingredients}`;
 };
 exports.generateItemDescription = generateItemDescription;
 const analyzeCartForUpsell = async (cartTextSummary, menuTextSummary) => {
+    const ai = await getAiClient();
     if (!ai)
         return [];
     try {
@@ -45,8 +58,8 @@ Valid Example Output:
             model: 'gemini-1.5-flash',
             contents: prompt,
             config: {
-                responseMimeType: "application/json",
-            }
+                responseMimeType: 'application/json',
+            },
         });
         const parsed = JSON.parse(response.text || '[]');
         return Array.isArray(parsed) ? parsed : [];
@@ -58,6 +71,7 @@ Valid Example Output:
 };
 exports.analyzeCartForUpsell = analyzeCartForUpsell;
 const extractMenuFromImage = async (base64Image) => {
+    const ai = await getAiClient();
     if (!ai)
         throw new Error('AI Engine not initialized. GEMINI_API_KEY missing.');
     try {
@@ -95,19 +109,18 @@ The JSON must follow this exact structure:
                         { text: prompt },
                         {
                             inlineData: {
-                                mimeType: "image/jpeg",
-                                data: base64Image.split(',')[1] || base64Image
-                            }
-                        }
-                    ]
-                }
+                                mimeType: 'image/jpeg',
+                                data: base64Image.split(',')[1] || base64Image,
+                            },
+                        },
+                    ],
+                },
             ],
             config: {
-                responseMimeType: "application/json",
-            }
+                responseMimeType: 'application/json',
+            },
         });
-        const text = result.text;
-        return JSON.parse(text || '{}');
+        return JSON.parse(result.text || '{}');
     }
     catch (error) {
         logger_1.logger.error({ error }, 'AI Menu Extraction failed');

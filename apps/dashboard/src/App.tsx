@@ -1,247 +1,448 @@
-import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
-import { MenuBuilder } from './pages/MenuBuilder'
-import { FloorPlan } from './pages/FloorPlan'
-import { Orders } from './pages/Orders'
-import { Analytics } from './pages/Analytics'
-import { Settings } from './pages/Settings'
-import { Onboarding } from './pages/Onboarding'
-import { Billing } from './pages/Billing'
-import { Admin } from './pages/Admin'
-import { WaiterPage } from './pages/WaiterPage'
+import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
 import {
-  LayoutDashboard, UtensilsCrossed, Receipt, CreditCard, LogIn,
-  BarChart3, Settings2, ChevronRight, Store, Loader2
-} from 'lucide-react'
-import { useQueries } from '@tanstack/react-query'
-import { api } from './lib/api'
-import { useEffect, useState } from 'react'
+  LayoutDashboard,
+  UtensilsCrossed,
+  Receipt,
+  CreditCard,
+  LogIn,
+  BarChart3,
+  Settings2,
+  ChevronRight,
+  Store,
+  Loader2,
+} from 'lucide-react';
+import { MenuBuilder } from './pages/MenuBuilder';
+import { FloorPlan } from './pages/FloorPlan';
+import { Orders } from './pages/Orders';
+import { Analytics } from './pages/Analytics';
+import { Settings } from './pages/Settings';
+import { Onboarding } from './pages/Onboarding';
+import { Billing } from './pages/Billing';
+import { Admin } from './pages/Admin';
+import { WaiterPage } from './pages/WaiterPage';
+import { FirstLoginPasswordGate } from './components/FirstLoginPasswordGate';
+import { AuthIndexPage } from './pages/AuthIndexPage';
+import { AuthContactPage } from './pages/AuthContactPage';
+import { AuthLaunch45Page } from './pages/AuthLaunch45Page';
+import { LoginPage } from './pages/LoginPage';
+import { SignupPage } from './pages/SignupPage';
+import { DashboardErrorBoundary } from './components/DashboardErrorBoundary';
+import { VendorTopNav } from './components/VendorTopNav';
+import { api } from './lib/api';
 
-/* ─── Login Page ──────────────────────────────────────────── */
-function LoginPage({ onLogin }: { onLogin: () => void }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [shake, setShake] = useState(false);
+type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER' | 'UNKNOWN';
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const res = await api.post('/auth/login', { email, password });
-      localStorage.setItem('accessToken', res.data.accessToken);
-      localStorage.setItem('userRole', res.data.user.role);
-      onLogin();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Invalid credentials. Please try again.');
-      setShake(true);
-      setTimeout(() => setShake(false), 600);
-    } finally {
-      setLoading(false);
-    }
-  };
+const FULL_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER']);
+const ORDERS_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'KITCHEN']);
+const BILLING_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER']);
+const BUSINESS_READ_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER']);
 
+type DemoStep = {
+  title: string;
+  summary: string;
+  actionLabel: string;
+  route: string;
+  checklist: string[];
+};
+
+const DASHBOARD_DEMO_STEPS: DemoStep[] = [
+  {
+    title: 'Menu Management',
+    summary: 'Create categories and menu items here. This is the source of truth for what guests can order.',
+    actionLabel: 'Menu',
+    route: '/app',
+    checklist: [
+      'Add categories like Starters, Mains, and Desserts.',
+      'Create items, set prices, and keep descriptions up to date.',
+      'Use View Live Site to preview how customers will see your menu.',
+    ],
+  },
+  {
+    title: 'Tables & QR Setup',
+    summary: 'Design your floor layout and generate tables linked to QR ordering.',
+    actionLabel: 'Tables & QR',
+    route: '/app/tables',
+    checklist: [
+      'Create zones and place tables where they belong.',
+      'Track table statuses: available, occupied, reserved, or cleaning.',
+      'Use QR links so guests can start sessions directly from their table.',
+    ],
+  },
+  {
+    title: 'Live Orders Pipeline',
+    summary: 'Monitor incoming orders in real time and move them through kitchen and service stages.',
+    actionLabel: 'Live Orders',
+    route: '/app/orders',
+    checklist: [
+      'Watch orders appear instantly as guests place them.',
+      'Update status to keep kitchen and service teams synced.',
+      'Handle waiter calls and close sessions once service is complete.',
+    ],
+  },
+  {
+    title: 'Billing & Invoices',
+    summary: 'Finalize completed sessions, collect payments, and generate invoices.',
+    actionLabel: 'Billing',
+    route: '/app/billing',
+    checklist: [
+      'Review completed orders with tax and discount totals.',
+      'Print or download invoices when needed.',
+      'Split bills and mark payments to close the loop quickly.',
+    ],
+  },
+  {
+    title: 'Analytics Insights',
+    summary: 'Understand revenue trends, peak hours, and top-performing items.',
+    actionLabel: 'Analytics',
+    route: '/app/analytics',
+    checklist: [
+      'Choose a date range to compare business performance.',
+      'Track conversion and order volume to spot bottlenecks.',
+      'Export data when you need reporting outside the dashboard.',
+    ],
+  },
+  {
+    title: 'Settings & Team Controls',
+    summary: 'Manage business profile, team accounts, and operational defaults.',
+    actionLabel: 'Settings',
+    route: '/app/settings',
+    checklist: [
+      'Update restaurant details and customer-facing settings.',
+      'Add staff members and assign roles safely.',
+      'Adjust system options as your operations grow.',
+    ],
+  },
+  {
+    title: 'Daily Workflow',
+    summary: 'Most teams run this loop: update menu, monitor live orders, then settle billing and review analytics.',
+    actionLabel: 'Live Orders',
+    route: '/app/orders',
+    checklist: [
+      "Start by confirming today's menu and table readiness.",
+      'Keep the Orders view open during service for real-time control.',
+      'Close the day with billing checks and analytics review.',
+    ],
+  },
+];
+
+function normalizeDashboardRole(rawRole?: string | null): DashboardRole {
+  const normalized = (rawRole || '').toUpperCase();
+  if (normalized === 'OWNER') return 'OWNER';
+  if (normalized === 'MANAGER') return 'MANAGER';
+  if (normalized === 'CASHIER') return 'CASHIER';
+  if (normalized === 'KITCHEN') return 'KITCHEN';
+  if (normalized === 'WAITER') return 'WAITER';
+  return 'UNKNOWN';
+}
+
+function getDefaultRouteForRole(role: DashboardRole) {
+  if (role === 'WAITER') return '/app/waiter';
+  if (role === 'CASHIER' || role === 'KITCHEN') return '/app/orders';
+  return '/app';
+}
+
+function needsWorkspaceSetup(business?: { businessName?: string; gstin?: string | null; phone?: string | null } | null) {
+  if (!business) return false;
+  return !Boolean(
+    business.businessName?.trim() &&
+      business.gstin?.trim() &&
+      business.phone?.trim(),
+  );
+}
+
+function getDemoStorageKey(business?: { id?: string; slug?: string }) {
+  const scope = business?.id || business?.slug || 'default';
+  return `rf_dashboard_demo_seen_${scope}`;
+}
+
+function clearLocalAuthStorage() {
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('userRole');
+  localStorage.removeItem('mustChangePassword');
+}
+
+function logoutAndReload() {
+  clearLocalAuthStorage();
+  const clerk = (globalThis as any).Clerk;
+  if (clerk?.signOut) {
+    void Promise.resolve(clerk.signOut()).finally(() => window.location.reload());
+    return;
+  }
+  window.location.reload();
+}
+
+function ScreenLoader({ message }: { message: string }) {
   return (
-    <div className="min-h-screen flex bg-slate-950">
-      {/* Left Brand Panel */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center relative overflow-hidden px-16 py-12"
-        style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #2563eb 100%)' }}>
-        <div className="absolute inset-0" style={{ background: 'radial-gradient(circle at 30% 70%, rgba(99,102,241,0.3) 0%, transparent 60%)' }} />
-        <div className="absolute inset-0" style={{ background: 'radial-gradient(circle at 80% 20%, rgba(16,185,129,0.15) 0%, transparent 50%)' }} />
-        
-        <div className="relative z-10 text-white text-center">
-          <div className="w-20 h-20 bg-white/10 backdrop-blur-sm rounded-3xl flex items-center justify-center mx-auto mb-8 float border border-white/20">
-            <UtensilsCrossed size={36} className="text-white" />
-          </div>
-          <h1 className="text-5xl font-black tracking-tight mb-3" style={{ fontFamily: 'Space Grotesk, Inter, sans-serif' }}>
-            RestoFlow
-          </h1>
-          <p className="text-blue-200 text-lg font-medium mb-12">The modern restaurant OS</p>
-
-          <div className="space-y-4 text-left w-full max-w-sm">
-            {[
-              { icon: '🍽️', title: 'Table Session Management', desc: 'Intelligent open-ticket system' },
-              { icon: '📊', title: 'Real-time order pipeline', desc: 'CRM-grade live operations' },
-              { icon: '🧾', title: 'GST-compliant billing', desc: 'Auto calculator with CGST/SGST' },
-            ].map((f, i) => (
-              <div key={i} className="flex items-start gap-4 bg-white/5 border border-white/10 rounded-2xl p-4">
-                <span className="text-2xl mt-0.5">{f.icon}</span>
-                <div>
-                  <p className="font-bold text-white text-sm">{f.title}</p>
-                  <p className="text-blue-200 text-xs mt-0.5">{f.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <Loader2 size={30} className="animate-spin text-blue-500" />
+        <p className="text-sm font-medium text-slate-400">{message}</p>
       </div>
-
-      {/* Right Form Panel */}
-      <div className="flex-1 flex items-center justify-center p-6 bg-slate-950">
-        <div className={`w-full max-w-md ${shake ? 'animate-[shake_0.4s_ease]' : ''}`}>
-          {/* Mobile logo */}
-          <div className="lg:hidden flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
-              <UtensilsCrossed size={20} className="text-white" />
-            </div>
-            <span className="text-white font-black text-xl" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>RestoFlow</span>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8">
-            <h2 className="text-2xl font-black text-white mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-              Sign in
-            </h2>
-            <p className="text-slate-400 text-sm mb-8">Access your vendor dashboard</p>
-
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl text-sm font-medium mb-6 flex items-center gap-2 fade-in">
-                <span>⚠</span> {error}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Email Address</label>
-                <input
-                  type="email" value={email} onChange={e => setEmail(e.target.value)} required autoFocus
-                  placeholder="owner@restaurant.com"
-                  className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 px-4 py-3.5 rounded-xl font-medium focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Password</label>
-                <input
-                  type="password" value={password} onChange={e => setPassword(e.target.value)} required
-                  placeholder="••••••••"
-                  className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 px-4 py-3.5 rounded-xl font-medium focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                />
-              </div>
-
-              <div className="bg-slate-800 rounded-xl p-3 text-xs text-slate-400">
-                <p className="font-bold text-slate-300 mb-0.5">Demo Credentials</p>
-                <p>Email: <span className="text-blue-400 font-mono">owner@dineflow.demo</span></p>
-                <p>Password: <span className="text-blue-400 font-mono">demo1234</span></p>
-              </div>
-
-              <button
-                type="submit" disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-600/30 active:scale-[0.98] mt-2"
-              >
-                {loading ? <Loader2 size={18} className="animate-spin" /> : <LogIn size={18} />}
-                {loading ? 'Signing In...' : 'Sign In to Dashboard'}
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-
-      <style>{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          20% { transform: translateX(-8px); }
-          40% { transform: translateX(8px); }
-          60% { transform: translateX(-4px); }
-          80% { transform: translateX(4px); }
-        }
-      `}</style>
     </div>
   );
 }
 
-/* ─── Dashboard Shell with Sidebar ───────────────────────── */
+function MarketingHomeRoute() {
+  const navigate = useNavigate();
+  return (
+    <AuthIndexPage
+      onLoginClick={() => navigate('/login')}
+      onSignupClick={() => navigate('/signup')}
+      onContactClick={() => navigate('/contact')}
+      onLaunchClick={() => navigate('/launch-plan')}
+    />
+  );
+}
+
+function MarketingContactRoute() {
+  const navigate = useNavigate();
+  return (
+    <AuthContactPage
+      onBackHome={() => navigate('/')}
+      onLoginClick={() => navigate('/login')}
+      onSignupClick={() => navigate('/signup')}
+    />
+  );
+}
+
+function MarketingLaunchRoute() {
+  const navigate = useNavigate();
+  return (
+    <AuthLaunch45Page
+      onBackHome={() => navigate('/')}
+      onLoginClick={() => navigate('/login')}
+      onContactClick={() => navigate('/contact')}
+      onSignupClick={() => navigate('/signup')}
+    />
+  );
+}
+
+function PostLoginRedirect({ mustChangePassword }: { mustChangePassword: boolean }) {
+  const role = normalizeDashboardRole(localStorage.getItem('userRole'));
+  const shouldCheckWorkspace = FULL_ACCESS_ROLES.has(role);
+
+  const { data: business, isLoading } = useQuery({
+    queryKey: ['post-login-business'],
+    queryFn: async () => (await api.get('/settings/business')).data,
+    retry: false,
+    staleTime: 1000 * 30,
+    enabled: shouldCheckWorkspace,
+  });
+
+  if (role === 'UNKNOWN') {
+    clearLocalAuthStorage();
+    return <Navigate to="/login" replace />;
+  }
+
+  if (shouldCheckWorkspace && isLoading) {
+    return <ScreenLoader message="Preparing your workspace..." />;
+  }
+
+  if (shouldCheckWorkspace && business && needsWorkspaceSetup(business)) {
+    return <Navigate to="/setup" replace />;
+  }
+
+  if (mustChangePassword) {
+    return <Navigate to="/security-setup" replace />;
+  }
+
+  return <Navigate to={getDefaultRouteForRole(role)} replace />;
+}
+
 function DashboardShell() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [liveOrderCount, setLiveOrderCount] = useState(0);
+  const [showFirstTimeDemo, setShowFirstTimeDemo] = useState(false);
+  const [demoStep, setDemoStep] = useState(0);
+  const role = normalizeDashboardRole(localStorage.getItem('userRole'));
+  const defaultRoute = getDefaultRouteForRole(role);
+  const canAccessMenu = FULL_ACCESS_ROLES.has(role);
+  const canAccessTables = FULL_ACCESS_ROLES.has(role);
+  const canAccessOrders = ORDERS_ACCESS_ROLES.has(role);
+  const canAccessBilling = BILLING_ACCESS_ROLES.has(role);
+  const canAccessAnalytics = FULL_ACCESS_ROLES.has(role);
+  const canAccessSettings = FULL_ACCESS_ROLES.has(role);
+  const canShowFirstTimeDemo = FULL_ACCESS_ROLES.has(role);
+  const canShowAdminShellData = BUSINESS_READ_ROLES.has(role);
 
   const [businessQuery, billingQuery] = useQueries({
     queries: [
-      { queryKey: ['settings-business'], queryFn: async () => (await api.get('/settings/business')).data, retry: false, staleTime: 1000 * 30 },
-      { queryKey: ['billing-summary'], queryFn: async () => (await api.get('/billing')).data, retry: false, staleTime: 1000 * 30 },
+      {
+        queryKey: ['settings-business'],
+        queryFn: async () => (await api.get('/settings/business')).data,
+        retry: false,
+        staleTime: 1000 * 30,
+        enabled: canShowAdminShellData,
+      },
+      {
+        queryKey: ['billing-summary'],
+        queryFn: async () => (await api.get('/billing')).data,
+        retry: false,
+        staleTime: 1000 * 30,
+        enabled: canShowAdminShellData,
+      },
     ],
   });
 
   const business = businessQuery.data;
   const billing = billingQuery.data;
-  const isLoading = businessQuery.isLoading || billingQuery.isLoading;
+  const isLoading = canShowAdminShellData && (businessQuery.isLoading || billingQuery.isLoading);
+  const demoStorageKey = getDemoStorageKey(business);
+  const activeDemoStep = DASHBOARD_DEMO_STEPS[demoStep];
+  const isLastDemoStep = demoStep === DASHBOARD_DEMO_STEPS.length - 1;
 
   useEffect(() => {
-    api.get('/orders').then(r => setLiveOrderCount(Array.isArray(r.data) ? r.data.length : 0)).catch(() => {});
-  }, [location.pathname]);
+    if (!canAccessOrders) {
+      setLiveOrderCount(0);
+      return;
+    }
+    api.get('/orders').then((r) => setLiveOrderCount(Array.isArray(r.data) ? r.data.length : 0)).catch(() => {});
+  }, [canAccessOrders, location.pathname]);
 
-  const role = localStorage.getItem('userRole');
+  useEffect(() => {
+    if (isLoading || showFirstTimeDemo) return;
+    if (!canShowFirstTimeDemo || !business || needsWorkspaceSetup(business)) return;
+    const hasSeenDemo = localStorage.getItem(demoStorageKey) === '1';
+    if (hasSeenDemo) return;
+    setShowFirstTimeDemo(true);
+    setDemoStep(0);
+  }, [business, canShowFirstTimeDemo, demoStorageKey, isLoading, showFirstTimeDemo]);
 
-  if (isLoading) return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <Loader2 size={32} className="text-blue-500 animate-spin" />
-        <p className="text-slate-400 text-sm font-medium">Syncing profile...</p>
+  const finishDemo = () => {
+    localStorage.setItem(demoStorageKey, '1');
+    setShowFirstTimeDemo(false);
+  };
+
+  const goToPreviousDemoStep = () => {
+    setDemoStep((prev) => Math.max(prev - 1, 0));
+  };
+
+  const goToNextDemoStep = () => {
+    if (isLastDemoStep) {
+      finishDemo();
+      return;
+    }
+    setDemoStep((prev) => Math.min(prev + 1, DASHBOARD_DEMO_STEPS.length - 1));
+  };
+
+  const openDemoSection = () => {
+    if (!activeDemoStep) return;
+    if (location.pathname !== activeDemoStep.route) {
+      navigate(activeDemoStep.route);
+    }
+  };
+
+  if (isLoading) {
+    return <ScreenLoader message="Syncing profile..." />;
+  }
+
+  if (role === 'UNKNOWN') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center">
+          <h2 className="text-white text-xl font-black tracking-tight">Role Access Error</h2>
+          <p className="mt-2 text-sm text-slate-400">
+            Your account role could not be validated. Please sign in again.
+          </p>
+          <button
+            onClick={() => {
+              logoutAndReload();
+            }}
+            className="mt-5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-500"
+          >
+            Back to Login
+          </button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
-  if (business?.onboardingCompleted === false && location.pathname !== '/onboarding') return <Navigate to="/onboarding" replace />;
-  if (business?.onboardingCompleted === true && location.pathname === '/onboarding') return <Navigate to="/" replace />;
-  
-  // Waiter Redirect Logic
-  if (role === 'WAITER' && location.pathname !== '/waiter') return <Navigate to="/waiter" replace />;
-  if (role === 'WAITER' && location.pathname === '/waiter') return <WaiterPage />;
-  if (role !== 'WAITER' && location.pathname === '/waiter') return <Navigate to="/" replace />;
+  if (canShowAdminShellData && business && needsWorkspaceSetup(business)) {
+    return <Navigate to="/setup" replace />;
+  }
 
-  if (location.pathname === '/onboarding') return <Onboarding />;
+  if (role === 'WAITER' && location.pathname !== '/app/waiter') {
+    return <Navigate to="/app/waiter" replace />;
+  }
+  if (role === 'WAITER' && location.pathname === '/app/waiter') {
+    return <WaiterPage />;
+  }
+  if (role !== 'WAITER' && location.pathname === '/app/waiter') {
+    return <Navigate to={defaultRoute} replace />;
+  }
+
+  const allowedPaths = new Set<string>([
+    ...(canAccessMenu ? ['/app'] : []),
+    ...(canAccessTables ? ['/app/tables'] : []),
+    ...(canAccessOrders ? ['/app/orders'] : []),
+    ...(canAccessBilling ? ['/app/billing'] : []),
+    ...(canAccessAnalytics ? ['/app/analytics'] : []),
+    ...(canAccessSettings ? ['/app/settings'] : []),
+  ]);
+
+  if (!allowedPaths.has(location.pathname)) {
+    return <Navigate to={defaultRoute} replace />;
+  }
 
   const navItems = [
-    { to: '/', label: 'Menu', icon: <UtensilsCrossed size={18} /> },
-    { to: '/tables', label: 'Tables & QR', icon: <LayoutDashboard size={18} /> },
-    { to: '/orders', label: 'Live Orders', icon: <Receipt size={18} />, badge: liveOrderCount },
-    { to: '/billing', label: 'Billing', icon: <CreditCard size={18} /> },
-    { to: '/analytics', label: 'Analytics', icon: <BarChart3 size={18} /> },
-    { to: '/settings', label: 'Settings', icon: <Settings2 size={18} /> },
+    ...(canAccessMenu ? [{ to: '/app', label: 'Menu', icon: <UtensilsCrossed size={18} /> }] : []),
+    ...(canAccessTables ? [{ to: '/app/tables', label: 'Tables & QR', icon: <LayoutDashboard size={18} /> }] : []),
+    ...(canAccessOrders ? [{ to: '/app/orders', label: 'Live Orders', icon: <Receipt size={18} />, badge: liveOrderCount }] : []),
+    ...(canAccessBilling ? [{ to: '/app/billing', label: 'Billing', icon: <CreditCard size={18} /> }] : []),
+    ...(canAccessAnalytics ? [{ to: '/app/analytics', label: 'Analytics', icon: <BarChart3 size={18} /> }] : []),
+    ...(canAccessSettings ? [{ to: '/app/settings', label: 'Settings', icon: <Settings2 size={18} /> }] : []),
   ];
 
   return (
-    <div className="min-h-[100dvh] bg-slate-50 flex font-sans text-gray-900">
-      {/* ── Sidebar ── */}
-      <aside className={`flex-shrink-0 h-screen sticky top-0 bg-slate-900 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-[68px]' : 'w-[228px]'}`}>
-        {/* Logo */}
-        <div className="px-4 py-5 border-b border-slate-800 flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+    <div className="h-screen overflow-hidden flex font-sans selection:bg-blue-500/30" style={{ background: 'var(--shell-bg)', color: 'var(--text-1)' }}>
+      <div className="fixed inset-0 z-0 pointer-events-none" style={{ background: 'var(--shell-gradient)' }} />
+      <aside className={`relative z-10 flex-shrink-0 h-screen sticky top-0 backdrop-blur-xl flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-[68px]' : 'w-[240px]'}`} style={{ background: 'var(--sidebar-bg)', borderRight: '1px solid var(--sidebar-border)' }}>
+        <div className="px-4 py-6 flex items-center gap-3" style={{ borderBottom: '1px solid var(--border)' }}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 shadow-[0_0_15px_rgba(37,99,235,0.4)]" style={{ background: 'var(--sidebar-logo-bg)' }}>
             <UtensilsCrossed size={16} className="text-white" />
           </div>
           {!sidebarCollapsed && (
-            <span className="font-black text-white text-lg tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+            <span className="font-black text-lg tracking-tight" style={{ color: 'var(--text-1)', fontFamily: 'Inter, sans-serif' }}>
               RestoFlow
             </span>
           )}
         </div>
 
-        {/* Restaurant info */}
         {!sidebarCollapsed && business?.businessName && (
-          <div className="px-4 py-3 border-b border-slate-800">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Store size={13} className="text-blue-400" />
+          <div className="px-4 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}>
+                <Store size={14} className="text-blue-400" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-white truncate">{business.businessName}</p>
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider">{billing?.plan || 'Free'} plan</p>
+                <p className="text-xs font-bold truncate" style={{ color: 'var(--text-1)' }}>{business.businessName}</p>
+                <p className="text-[10px] uppercase tracking-widest font-semibold mt-0.5" style={{ color: 'var(--text-3)' }}>{billing?.plan || 'Free'} plan</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Nav items */}
-        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto overflow-x-hidden custom-scrollbar">
           {navItems.map(({ to, label, icon, badge }) => {
             const active = location.pathname === to;
             return (
-              <Link key={to} to={to}
-                className={`flex items-center ${sidebarCollapsed ? 'justify-center' : ''} gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all relative group ${
-                  active
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 ring-1 ring-blue-300/40'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              <Link
+                key={to}
+                to={to}
+                className={`flex items-center ${sidebarCollapsed ? 'justify-center' : ''} gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all relative group border ${
+                  active ? 'border-blue-500/20' : 'border-transparent'
                 }`}
+                style={{
+                  background: active ? 'var(--sidebar-item-active-bg)' : undefined,
+                  color: active ? 'var(--sidebar-text-active)' : 'var(--sidebar-text)',
+                }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--sidebar-item-hover-bg)'; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = ''; }}
               >
                 <span className="flex-shrink-0 relative">
                   {icon}
@@ -249,37 +450,29 @@ function DashboardShell() {
                 </span>
                 {!sidebarCollapsed && <span className="truncate">{label}</span>}
                 {badge != null && badge > 0 && (
-                  <span className={`ml-auto text-[10px] font-black px-1.5 py-0.5 rounded-full ${active ? 'bg-white/20 text-white' : 'bg-red-500 text-white'}`}>
+                  <span className="ml-auto text-[10px] font-black px-1.5 py-0.5 rounded-full bg-blue-500 text-white">
                     {badge}
                   </span>
-                )}
-                {sidebarCollapsed && (
-                  <div className="absolute left-full ml-2 px-2 py-1 bg-slate-700 text-white text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                    {label}
-                  </div>
                 )}
               </Link>
             );
           })}
         </nav>
 
-        {/* Collapse toggle + Logout */}
-        <div className="p-2 border-t border-slate-800 space-y-1">
+        <div className="p-3 space-y-1" style={{ borderTop: '1px solid var(--border)' }}>
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-white hover:bg-slate-800 text-sm font-medium transition-all relative group"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
+            style={{ color: 'var(--text-3)' }}
           >
             <ChevronRight size={18} className={`transition-transform ${sidebarCollapsed ? '' : 'rotate-180'}`} />
             {!sidebarCollapsed && <span>Collapse</span>}
-            {sidebarCollapsed && (
-              <div className="absolute left-full ml-2 px-2 py-1 bg-slate-700 text-white text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                Expand Sidebar
-              </div>
-            )}
           </button>
           <button
-            onClick={() => { localStorage.removeItem('accessToken'); window.location.reload(); }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-400 hover:bg-red-500/10 hover:text-red-300 text-sm font-medium transition-all"
+            onClick={() => {
+              logoutAndReload();
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-400/80 hover:bg-red-500/10 hover:text-red-300 text-sm font-medium transition-all"
           >
             <LogIn size={18} className="rotate-180" />
             {!sidebarCollapsed && <span>Logout</span>}
@@ -287,28 +480,179 @@ function DashboardShell() {
         </div>
       </aside>
 
-      {/* ── Main content ── */}
-      <main className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <Routes>
-          <Route path="/" element={<MenuBuilder />} />
-          <Route path="/tables" element={<FloorPlan />} />
-          <Route path="/orders" element={<Orders />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/billing" element={<Billing />} />
-          <Route path="/waiter" element={<WaiterPage />} />
-        </Routes>
+      <main className="relative z-10 flex-1 min-w-0 h-full overflow-hidden flex flex-col bg-transparent">
+        <div className="flex-shrink-0 px-3 pt-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-5">
+          <VendorTopNav
+            path={location.pathname}
+            role={role}
+            business={business}
+            billing={billing}
+            liveOrderCount={liveOrderCount}
+            canAccessSettings={canAccessSettings}
+            canAccessBilling={canAccessBilling}
+            onLogout={logoutAndReload}
+          />
+        </div>
+
+        <div className="min-h-0 flex-1 px-2 pb-2 pt-2 sm:px-3 sm:pb-3 lg:px-5 lg:pb-5">
+          <DashboardErrorBoundary>
+            <Routes>
+              {canAccessMenu && <Route index element={<MenuBuilder />} />}
+              {canAccessTables && <Route path="tables" element={<FloorPlan />} />}
+              {canAccessOrders && <Route path="orders" element={<Orders role={role} />} />}
+              {canAccessAnalytics && <Route path="analytics" element={<Analytics />} />}
+              {canAccessSettings && <Route path="settings" element={<Settings />} />}
+              {canAccessBilling && <Route path="billing" element={<Billing />} />}
+              {role === 'WAITER' && <Route path="waiter" element={<WaiterPage />} />}
+              <Route path="*" element={<Navigate to={defaultRoute} replace />} />
+            </Routes>
+          </DashboardErrorBoundary>
+        </div>
       </main>
+
+      {showFirstTimeDemo && activeDemoStep && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+            <div className="bg-slate-900 px-6 py-5 text-white">
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-blue-300">First-Time Demo</p>
+              <h3 className="mt-1 text-2xl font-black tracking-tight">How RestoFlow Works</h3>
+              <p className="mt-2 text-sm text-slate-300">
+                Step {demoStep + 1} of {DASHBOARD_DEMO_STEPS.length}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {DASHBOARD_DEMO_STEPS.map((stepItem, index) => (
+                  <span
+                    key={stepItem.title}
+                    className={`h-1.5 min-w-[28px] flex-1 rounded-full ${index <= demoStep ? 'bg-blue-400' : 'bg-slate-700'}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-5 px-6 py-6">
+              <div>
+                <h4 className="text-xl font-black text-slate-900">{activeDemoStep.title}</h4>
+                <p className="mt-1 text-sm font-medium text-slate-600">{activeDemoStep.summary}</p>
+              </div>
+
+              <ul className="space-y-2">
+                {activeDemoStep.checklist.map((point) => (
+                  <li key={point} className="flex items-start gap-2 text-sm text-slate-700">
+                    <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
+                <button
+                  onClick={finishDemo}
+                  className="text-sm font-bold text-slate-500 transition-colors hover:text-slate-800"
+                >
+                  Skip Demo
+                </button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={goToPreviousDemoStep}
+                    disabled={demoStep === 0}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={openDemoSection}
+                    className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition-colors hover:bg-blue-100"
+                  >
+                    Open {activeDemoStep.actionLabel}
+                  </button>
+                  <button
+                    onClick={goToNextDemoStep}
+                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700"
+                  >
+                    {isLastDemoStep ? 'Finish Demo' : 'Next'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-/* ─── Root App ─────────────────────────────────────────────── */
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('accessToken'));
-  if (window.location.pathname === '/admin') return <Admin />;
-  if (!isLoggedIn) return <LoginPage onLogin={() => setIsLoggedIn(true)} />;
-  return <DashboardShell />;
+  const [mustChangePassword, setMustChangePassword] = useState(
+    () => localStorage.getItem('mustChangePassword') === '1',
+  );
+  const role = normalizeDashboardRole(localStorage.getItem('userRole'));
+  const clerkConfigured = Boolean(
+    import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || import.meta.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+  );
+
+  const handleLogin = ({ mustChangePassword: shouldChange }: { mustChangePassword: boolean }) => {
+    setMustChangePassword(shouldChange);
+    setIsLoggedIn(true);
+  };
+
+  const handleLogout = () => {
+    clearLocalAuthStorage();
+    const clerk = (globalThis as any).Clerk;
+    if (clerk?.signOut) void Promise.resolve(clerk.signOut()).catch(() => {});
+    setMustChangePassword(false);
+    setIsLoggedIn(false);
+  };
+
+  return (
+    <Routes>
+      <Route path="/admin" element={<Admin />} />
+      <Route path="/sso-callback" element={clerkConfigured ? <AuthenticateWithRedirectCallback /> : <Navigate to="/login" replace />} />
+
+      <Route path="/" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingHomeRoute />} />
+      <Route path="/contact" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingContactRoute />} />
+      <Route path="/launch-plan" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingLaunchRoute />} />
+      <Route path="/login" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <LoginPage onLogin={handleLogin} />} />
+      <Route path="/signup" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <SignupPage onLogin={handleLogin} />} />
+
+      <Route
+        path="/setup"
+        element={
+          !isLoggedIn ? (
+            <Navigate to="/login" replace />
+          ) : FULL_ACCESS_ROLES.has(role) ? (
+            <Onboarding nextPath={mustChangePassword ? '/security-setup' : getDefaultRouteForRole(role)} />
+          ) : (
+            <Navigate to={getDefaultRouteForRole(role)} replace />
+          )
+        }
+      />
+
+      <Route
+        path="/security-setup"
+        element={
+          !isLoggedIn ? (
+            <Navigate to="/login" replace />
+          ) : mustChangePassword ? (
+            <FirstLoginPasswordGate
+              onCompleted={() => setMustChangePassword(false)}
+              onLogout={handleLogout}
+            />
+          ) : (
+            <PostLoginRedirect mustChangePassword={false} />
+          )
+        }
+      />
+
+      <Route
+        path="/app/*"
+        element={!isLoggedIn ? <Navigate to="/login" replace /> : <DashboardShell />}
+      />
+
+      <Route path="*" element={<Navigate to={isLoggedIn ? getDefaultRouteForRole(role) : '/'} replace />} />
+    </Routes>
+  );
 }
 
-export default App
+export default App;

@@ -1,29 +1,133 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { format } from 'date-fns';
 import { formatINR } from '../lib/currency';
-import { getSocketUrl } from '../lib/network';
-import { Hand, Receipt, HelpCircle, Zap, XCircle } from 'lucide-react';
+import { Hand, Receipt, HelpCircle, Zap, XCircle, WifiOff, Signal, RefreshCw } from 'lucide-react';
+import { useRealtimeSocket } from '../hooks/useRealtimeSocket';
 
-export function Orders() {
+type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER';
+
+const TERMINAL_STATUSES = new Set(['RECEIVED', 'CANCELLED']);
+const ORDER_STATUS_OPTIONS = [
+  { value: 'NEW', label: 'New' },
+  { value: 'ACCEPTED', label: 'Accepted' },
+  { value: 'PREPARING', label: 'Preparing' },
+  { value: 'READY', label: 'Ready' },
+  { value: 'SERVED', label: 'Served' },
+  { value: 'RECEIVED', label: 'Received' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+] as const;
+const ORDER_STATUS_OPTION_STYLE: CSSProperties = {
+  backgroundColor: '#ffffff',
+  color: '#0f172a',
+};
+
+function readRestaurantSlugFromStorage() {
+  try {
+    const raw = localStorage.getItem('restaurant');
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.slug === 'string' ? parsed.slug.trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+function isValidSlug(value: string) {
+  return /^[a-z0-9-]+$/i.test(value);
+}
+
+function resolveRole(rawRole?: string | null): DashboardRole {
+  const normalized = (rawRole || '').toUpperCase();
+  if (normalized === 'MANAGER') return 'MANAGER';
+  if (normalized === 'CASHIER') return 'CASHIER';
+  if (normalized === 'KITCHEN') return 'KITCHEN';
+  if (normalized === 'WAITER') return 'WAITER';
+  return 'OWNER';
+}
+
+function getConnectionTone(status: string, latencyMs: number | null) {
+  if (status === 'connected' && (latencyMs == null || latencyMs < 250)) {
+    return { label: 'Live', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+  }
+  if (status === 'connected') {
+    return { label: 'Live (slow)', className: 'bg-amber-100 text-amber-700 border-amber-200' };
+  }
+  if (status === 'reconnecting' || status === 'connecting') {
+    return { label: 'Reconnecting', className: 'bg-orange-100 text-orange-700 border-orange-200' };
+  }
+  return { label: 'Offline', className: 'bg-red-100 text-red-700 border-red-200' };
+}
+
+export function Orders({ role }: { role?: string }) {
   const queryClient = useQueryClient();
+  const effectiveRole = resolveRole(role || localStorage.getItem('userRole'));
+  const onlyPipeline = effectiveRole === 'KITCHEN';
+  const canViewSessions = effectiveRole !== 'KITCHEN';
+  const canViewHistory = effectiveRole !== 'KITCHEN';
+  const canCloseSession = effectiveRole === 'OWNER' || effectiveRole === 'MANAGER' || effectiveRole === 'CASHIER';
+  const canBulkClose = effectiveRole === 'OWNER' || effectiveRole === 'MANAGER';
+  const canToggleBusyMode = effectiveRole === 'OWNER' || effectiveRole === 'MANAGER';
+  const canSetKitchenStages = ['OWNER', 'MANAGER', 'KITCHEN'].includes(effectiveRole);
+  const canSetServiceStages = ['OWNER', 'MANAGER', 'CASHIER', 'WAITER'].includes(effectiveRole);
+  const canEditSessionBatchStatus = effectiveRole === 'OWNER' || effectiveRole === 'MANAGER';
   const [activeTab, setActiveTab] = useState<'PIPELINE' | 'SESSIONS' | 'HISTORY'>('PIPELINE');
   const [busyMode, setBusyMode] = useState(false);
   const [waiterCalls, setWaiterCalls] = useState<any[]>([]);
-  const openTestOrder = () => {
-    try {
-      const restaurant = JSON.parse(localStorage.getItem('restaurant') || '{}');
-      if (!restaurant?.slug) {
-        alert('Tenant slug missing. Complete business setup first.');
-        return;
-      }
-      window.open(`/order/${restaurant.slug}`, '_blank', 'noopener,noreferrer');
-    } catch {
-      alert('Unable to open test order flow right now.');
+  const [overviewNow, setOverviewNow] = useState(() => new Date());
+
+  useEffect(() => {
+    if (onlyPipeline && activeTab !== 'PIPELINE') {
+      setActiveTab('PIPELINE');
     }
+  }, [activeTab, onlyPipeline]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setOverviewNow(new Date()), 30000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const { data: businessSettings } = useQuery<{ slug?: string }>({
+    queryKey: ['settings-business'],
+    queryFn: async () => {
+      const res = await api.get('/settings/business');
+      return res.data;
+    },
+    staleTime: 1000 * 60,
+  });
+
+  const resolveTenantSlug = useCallback(async () => {
+    const fromQuery = (businessSettings?.slug || '').trim();
+    if (fromQuery && isValidSlug(fromQuery)) return fromQuery;
+
+    try {
+      const res = await api.get('/settings/business');
+      const fromSettings = String(res.data?.slug || '').trim();
+      if (fromSettings && isValidSlug(fromSettings)) return fromSettings;
+    } catch {
+      // Non-admin roles can fail this endpoint; continue fallback.
+    }
+
+    const fromStorage = readRestaurantSlugFromStorage().trim();
+    if (fromStorage && isValidSlug(fromStorage)) return fromStorage;
+    return '';
+  }, [businessSettings?.slug]);
+
+  const openTestOrder = async () => {
+    const slug = await resolveTenantSlug();
+    if (!slug) {
+      alert('Tenant slug missing. Complete Business Profile setup first.');
+      return;
+    }
+    window.open(`/order/${slug}`, '_blank', 'noopener,noreferrer');
   };
+
+  const refreshOperationalData = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+    queryClient.invalidateQueries({ queryKey: ['order-history'] });
+    queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
+  }, [queryClient]);
 
   const { data: liveOrders = [], isLoading } = useQuery<any[]>({
     queryKey: ['live-orders'],
@@ -50,7 +154,7 @@ export function Orders() {
       return res.data;
     },
     onSuccess: (updatedOrder: any) => {
-      if (updatedOrder.status === 'RECEIVED' || updatedOrder.status === 'CANCELLED') {
+      if (TERMINAL_STATUSES.has(updatedOrder.status)) {
         queryClient.setQueryData(['live-orders'], (old: any[] = []) =>
           old.filter((order) => order.id !== updatedOrder.id)
         );
@@ -64,48 +168,72 @@ export function Orders() {
     }
   });
 
-  useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    const socket = io(getSocketUrl(), { auth: { token } });
-
-    socket.on('order:new', (order) => queryClient.setQueryData(['live-orders'], (old: any) => [...(old || []), order]));
-    socket.on('order:update', (updatedOrder) => {
-      queryClient.setQueryData(['live-orders'], (old: any) => {
-        if (!old) return old;
-        if (updatedOrder.status === 'RECEIVED' || updatedOrder.status === 'CANCELLED') {
-          return old.filter((o: any) => o.id !== updatedOrder.id);
+  const realtimeHandlers = useMemo(
+    () => ({
+      'order:new': (incomingOrder: any) => {
+        queryClient.setQueryData(['live-orders'], (old: any[] = []) => {
+          if (old.some((order) => order.id === incomingOrder.id)) return old;
+          return [...old, incomingOrder];
+        });
+      },
+      'order:update': (updatedOrder: any) => {
+        queryClient.setQueryData(['live-orders'], (old: any[] = []) => {
+          if (!old.length) return old;
+          if (TERMINAL_STATUSES.has(updatedOrder.status)) {
+            return old.filter((order) => order.id !== updatedOrder.id);
+          }
+          return old.map((order) => (order.id === updatedOrder.id ? updatedOrder : order));
+        });
+        if (TERMINAL_STATUSES.has(updatedOrder.status)) {
+          queryClient.invalidateQueries({ queryKey: ['order-history'] });
+          queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
         }
-        return old.map((o: any) => o.id === updatedOrder.id ? updatedOrder : o);
-      });
-      if (updatedOrder.status === 'RECEIVED' || updatedOrder.status === 'CANCELLED') {
+      },
+      'orders:bulk_status': (payload: { sessionId?: string; status?: string }) => {
+        if (!payload?.sessionId || !payload?.status) return;
+        if (!TERMINAL_STATUSES.has(payload.status)) return;
+        queryClient.setQueryData(['live-orders'], (old: any[] = []) =>
+          old.filter((order) => order.diningSessionId !== payload.sessionId)
+        );
         queryClient.invalidateQueries({ queryKey: ['order-history'] });
         queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
-      }
-    });
+      },
+      // Avoid aggressive refetch storms: order:new/order:update handlers already keep live-orders in sync.
+      'session:new': () => undefined,
+      'session:update': () => undefined,
+      'session:finished': () => queryClient.invalidateQueries({ queryKey: ['live-orders'] }),
+      'session:completed': () => {
+        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+        queryClient.invalidateQueries({ queryKey: ['order-history'] });
+      },
+      'table:status_change': () => undefined,
+      'waiter:call': (call: any) => {
+        const uniqueId = `${call?.tableId || 'na'}_${call?.timestamp || Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        setWaiterCalls((prev) => [{ ...call, id: uniqueId }, ...prev].slice(0, 10));
+        try {
+          new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczLjt0otf/mGEcFkl/sOLbfTcRJWuY1OOURBcRUIC06M1xKRAna6DM5aRaGhhAhb3e0okyDDBwpN77jl0ZJGqk2P+hXxcTRYe84tN5LQ0nbaXb+5JYGSNqpND/pFkUFEmIvuPXeS0NLW6m3v6SVxokZaXR/6RYGRUAAA==').play();
+        } catch {
+          // ignore browser media policy blocks
+        }
+      },
+    }),
+    [queryClient],
+  );
 
-    // USP 10: Waiter call alerts
-    socket.on('waiter:call', (call: any) => {
-      setWaiterCalls(prev => [{ ...call, id: Date.now() }, ...prev].slice(0, 10));
-      // Play sound
-      try {
-        new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczLjt0otf/mGEcFkl/sOLbfTcRJWuY1OOURBcRUIC06M1xKRAna6DM5aRaGhhAhb3e0okyDDBwpN77jl0ZJGqk2P+hXxcTRYe84tN5LQ0nbaXb+5JYGSNqpND/pFkUFEmIvuPXeS0NLW6m3v6SVxokZaXR/6RYGRUAAA==').play();
-      } catch (err) {
-        console.warn('Waiter call sound failed:', err);
-      }
-    });
-
-    return () => { socket.disconnect() };
-  }, [queryClient]);
+  const { status: socketStatus, latencyMs } = useRealtimeSocket({
+    handlers: realtimeHandlers,
+    onReconnect: refreshOperationalData,
+  });
 
   if (isLoading) return (
-    <div className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
       {[1, 2, 3, 4, 5, 6].map(i => (
-        <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-48 animate-pulse">
-          <div className="w-1/3 h-6 bg-gray-200 rounded mb-4"></div>
-          <div className="w-1/4 h-4 bg-gray-100 rounded mb-6"></div>
+        <div key={i} className="rounded-xl p-6 h-48 animate-pulse" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}>
+          <div className="w-1/3 h-6 rounded mb-4 shimmer"></div>
+          <div className="w-1/4 h-4 rounded mb-6 shimmer"></div>
           <div className="space-y-3">
-            <div className="w-full h-8 bg-gray-50 rounded"></div>
-            <div className="w-5/6 h-8 bg-gray-50 rounded"></div>
+            <div className="w-full h-8 rounded shimmer"></div>
+            <div className="w-5/6 h-8 rounded shimmer"></div>
           </div>
         </div>
       ))}
@@ -144,19 +272,26 @@ export function Orders() {
 
     const handleCloseSession = async (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!confirm('Generate final bill and close this session?')) return;
+      if (!canCloseSession) return;
+      if (!confirm('Generate bill and auto-checkout this session now?')) return;
+      const slug = await resolveTenantSlug();
+      if (!slug) {
+        alert('Tenant slug missing. Complete Business Profile setup first.');
+        return;
+      }
       try {
-        const slug = JSON.parse(localStorage.getItem('restaurant') || '{}').slug;
-        if (!slug) throw new Error('Tenant slug not found');
         await api.post(`/public/${slug}/sessions/${ticket.sessionId}/finish`);
+        await api.post(`/public/${slug}/sessions/${ticket.sessionId}/complete`, { paymentMethod: 'cash' });
         queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+        queryClient.invalidateQueries({ queryKey: ['order-history'] });
+        queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
       } catch (err: any) {
         alert(err?.response?.data?.error || err?.message || 'Failed to close session');
       }
     };
 
     return (
-      <div className={`pipeline-card card-hover flex flex-col animate-in fade-in duration-300 ${isCancelled ? 'opacity-60' : ''}`}>
+      <div className={`pipeline-card card-hover flex flex-col animate-in fade-in duration-300 ${isCancelled ? 'opacity-60' : ''}`} style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}>
         {/* Top stripe */}
         <div className={`pipeline-card-stripe ${isCancelled ? 'bg-red-400' : 'bg-gradient-to-r from-blue-500 to-indigo-500'}`} />
 
@@ -164,10 +299,10 @@ export function Orders() {
           {/* Table + Time */}
           <div className="flex justify-between items-start">
             <div>
-              <span className="font-black text-gray-900 text-base block leading-tight">
+              <span className="font-black text-base block leading-tight" style={{ color: 'var(--text-1)' }}>
                 {ticket.table ? `Table ${ticket.table.name}` : 'Takeaway'}
               </span>
-              <span className="text-gray-400 text-[11px] font-semibold uppercase tracking-wider">
+              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>
                 {ticket.isSession ? 'Open Tab' : `#${ticket.orders[0]?.id.slice(-6)}`} · {format(new Date(ticket.createdAt), 'h:mm a')}
                 {elapsedMin > 0 && ` · ${elapsedMin}m`}
               </span>
@@ -189,11 +324,11 @@ export function Orders() {
           </div>
 
           {/* Batch list */}
-          <div className="space-y-2 border-t border-gray-100 pt-3">
+          <div className="space-y-2 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
             {ticket.orders.map((order: any, idx: number) => (
-              <div key={order.id} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div key={order.id} className="rounded-xl p-3" style={{ background: 'var(--surface-3)', border: '1px solid var(--border)' }}>
                 <div className="flex justify-between mb-1.5">
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Batch {idx + 1}</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>Batch {idx + 1}</span>
                   <span className={`chip ${
                     order.status === 'NEW' ? 'chip-blue' :
                     order.status === 'PREPARING' ? 'chip-yellow' :
@@ -203,34 +338,45 @@ export function Orders() {
                 </div>
                 <ul className="space-y-1 mb-2">
                   {order.items?.map((item: any) => (
-                    <li key={item.id} className="text-sm text-gray-700 font-medium flex gap-2">
+                    <li key={item.id} className="text-sm font-medium flex gap-2" style={{ color: 'var(--text-1)' }}>
                       <span className="font-black text-blue-600">{item.quantity}x</span>
                       {item.menuItem?.name || 'Item'}
                     </li>
                   ))}
                 </ul>
-                <select
-                  value={order.status}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    if (next === 'CANCELLED') {
-                      const reason = window.prompt('Reason for cancellation?');
-                      if (reason === null) return;
-                      statusMutation.mutate({ id: order.id, status: next, cancelReason: reason });
-                    } else {
-                      statusMutation.mutate({ id: order.id, status: next });
-                    }
-                  }}
-                  className="w-full text-xs rounded-lg font-bold border border-gray-200 bg-white px-3 py-1.5 outline-none cursor-pointer text-gray-700"
-                >
-                  <option value="NEW">New</option>
-                  <option value="ACCEPTED">Accepted</option>
-                  <option value="PREPARING">Preparing</option>
-                  <option value="READY">Ready</option>
-                  <option value="SERVED">Served</option>
-                  <option value="RECEIVED">Received</option>
-                  <option value="CANCELLED">Cancelled</option>
-                </select>
+                {canEditSessionBatchStatus ? (
+                  <select
+                    value={order.status}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      if (next === 'CANCELLED') {
+                        const reason = window.prompt('Reason for cancellation?');
+                        if (reason === null) return;
+                        statusMutation.mutate({ id: order.id, status: next, cancelReason: reason });
+                      } else {
+                        statusMutation.mutate({ id: order.id, status: next });
+                      }
+                    }}
+                    className="w-full text-xs rounded-lg font-bold px-3 py-1.5 outline-none cursor-pointer"
+                    style={{
+                      background: 'var(--input-bg)',
+                      border: '1px solid var(--input-border)',
+                      color: 'var(--input-text)',
+                      colorScheme: 'light',
+                      WebkitTextFillColor: 'var(--input-text)',
+                    }}
+                  >
+                    {ORDER_STATUS_OPTIONS.map((statusOption) => (
+                      <option key={statusOption.value} value={statusOption.value} style={ORDER_STATUS_OPTION_STYLE}>
+                        {statusOption.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="w-full rounded-lg px-3 py-1.5 text-xs font-semibold" style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', color: 'var(--text-3)' }}>
+                    Read-only for your role
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -239,9 +385,10 @@ export function Orders() {
           {ticket.isSession && (
             <button
               onClick={handleCloseSession}
-              className="w-full text-sm font-bold bg-gradient-to-r from-orange-500 to-red-500 text-white py-2.5 rounded-xl hover:brightness-110 active:scale-[0.98] transition-all shadow-md shadow-orange-500/20 mt-1"
+              disabled={!canCloseSession}
+              className="w-full text-sm font-bold bg-gradient-to-r from-orange-500 to-red-500 text-white py-2.5 rounded-xl hover:brightness-110 active:scale-[0.98] transition-all shadow-md shadow-orange-500/20 mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Close Session & Generate Bill →
+              Generate Bill & Auto Checkout
             </button>
           )}
         </div>
@@ -258,58 +405,58 @@ export function Orders() {
       order.status === 'READY' ? 'stripe-ready' : 'stripe-served';
 
     return (
-      <div className={`pipeline-card card-hover animate-in fade-in duration-300 ${isUrgent ? 'ring-1 ring-red-300' : ''}`}>
+      <div className={`pipeline-card card-hover animate-in fade-in duration-300 ${isUrgent ? 'ring-1 ring-red-300' : ''}`} style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}>
         <div className={`pipeline-card-stripe ${stripeClass}`} />
         <div className="p-4">
           <div className="flex justify-between items-start mb-1">
             <div>
-              <span className="font-black text-gray-900 text-sm block">
+              <span className="font-black text-sm block" style={{ color: 'var(--text-1)' }}>
                 {order.orderNumber || `#${order.id.slice(-6).toUpperCase()}`}
               </span>
-              <span className="text-gray-400 text-[11px] font-semibold">
+              <span className="text-[11px] font-semibold" style={{ color: 'var(--text-3)' }}>
                 {order.table?.name ? `Table ${order.table.name}` : 'Takeaway'}
               </span>
             </div>
             <div className="text-right">
-              <span className="text-gray-400 text-[11px] font-bold">{format(new Date(order.createdAt), 'h:mm a')}</span>
-              {isUrgent && <div className="text-[10px] font-black text-red-500 mt-0.5">⚠ {elapsed}m</div>}
+              <span className="text-[11px] font-bold" style={{ color: 'var(--text-3)' }}>{format(new Date(order.createdAt), 'h:mm a')}</span>
+              {isUrgent && <div className="text-[10px] font-black text-red-500 mt-0.5">Alert: {elapsed}m</div>}
             </div>
           </div>
 
           <ul className="mt-3 mb-4 space-y-1.5">
             {order.items?.map((item: any) => (
-              <li key={item.id} className="flex gap-2 text-sm text-gray-700 font-medium items-start">
+              <li key={item.id} className="flex gap-2 text-sm font-medium items-start" style={{ color: 'var(--text-1)' }}>
                 <span className="bg-blue-50 text-blue-700 text-xs font-black px-1.5 py-0.5 rounded-md flex-shrink-0 mt-0.5">{item.quantity}x</span>
                 <span className="leading-tight">{item.menuItem?.name || item.name}</span>
               </li>
             ))}
           </ul>
 
-          {order.status === 'NEW' && (
+          {order.status === 'NEW' && canSetKitchenStages && (
             <button onClick={() => statusMutation.mutate({ id: order.id, status: 'ACCEPTED' })} disabled={statusMutation.isPending}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition-all active:scale-[0.97] disabled:opacity-50 shadow-md shadow-blue-600/20 text-sm">
-              ✓ Accept Order
+              Accept Order
             </button>
           )}
-          {order.status === 'ACCEPTED' && (
+          {order.status === 'ACCEPTED' && canSetKitchenStages && (
             <button onClick={() => statusMutation.mutate({ id: order.id, status: 'PREPARING' })} disabled={statusMutation.isPending}
               className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl transition-all active:scale-[0.97] disabled:opacity-50 shadow-md shadow-amber-500/20 text-sm">
-              🍳 Start Preparing
+              Start Preparing
             </button>
           )}
-          {order.status === 'PREPARING' && (
+          {order.status === 'PREPARING' && canSetKitchenStages && (
             <button onClick={() => statusMutation.mutate({ id: order.id, status: 'READY' })} disabled={statusMutation.isPending}
               className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 rounded-xl transition-all active:scale-[0.97] disabled:opacity-50 shadow-md shadow-orange-500/20 text-sm">
-              🔔 Mark Ready
+              Mark Ready
             </button>
           )}
-          {order.status === 'READY' && (
+          {order.status === 'READY' && canSetServiceStages && (
             <button onClick={() => statusMutation.mutate({ id: order.id, status: 'SERVED' })} disabled={statusMutation.isPending}
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl transition-all active:scale-[0.97] disabled:opacity-50 shadow-md shadow-emerald-600/20 text-sm">
-              🍽️ Mark Served
+              Mark Served
             </button>
           )}
-          {order.status === 'SERVED' && (
+          {order.status === 'SERVED' && canSetServiceStages && (
             <div className="flex gap-2">
               <div className="flex-1 bg-gray-50 border border-gray-200 text-gray-500 py-2.5 rounded-xl text-center text-sm font-bold">
                 Awaiting Receipt
@@ -320,62 +467,104 @@ export function Orders() {
               </button>
             </div>
           )}
+          {((order.status === 'NEW' && !canSetKitchenStages) ||
+            (order.status === 'ACCEPTED' && !canSetKitchenStages) ||
+            (order.status === 'PREPARING' && !canSetKitchenStages) ||
+            (order.status === 'READY' && !canSetServiceStages) ||
+            (order.status === 'SERVED' && !canSetServiceStages)) && (
+            <div className="w-full rounded-xl py-2 text-center text-xs font-semibold" style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', color: 'var(--text-3)' }}>
+              Read-only for your role
+            </div>
+          )}
         </div>
       </div>
     );
   };
 
+  const connectionTone = getConnectionTone(socketStatus, latencyMs);
+  const overviewTimestamp = format(overviewNow, 'MMM d, yyyy | h:mm a');
+
   return (
-    <div className="p-8 max-w-7xl mx-auto h-[calc(100vh-theme(spacing.16))] overflow-hidden flex flex-col">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-4">
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Active Operations</h1>
-          {busyMode && (
-            <span className="flex items-center gap-1.5 bg-red-100 text-red-600 px-3 py-1 rounded-full text-xs font-black animate-pulse">
-              <Zap size={12} /> BUSY MODE
+    <div className="flex h-full min-h-0 flex-col p-3 sm:p-5 lg:p-8">
+      <div className="mb-4 flex flex-col gap-3 lg:mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border p-2" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${connectionTone.className}`}>
+              {socketStatus === 'connected' ? <Signal size={12} /> : <WifiOff size={12} />}
+              {connectionTone.label}
+              {latencyMs != null && socketStatus === 'connected' ? `${latencyMs}ms` : ''}
             </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setBusyMode(!busyMode)}
-            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${
-              busyMode ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            <Zap size={14} /> {busyMode ? 'Busy ON' : 'Busy Mode'}
-          </button>
-          <button
-            onClick={() => {
-              if (confirm('Close ALL live kitchen batches? This will mark them as Served.')) {
-                liveOrders.forEach((o: any) => statusMutation.mutate({ id: o.id, status: 'SERVED' }));
-              }
-            }}
-            disabled={liveOrders.length === 0}
-            className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200 disabled:opacity-40 flex items-center gap-2 transition-all"
-          >
-            <XCircle size={14} /> Close All
-          </button>
-          <div className="flex bg-gray-100 p-1.5 rounded-xl border border-gray-200">
-            <button 
-              onClick={() => setActiveTab('PIPELINE')}
-              className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'PIPELINE' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+            <span className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
+              {overviewTimestamp}
+            </span>
+            {busyMode && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/20 px-3 py-1 text-xs font-black text-rose-600">
+                <Zap size={12} /> Busy Mode
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              onClick={refreshOperationalData}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold"
+              style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', color: 'var(--text-2)' }}
             >
-              Order Pipeline
+              <RefreshCw size={12} /> Sync
             </button>
-            <button 
+            {canToggleBusyMode && (
+              <button
+                onClick={() => setBusyMode(!busyMode)}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all ${
+                  busyMode ? 'bg-red-500 text-white shadow-lg shadow-red-500/30' : ''
+                }`}
+                style={busyMode ? undefined : { background: 'var(--surface-3)', color: 'var(--text-2)' }}
+              >
+                <Zap size={14} /> {busyMode ? 'Busy ON' : 'Busy Mode'}
+              </button>
+            )}
+            {canBulkClose && (
+              <button
+                onClick={() => {
+                  if (confirm('Close ALL live kitchen batches? This will mark them as Served.')) {
+                    liveOrders.forEach((o: any) => statusMutation.mutate({ id: o.id, status: 'SERVED' }));
+                  }
+                }}
+                disabled={liveOrders.length === 0}
+                className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all disabled:opacity-40"
+                style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}
+              >
+                <XCircle size={14} /> Close All
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex w-full max-w-full overflow-x-auto rounded-xl p-1.5" style={{ background: 'var(--surface-3)', border: '1px solid var(--border)' }}>
+          <button
+            onClick={() => setActiveTab('PIPELINE')}
+            className="px-4 py-2 rounded-lg text-sm font-bold transition-all focus-visible:outline-none sm:px-6"
+            style={activeTab === 'PIPELINE' ? { background: 'var(--card-bg)', color: 'var(--brand)', boxShadow: 'var(--card-shadow)' } : { color: 'var(--text-3)' }}
+          >
+            Order Pipeline
+          </button>
+          {canViewSessions && (
+            <button
               onClick={() => setActiveTab('SESSIONS')}
-              className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'SESSIONS' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+              className="px-4 py-2 rounded-lg text-sm font-bold transition-all focus-visible:outline-none sm:px-6"
+              style={activeTab === 'SESSIONS' ? { background: 'var(--card-bg)', color: 'var(--brand)', boxShadow: 'var(--card-shadow)' } : { color: 'var(--text-3)' }}
             >
               Table Sessions
             </button>
-            <button 
+          )}
+          {canViewHistory && (
+            <button
               onClick={() => setActiveTab('HISTORY')}
-              className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'HISTORY' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+              className="px-4 py-2 rounded-lg text-sm font-bold transition-all focus-visible:outline-none sm:px-6"
+              style={activeTab === 'HISTORY' ? { background: 'var(--card-bg)', color: 'var(--brand)', boxShadow: 'var(--card-shadow)' } : { color: 'var(--text-3)' }}
             >
               Order History
             </button>
-          </div>
+          )}
         </div>
       </div>
 
@@ -402,7 +591,7 @@ export function Orders() {
       )}
       
       {activeTab === 'PIPELINE' ? (
-        <div className="flex-1 overflow-x-auto custom-scrollbar p-6 flex gap-6 h-full bg-[#f1f5f9]/50">
+        <div className="flex-1 overflow-x-auto custom-scrollbar p-6 flex gap-6 h-full" style={{ background: 'var(--kanban-bg)' }}>
           {[
             { label: 'NEW ORDERS', color: 'text-blue-700', bg: 'bg-blue-50 border-b border-blue-100', badge: 'bg-blue-100 text-blue-800', filter: (o: any) => o.status === 'NEW', stripe: 'stripe-new', pulse: true },
             { label: 'IN KITCHEN', color: 'text-amber-700', bg: 'bg-amber-50 border-b border-amber-100', badge: 'bg-amber-100 text-amber-800', filter: (o: any) => o.status === 'ACCEPTED' || o.status === 'PREPARING', stripe: 'stripe-preparing', pulse: false },
@@ -447,7 +636,7 @@ export function Orders() {
         </div>
 
       ) : activeTab === 'SESSIONS' ? (
-        <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50/50 p-6 rounded-3xl border border-gray-100">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 rounded-3xl" style={{ background: 'var(--kanban-bg)', border: '1px solid var(--border)' }}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
             {groupedLive.map((ticket: any) => <TicketCard key={ticket.id} ticket={ticket} />)}
             {groupedLive.length === 0 && (
@@ -466,7 +655,7 @@ export function Orders() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50/50 p-6 rounded-3xl border border-gray-100">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 rounded-3xl" style={{ background: 'var(--kanban-bg)', border: '1px solid var(--border)' }}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
             {historyOrders.map((order: any) => <TicketCard key={`history_${order.id}`} ticket={{ ...order, isSession: false, orders: [order] }} />)}
             {historyOrders.length === 0 && (

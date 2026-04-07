@@ -1,8 +1,8 @@
 import { Router, Request } from 'express';
 import { requireAuth, requireRole } from '../middlewares/auth.middleware';
-import { UserRole } from '@dineflow/prisma';
 import * as PaymentController from '../controllers/payment.controller';
 import express from 'express';
+import { FULL_ACCESS_ROLES } from '../constants/rbac';
 
 const router: Router = Router();
 
@@ -12,7 +12,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), PaymentContro
 
 // Protected Tenant Financial Routes
 router.use(requireAuth);
-router.post('/create-order', requireRole(['OWNER']), PaymentController.createSubscriptionOrder);
-router.post('/verify', requireRole(['OWNER']), PaymentController.verifyPayment);
+router.post('/create-order', requireRole(FULL_ACCESS_ROLES), PaymentController.createSubscriptionOrder);
+router.post('/verify', requireRole(FULL_ACCESS_ROLES), PaymentController.verifyPayment);
 
 export default router;

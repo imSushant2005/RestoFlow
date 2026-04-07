@@ -19,7 +19,7 @@ router.post('/:tenantSlug/waiter-call', PublicController.waiterCall);
 router.post('/tables/:id/session', TableController.createSession);
 router.post('/customer/login', async (req, res, next) => {
 	try {
-		const CustomerController = await import('../controllers/customer.controller');
+		const CustomerController = await import('../controllers/customer.controller.js');
 		return CustomerController.login(req, res);
 	} catch (err) {
 		console.error('Customer controller load error:', err);

@@ -1,4 +1,4 @@
-import { Role } from '@dineflow/prisma';
+import { UserRole } from '@dineflow/prisma';
 
 declare global {
   namespace Express {
@@ -6,7 +6,7 @@ declare global {
       user?: {
         id: string;
         tenantId: string;
-        role: Role;
+        role: UserRole;
       };
       tenantId?: string;
     }

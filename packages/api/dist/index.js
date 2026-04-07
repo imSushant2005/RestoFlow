@@ -37,10 +37,14 @@ const port = env_1.env.PORT || 4000;
 app.use((0, helmet_1.default)({
     crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
-// Rate Limiting (100 reqs / 15 min per IP)
+// Rate limiting for public routes (defaults to 500 req / 15 min per IP, configurable via PUBLIC_RATE_LIMIT_MAX)
+const publicRateLimitMaxRaw = Number(process.env.PUBLIC_RATE_LIMIT_MAX || 500);
+const publicRateLimitMax = Number.isFinite(publicRateLimitMaxRaw) && publicRateLimitMaxRaw > 0
+    ? publicRateLimitMaxRaw
+    : 500;
 const apiLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000,
-    max: 100,
+    max: publicRateLimitMax,
     message: 'Too many requests from this IP, please try again later.',
     standardHeaders: true,
     legacyHeaders: false,
@@ -73,7 +77,15 @@ app.use('/customer', customer_routes_1.default);
 app.use('/public', session_routes_1.default);
 // Global Error Handler must be the LAST middleware
 app.use(error_middleware_1.globalErrorHandler);
+httpServer.on('error', (error) => {
+    if (error?.code === 'EADDRINUSE') {
+        logger_1.logger.error(`Port ${port} is already in use. Stop the existing process on ${port} and restart @dineflow/api.`);
+        process.exit(1);
+    }
+    logger_1.logger.error({ error }, 'HTTP server failed to start');
+    process.exit(1);
+});
 httpServer.listen(port, () => {
-    logger_1.logger.info(`🚀 RESTOFLOW API (V3 Enterprise) running on port ${port}`);
+    logger_1.logger.info(`RESTOFLOW API (V3 Enterprise) running on port ${port}`);
 });
 //# sourceMappingURL=index.js.map

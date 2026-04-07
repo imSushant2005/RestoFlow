@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
-import { ModifierModal } from './ModifierModal';
+import { Info, Plus, Sparkles, Zap } from 'lucide-react';
 import { formatINR } from '../lib/currency';
+import { ModifierModal } from './ModifierModal';
 
 export function MenuItemCard({ item }: { item: any }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -13,7 +13,12 @@ export function MenuItemCard({ item }: { item: any }) {
   const itemName = item?.name || 'Untitled Item';
   const itemDescription = item?.description || '';
   const itemPrice = Number.isFinite(Number(item?.price)) ? Number(item.price) : 0;
-  const hasTags = Boolean(item?.isVeg || item?.isVegan || item?.isGlutenFree || item?.isChefSpecial || item?.isNew);
+  const foodTag = item?.isVeg ? 'Veg' : item?.isEgg ? 'Egg' : 'Non-Veg';
+  const foodTagTone = item?.isVeg
+    ? 'bg-green-50 text-green-700 border-green-200'
+    : item?.isEgg
+      ? 'bg-orange-50 text-orange-700 border-orange-200'
+      : 'bg-red-50 text-red-700 border-red-200';
 
   const normalizedItem = {
     ...item,
@@ -27,60 +32,111 @@ export function MenuItemCard({ item }: { item: any }) {
     <>
       <div
         onClick={() => setIsModalOpen(true)}
-        className="group bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer active:scale-[0.98] transition-all duration-200 hover:shadow-md hover:border-gray-200"
+        className="group relative flex cursor-pointer flex-col overflow-hidden rounded-[24px] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl active:scale-[0.98]"
+        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
       >
-        <div className="relative w-full h-44 bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden">
+        <div className="relative h-[180px] w-full overflow-hidden">
           {imageError || !imageUrl ? (
-            <div className="w-full h-full flex items-center justify-center text-5xl opacity-40">🍽️</div>
+            <div
+              className="flex h-full w-full items-center justify-center text-sm font-bold opacity-50"
+              style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}
+            >
+              Image unavailable
+            </div>
           ) : (
             <img
               src={imageUrl}
               alt={itemName}
               loading="lazy"
-              className="w-full h-full object-cover absolute inset-0 transition-transform duration-700 group-hover:scale-110"
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-1000 group-hover:scale-110"
               onError={() => setImageError(true)}
             />
           )}
 
-          <div className="absolute top-3 left-3 flex flex-wrap gap-1">
+          <div className="pointer-events-none absolute left-3 top-3 flex flex-col gap-1.5">
             {(item?.isBestSeller || item?.isPopular) && (
-              <span className="bg-brand text-white text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-sm shadow-md">
+              <div className="flex items-center gap-1 rounded-lg bg-orange-500/85 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-white shadow-lg backdrop-blur-md">
+                <Zap size={10} fill="white" />
                 Bestseller
-              </span>
+              </div>
+            )}
+            {item?.isChefSpecial && (
+              <div className="flex items-center gap-1 rounded-lg bg-blue-500/85 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-white shadow-lg backdrop-blur-md">
+                <Sparkles size={10} fill="white" />
+                Chef Choice
+              </div>
             )}
           </div>
 
-          <button
-            className="absolute bottom-3 right-3 w-9 h-9 bg-brand hover:bg-brand-dark text-white rounded-full flex items-center justify-center shadow-lg transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsModalOpen(true);
-            }}
-          >
-            <Plus size={18} strokeWidth={3} />
-          </button>
+          <div className="absolute bottom-3 right-3">
+            <button
+              className="flex h-10 w-10 items-center justify-center rounded-[14px] shadow-lg transition-all group-hover:rotate-6 active:scale-90"
+              style={{ background: 'var(--brand)', color: 'white' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsModalOpen(true);
+              }}
+            >
+              <Plus size={22} strokeWidth={3} />
+            </button>
+          </div>
         </div>
 
-        <div className="p-4">
-          {hasTags && (
-            <div className="flex flex-wrap gap-1 mb-3">
-              {item?.isVeg && <span className="inline-flex flex-shrink-0 items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-200">🌿 VEG</span>}
-              {item?.isVegan && <span className="inline-flex flex-shrink-0 items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-green-100 text-green-800 border-green-300">🌱 VEGAN</span>}
-              {item?.isGlutenFree && <span className="inline-flex flex-shrink-0 items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-orange-50 text-orange-700 border-orange-200">🌾 GF</span>}
-              {item?.isChefSpecial && <span className="inline-flex flex-shrink-0 items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200">👨‍🍳 CHEF SPECIAL</span>}
-              {item?.isNew && <span className="inline-flex flex-shrink-0 items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-purple-50 text-purple-700 border-purple-200">✨ NEW</span>}
+        <div className="flex flex-1 flex-col p-5">
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="mb-1 flex items-center gap-2">
+                {item?.isVeg ? (
+                  <div className="flex h-4 w-4 items-center justify-center rounded-sm border-2 border-green-600 bg-white p-[2px]">
+                    <div className="h-1.5 w-1.5 rounded-full bg-green-600" />
+                  </div>
+                ) : item?.isEgg ? (
+                  <div className="flex h-4 w-4 items-center justify-center rounded-sm border-2 border-orange-400 bg-white p-[2px]">
+                    <div className="h-1.5 w-1.5 rounded-full bg-orange-400" />
+                  </div>
+                ) : (
+                  <div className="flex h-4 w-4 items-center justify-center rounded-sm border-2 border-red-600 bg-white p-[2px]">
+                    <div className="h-1.5 w-1.5 rounded-full bg-red-600" />
+                  </div>
+                )}
+                <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${foodTagTone}`}>
+                  {foodTag}
+                </span>
+                {item?.isNew && (
+                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
+                    New
+                  </span>
+                )}
+              </div>
+              <h3
+                className="text-[17px] font-black leading-tight transition-colors group-hover:text-brand"
+                style={{ color: 'var(--text-1)' }}
+              >
+                {itemName}
+              </h3>
             </div>
-          )}
-
-          <h3 className="font-bold text-gray-900 text-[15px] leading-snug mb-1">{itemName}</h3>
+            <div className="whitespace-nowrap text-xl font-black" style={{ color: 'var(--text-1)' }}>
+              {formatINR(itemPrice)}
+            </div>
+          </div>
 
           {itemDescription && (
-            <p className="text-gray-400 text-[13px] line-clamp-2 leading-relaxed mb-3">{itemDescription}</p>
+            <p
+              className="mb-4 mt-1 line-clamp-2 flex-1 text-[13px] font-medium italic leading-relaxed"
+              style={{ color: 'var(--text-3)' }}
+            >
+              {itemDescription}
+            </p>
           )}
 
-          <div className="flex items-center justify-between">
-            <span className="font-black text-gray-900 text-base">{formatINR(itemPrice)}</span>
-            <span className="text-xs text-gray-400 font-medium">Tap to add</span>
+          <div className="mt-auto flex items-center gap-2 border-t pt-2" style={{ borderColor: 'var(--border)' }}>
+            <Info size={14} style={{ color: 'var(--text-3)' }} />
+            <span
+              className="text-[10px] font-black uppercase tracking-widest"
+              style={{ color: 'var(--text-3)' }}
+            >
+              View details and customization
+            </span>
           </div>
         </div>
       </div>

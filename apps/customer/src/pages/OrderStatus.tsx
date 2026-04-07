@@ -1,51 +1,77 @@
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { publicApi } from '../lib/api';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import { ArrowLeft, Star, CheckCircle2, Clock3, ChefHat, Bell, PlusCircle, Share2, Timer } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bell,
+  CheckCircle2,
+  ChefHat,
+  ChevronRight,
+  Clock3,
+  Share2,
+  Star,
+  Timer,
+  UtensilsCrossed,
+} from 'lucide-react';
+import { publicApi } from '../lib/api';
 import { formatINR } from '../lib/currency';
 import { getSocketUrl } from '../lib/network';
+import { getActiveSessionForTenant } from '../lib/tenantStorage';
+import { useNotifications } from '../components/Notifications';
 
 interface StepConfig {
   label: string;
-  icon: React.ReactNode;
-  statuses: string[];
+  icon: ReactNode;
+  rank: number;
+  glow: string;
 }
 
 const STEPS: StepConfig[] = [
-  { label: 'Order Placed', icon: <Clock3 size={20} />, statuses: ['NEW'] },
-  { label: 'Cooking', icon: <ChefHat size={20} />, statuses: ['ACCEPTED', 'PREPARING'] },
-  { label: 'Ready', icon: <Bell size={20} />, statuses: ['READY', 'SERVED'] },
-  { label: 'Done', icon: <CheckCircle2 size={20} />, statuses: ['RECEIVED'] },
+  { label: 'Accepted', icon: <CheckCircle2 size={20} />, rank: 1, glow: 'from-blue-500/30 to-indigo-500/10' },
+  { label: 'Preparing', icon: <ChefHat size={20} />, rank: 2, glow: 'from-amber-500/30 to-orange-500/10' },
+  { label: 'Ready', icon: <UtensilsCrossed size={20} />, rank: 3, glow: 'from-emerald-500/30 to-green-500/10' },
+  { label: 'Waiter Pickup', icon: <Bell size={20} />, rank: 4, glow: 'from-cyan-500/30 to-sky-500/10' },
+  { label: 'Served', icon: <Clock3 size={20} />, rank: 5, glow: 'from-violet-500/30 to-fuchsia-500/10' },
+  { label: 'Complete', icon: <Star size={20} />, rank: 6, glow: 'from-rose-500/30 to-red-500/10' },
 ];
-
-function getStepIndex(status: string) {
-  for (let i = 0; i < STEPS.length; i++) {
-    if (STEPS[i].statuses.includes(status)) return i;
-  }
-  return 0;
-}
 
 function isActiveOrder(status?: string) {
   return status !== 'RECEIVED' && status !== 'CANCELLED';
 }
 
+function getOrderRank(status: string) {
+  switch (status) {
+    case 'ACCEPTED':
+      return 1;
+    case 'PREPARING':
+      return 2;
+    case 'READY':
+      return 3;
+    case 'SERVED':
+      return 5;
+    case 'RECEIVED':
+      return 6;
+    default:
+      return 0;
+  }
+}
+
 function statusBadgeClass(status?: string) {
   switch (status) {
     case 'NEW':
-      return 'bg-amber-50 text-amber-700 border-amber-200';
+      return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
     case 'ACCEPTED':
     case 'PREPARING':
-      return 'bg-blue-50 text-blue-700 border-blue-200';
+      return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
     case 'READY':
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
     case 'RECEIVED':
-      return 'bg-green-50 text-green-700 border-green-200';
+      return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
     case 'CANCELLED':
-      return 'bg-rose-50 text-rose-700 border-rose-200';
+      return 'bg-red-500/10 text-red-500 border-red-500/20';
     default:
-      return 'bg-gray-50 text-gray-700 border-gray-200';
+      return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
   }
 }
 
@@ -56,72 +82,127 @@ export function OrderStatus() {
   const [rating, setRating] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [tab, setTab] = useState<'TRACKING' | 'HISTORY'>('TRACKING');
-  const sessionToken = localStorage.getItem('restoflow_session') || localStorage.getItem('dineflow_session');
+  const sessionToken = getActiveSessionForTenant(tenantSlug);
+
+  const queryKey = ['session-orders', sessionToken, tenantSlug];
 
   const { data, isLoading } = useQuery({
-    queryKey: ['session-orders', sessionToken, tenantSlug],
+    queryKey,
     queryFn: async () => {
+      if (!sessionToken || !tenantSlug) return [];
       const res = await publicApi.get(`/${tenantSlug}/sessions/${sessionToken}/orders`);
       return res.data;
     },
-    refetchInterval: 2500,
-    refetchIntervalInBackground: true,
-    staleTime: 1000,
+    enabled: Boolean(sessionToken && tenantSlug),
+    staleTime: 1000 * 10,
+    refetchInterval: 1000 * 15,
   });
 
   const orders = Array.isArray(data) ? data : [];
+  const activeOrders = useMemo(() => orders.filter((order: any) => isActiveOrder(order.status)), [orders]);
+  const historyOrders = useMemo(() => orders.filter((order: any) => !isActiveOrder(order.status)), [orders]);
+
+  const latestCompletedWithoutReview = useMemo(
+    () => historyOrders.find((order: any) => order.status === 'RECEIVED' && !order.hasReview),
+    [historyOrders],
+  );
+
+  const feedbackMutation = useMutation({
+    mutationFn: async ({ rating, feedback }: { rating: number; feedback: string }) => {
+      if (!latestCompletedWithoutReview?.id) {
+        throw new Error('No completed order available for review');
+      }
+      return publicApi.post(`/orders/${latestCompletedWithoutReview.id}/feedback`, { rating, feedback });
+    },
+    onSuccess: () => {
+      setRating(0);
+      setFeedback('');
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error: any) => {
+      alert(error?.response?.data?.error || error?.message || 'Unable to submit feedback right now.');
+    },
+  });
 
   useEffect(() => {
     if (!tenantSlug || !sessionToken) return;
 
     const socket = io(getSocketUrl(), {
-      auth: { tenantSlug, sessionToken },
+      auth: { tenantSlug, sessionToken, client: 'customer-status' },
+      transports: ['websocket'],
+      rememberUpgrade: true,
+      reconnection: true,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 3000,
+      timeout: 10000,
     });
 
-    socket.on('order:new', (created: any) => {
-      queryClient.setQueryData(['session-orders', sessionToken, tenantSlug], (old: any[] = []) => {
-        if (old.some((order) => order.id === created.id)) return old;
-        return [created, ...old];
-      });
-    });
+    const { notify } = useNotifications();
 
-    socket.on('order:update', (updated: any) => {
-      queryClient.setQueryData(['session-orders', sessionToken, tenantSlug], (old: any[] = []) => {
-        return old.map((o: any) => (o.id === updated.id ? updated : o));
+    const upsertOrderInCache = (incomingOrder: any) => {
+      if (!incomingOrder) return;
+      // Read previous state to decide if we should notify
+      const prev = (queryClient.getQueryData(queryKey) as any[]) || [];
+      const existing = prev.find((o: any) => o.id === incomingOrder.id);
+
+      try {
+        if (existing && existing.status !== incomingOrder.status) {
+          if (incomingOrder.status === 'READY') {
+            notify({ title: 'Order Ready', message: `Order #${String(incomingOrder.orderNumber || incomingOrder.id).slice(-6).toUpperCase()} is ready.`, type: 'success' });
+          } else if (incomingOrder.status === 'PREPARING') {
+            notify({ title: 'Order Update', message: `Your order is being prepared.`, type: 'info' });
+          } else if (incomingOrder.status === 'SERVED' || incomingOrder.status === 'RECEIVED') {
+            notify({ title: 'Order Served', message: `Order #${String(incomingOrder.orderNumber || incomingOrder.id).slice(-6).toUpperCase()} served.`, type: 'success' });
+          }
+        }
+      } catch (e) {
+        // ignore notification errors
+      }
+
+      queryClient.setQueryData(queryKey, (old: any) => {
+        const safe = Array.isArray(old) ? old : [];
+        const hasMatch = safe.some((order: any) => order.id === incomingOrder.id);
+        if (!hasMatch) return [...safe, incomingOrder];
+        return safe.map((order: any) => (order.id === incomingOrder.id ? incomingOrder : order));
       });
+    };
+
+    const handleSessionFinished = (payload?: { sessionId?: string }) => {
+      if (payload?.sessionId && payload.sessionId !== sessionToken) return;
+      queryClient.invalidateQueries({ queryKey });
+      notify?.({ title: 'Session Finished', message: `Your session has finished. Redirecting to bill.`, type: 'info' });
+      navigate(`/order/${tenantSlug}/session/${sessionToken}/bill`);
+    };
+    const handleSessionCompleted = (payload?: { sessionId?: string }) => {
+      if (payload?.sessionId && payload.sessionId !== sessionToken) return;
+      queryClient.invalidateQueries({ queryKey });
+      notify?.({ title: 'Session Complete', message: `Thanks! Redirecting you to the bill.`, type: 'success' });
+      navigate(`/order/${tenantSlug}/session/${sessionToken}/bill`);
+    };
+
+    socket.on('order:new', upsertOrderInCache);
+    socket.on('order:update', upsertOrderInCache);
+    // generic waiter notifications if emitted by backend
+    socket.on('waiter:call', (payload: any) => {
+      try {
+        if (payload?.type) {
+          notify?.({ title: 'Staff Alert', message: `${payload.type} request received.`, type: 'info' });
+        } else {
+          notify?.({ title: 'Staff Alert', message: `A waiter has been called for your table.`, type: 'info' });
+        }
+      } catch (e) {}
     });
+    socket.on('session:finished', handleSessionFinished);
+    socket.on('session:completed', handleSessionCompleted);
 
     return () => {
+      socket.off('order:new', upsertOrderInCache);
+      socket.off('order:update', upsertOrderInCache);
+      socket.off('session:finished', handleSessionFinished);
+      socket.off('session:completed', handleSessionCompleted);
       socket.disconnect();
     };
-  }, [sessionToken, tenantSlug, queryClient]);
-
-  const activeOrders = useMemo(() => orders.filter((o: any) => isActiveOrder(o.status)), [orders]);
-  const historyOrders = useMemo(() => orders.filter((o: any) => !isActiveOrder(o.status)), [orders]);
-
-  // USP 4: ETA calculation
-  const getETA = (order: any) => {
-    if (!order?.createdAt || order.status === 'READY' || order.status === 'SERVED' || order.status === 'RECEIVED') return null;
-    const items = Array.isArray(order.items) ? order.items : [];
-    const totalPrepMin = items.reduce((sum: number, i: any) => sum + (Number(i?.menuItem?.prepTimeMinutes) || 8), 0);
-    const avgPrepMin = items.length > 0 ? Math.ceil(totalPrepMin / items.length) + Math.min(items.length * 2, 10) : 15;
-    const orderTime = new Date(order.createdAt).getTime();
-    const etaTime = orderTime + avgPrepMin * 60 * 1000;
-    const remainingMs = etaTime - Date.now();
-    return Math.max(0, Math.ceil(remainingMs / 60000));
-  };
-
-  // USP 6: WhatsApp receipt
-  const shareWhatsApp = (order: any) => {
-    const items = Array.isArray(order.items) ? order.items : [];
-    const itemLines = items.map((i: any) => `- ${i?.name || 'Item'} x${i?.quantity || 1}`).join('\n');
-    const msg = `🍽 *RestoFlow Order*\n\nOrder: ${order.orderNumber || ''}\nTable: ${order.table?.name || 'N/A'}\n\n${itemLines}\n\n*Total: ${formatINR(order.totalAmount || 0)}*\n\nThank you! 🙏`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-  };
-  const latestCompletedWithoutReview = useMemo(
-    () => historyOrders.find((o: any) => o.status === 'RECEIVED' && !o.hasReview),
-    [historyOrders],
-  );
+  }, [navigate, queryClient, queryKey, sessionToken, tenantSlug]);
 
   useEffect(() => {
     if (activeOrders.length === 0 && historyOrders.length > 0) {
@@ -129,229 +210,247 @@ export function OrderStatus() {
     }
   }, [activeOrders.length, historyOrders.length]);
 
-  const statusesLive = activeOrders.length > 0 ? activeOrders : historyOrders.filter((o: any) => o.status === 'RECEIVED');
-  const currentStepIndex = statusesLive.length > 0 ? Math.max(...statusesLive.map((o: any) => getStepIndex(o.status))) : 0;
-  const latestOrder = activeOrders[0] || historyOrders[0] || null;
-  const trackingTotal = activeOrders.reduce((sum: number, o: any) => sum + Number(o.totalAmount || 0), 0);
-  const historyTotal = historyOrders.reduce((sum: number, o: any) => sum + Number(o.totalAmount || 0), 0);
+  const getETA = (order: any) => {
+    if (!order?.createdAt || ['READY', 'SERVED', 'RECEIVED'].includes(order.status)) return null;
+    const items = Array.isArray(order.items) ? order.items : [];
+    const totalPrepMin = items.reduce(
+      (sum: number, item: any) => sum + (Number(item?.menuItem?.prepTimeMinutes) || 12),
+      0,
+    );
+    const avgPrepMin = items.length > 0 ? Math.ceil(totalPrepMin / items.length) + 5 : 15;
+    const orderTime = new Date(order.createdAt).getTime();
+    return Math.max(0, Math.ceil((orderTime + avgPrepMin * 60000 - Date.now()) / 60000));
+  };
 
-  const addMoreUrl = (() => {
-    const fromActive = activeOrders[0]?.tableId;
-    const fromHistory = historyOrders[0]?.tableId;
-    const tableId = fromActive || fromHistory;
-    if (!tenantSlug) return '/';
-    return tableId ? `/order/${tenantSlug}/${tableId}/menu` : `/order/${tenantSlug}`;
-  })();
+  const shareWhatsApp = (order: any) => {
+    const items = Array.isArray(order.items) ? order.items : [];
+    const itemLines = items.map((item: any) => `- ${item?.name || 'Item'} x${item?.quantity || 1}`).join('\n');
+    const message = `RestoFlow Order Summary\n\nOrder: ${order.orderNumber || ''}\nTable: ${order.table?.name || 'Takeaway'}\n\n${itemLines}\n\nTotal: ${formatINR(order.totalAmount || 0)}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
 
-  const feedbackMutation = useMutation({
-    mutationFn: (data: any) => {
-      if (!latestCompletedWithoutReview?.id) throw new Error('No completed order found for feedback');
-      return publicApi.post(`/orders/${latestCompletedWithoutReview.id}/feedback`, data);
-    },
-    onSuccess: async () => {
-      setRating(0);
-      setFeedback('');
-      setTab('HISTORY');
-      await queryClient.invalidateQueries({ queryKey: ['session-orders', sessionToken, tenantSlug] });
-    },
-  });
+  const maxOrderRank = useMemo(
+    () => (orders.length > 0 ? Math.max(...orders.map((order: any) => getOrderRank(order.status))) : 0),
+    [orders],
+  );
+  const currentStepRank = activeOrders.length === 0 && historyOrders.some((order: any) => order.status === 'RECEIVED')
+    ? 6
+    : maxOrderRank;
+  const nextPendingRank = (STEPS.find((step) => currentStepRank < step.rank)?.rank || STEPS[STEPS.length - 1].rank);
+  const currentStepMessage =
+    currentStepRank >= 6
+      ? 'Checkout completed'
+      : currentStepRank >= 5
+        ? 'Served, finalizing checkout'
+        : currentStepRank >= 3
+          ? 'Food is ready, waiter pickup in progress'
+          : currentStepRank >= 2
+            ? 'Kitchen is preparing your order'
+            : currentStepRank >= 1
+              ? 'Order accepted by restaurant'
+              : 'Waiting for kitchen acceptance';
+  const firstTableId = activeOrders[0]?.tableId || orders[0]?.tableId;
+  const addMoreUrl = firstTableId ? `/order/${tenantSlug}/${firstTableId}/menu` : `/order/${tenantSlug}`;
+  const brandColor = orders[0]?.tenant?.primaryColor || '#f97316';
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center pt-16 px-4">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-sm border border-gray-100 p-8 flex flex-col items-center gap-5">
-          <div className="w-36 h-6 bg-gray-100 rounded-full shimmer"></div>
-          <div className="w-48 h-10 bg-gray-200 rounded-xl shimmer"></div>
-          <div className="w-full h-24 bg-gray-100 rounded-2xl shimmer"></div>
-          <div className="w-full h-20 bg-gray-100 rounded-2xl shimmer"></div>
-        </div>
-      </div>
-    );
-  }
-
-  if (orders.length === 0) {
-    return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6 gap-4">
-        <div className="text-5xl">🍽️</div>
-        <h2 className="text-xl font-black text-gray-800">No orders yet</h2>
-        <p className="text-gray-400 text-sm text-center">Start ordering from this restaurant to see tracking and history here.</p>
-        <button
-          onClick={() => {
-            if (tenantSlug) navigate(`/order/${tenantSlug}`);
-            else navigate(-1);
-          }}
-          className="mt-2 bg-orange-500 text-white font-bold px-6 py-3 rounded-2xl shadow-md shadow-orange-500/20 active:scale-95 transition-all"
-        >
-          Go to Menu
-        </button>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
+        <div
+          className="w-10 h-10 border-4 rounded-full animate-spin"
+          style={{ borderColor: 'var(--brand-soft)', borderTopColor: 'var(--brand)' }}
+        />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[color:var(--bg-primary)] text-[color:var(--text-primary)] pb-20 fade-in transition-colors duration-300">
-      <div className="bg-[color:var(--bg-secondary)] border-b border-[color:var(--border-primary)] px-5 py-4 flex items-center gap-3 sticky top-0 z-10 shadow-sm transition-colors duration-300">
-        <button onClick={() => navigate(-1)} className="w-9 h-9 flex items-center justify-center bg-[color:var(--bg-primary)] border border-[color:var(--border-primary)] rounded-full text-[color:var(--text-secondary)] active:bg-gray-200">
-          <ArrowLeft size={18} />
-        </button>
-        <div className="min-w-0">
-          <h1 className="font-black text-[color:var(--text-primary)] text-base">My Orders</h1>
-          <p className="text-xs text-[color:var(--text-secondary)] font-medium">
-            {activeOrders.length} active · {historyOrders.length} in history
-          </p>
+    <div className="min-h-screen pb-32 transition-colors duration-400" style={{ background: 'var(--bg)', '--brand': brandColor } as any}>
+      <div className="sticky top-0 z-40 border-b px-4 py-3" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'transparent', color: 'var(--text-1)' }}>
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <h1 className="text-lg font-semibold" style={{ color: 'var(--text-1)' }}>Orders</h1>
+            <p className="text-[11px]" style={{ color: 'var(--text-3)' }}>{activeOrders.length} active</p>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-md mx-auto px-4 py-6 flex flex-col gap-5">
-        <div className="grid grid-cols-2 gap-2 bg-[color:var(--bg-primary)] border border-[color:var(--border-primary)] rounded-2xl p-1">
+      <div className="mx-auto flex max-w-screen-sm flex-col gap-8 px-6 py-8">
+        <div className="flex rounded-2xl border p-1.5" style={{ background: 'var(--surface-3)', borderColor: 'var(--border)' }}>
           <button
             onClick={() => setTab('TRACKING')}
-            className={`rounded-xl py-2.5 text-sm font-bold transition-all ${tab === 'TRACKING' ? 'bg-[color:var(--bg-secondary)] text-[color:var(--text-primary)] shadow-sm' : 'text-[color:var(--text-secondary)]'}`}
+            className={`flex-1 rounded-xl py-3 text-sm font-black transition-all ${tab === 'TRACKING' ? 'scale-[1.02] shadow-xl' : 'opacity-40 grayscale-[0.5]'}`}
+            style={{
+              background: tab === 'TRACKING' ? 'var(--surface)' : 'transparent',
+              color: tab === 'TRACKING' ? 'var(--text-1)' : 'var(--text-3)',
+            }}
           >
             Tracking
           </button>
           <button
             onClick={() => setTab('HISTORY')}
-            className={`rounded-xl py-2.5 text-sm font-bold transition-all ${tab === 'HISTORY' ? 'bg-[color:var(--bg-secondary)] text-[color:var(--text-primary)] shadow-sm' : 'text-[color:var(--text-secondary)]'}`}
+            className={`flex-1 rounded-xl py-3 text-sm font-black transition-all ${tab === 'HISTORY' ? 'scale-[1.02] shadow-xl' : 'opacity-40 grayscale-[0.5]'}`}
+            style={{
+              background: tab === 'HISTORY' ? 'var(--surface)' : 'transparent',
+              color: tab === 'HISTORY' ? 'var(--text-1)' : 'var(--text-3)',
+            }}
           >
-            Order History
+            History
           </button>
         </div>
 
-        <button
-          onClick={() => navigate(addMoreUrl)}
-          className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-[0.98] text-white font-black py-3.5 rounded-2xl shadow-lg shadow-orange-500/25 transition-all"
-        >
-          <PlusCircle size={18} />
-          Add More Food
-        </button>
-
         {tab === 'TRACKING' && (
-          <>
-            <div className="bg-[color:var(--bg-secondary)] rounded-[32px] border border-[color:var(--border-primary)] shadow-xl shadow-gray-200/10 p-8 overflow-hidden relative">
-              <div className="absolute top-0 left-0 right-0 h-1.5 bg-[color:var(--bg-primary)]">
-                <div 
-                  className="h-full bg-orange-500 transition-all duration-1000 ease-in-out"
-                  style={{ width: `${(currentStepIndex / (STEPS.length - 1)) * 100}%` }}
-                />
+          <div className="space-y-8 fade-in">
+            {activeOrders.length === 0 ? (
+              <div className="flex flex-col items-center py-20 text-center">
+                <div
+                  className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl"
+                  style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}
+                >
+                  <Bell size={40} />
+                </div>
+                <h2 className="mb-2 text-2xl font-black" style={{ color: 'var(--text-1)' }}>
+                  No active orders
+                </h2>
+                <p className="mb-8 font-medium" style={{ color: 'var(--text-3)' }}>
+                  All your orders are completed or cancelled.
+                </p>
+                <button
+                  onClick={() => navigate(`/order/${tenantSlug}`)}
+                  className="rounded-3xl bg-[#1a1c23] px-8 py-4 font-black text-white transition-all hover:bg-black active:scale-95"
+                >
+                  Go to Menu
+                </button>
               </div>
+            ) : (
+              <>
+                <div
+                  className="relative overflow-hidden rounded-[40px] border p-8 shadow-2xl"
+                  style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+                >
+                  <h2 className="mb-8 text-center text-2xl font-black" style={{ color: 'var(--text-1)' }}>
+                    {currentStepMessage}
+                  </h2>
 
-              <h2 className="font-black text-[color:var(--text-primary)] text-xl mb-2 text-center mt-2">
-                {currentStepIndex === 0 && 'Waiting for the kitchen...'}
-                {currentStepIndex === 1 && 'Your food is being prepared'}
-                {currentStepIndex === 2 && 'Order is ready to serve!'}
-                {currentStepIndex === 3 && 'Order completed!'}
-              </h2>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {STEPS.map((step) => {
+                      const completed = currentStepRank >= step.rank;
+                      const current = !completed && step.rank === nextPendingRank;
+                      return (
+                        <div
+                          key={step.label}
+                          className={`relative overflow-hidden rounded-2xl border p-3 transition-all ${current ? 'scale-[1.01] shadow-xl' : ''}`}
+                          style={{
+                            borderColor: completed || current ? 'rgba(59,130,246,0.35)' : 'var(--border)',
+                            background: completed || current ? 'var(--brand-soft)' : 'var(--surface-3)',
+                          }}
+                        >
+                          <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${step.glow} ${completed || current ? 'opacity-100' : 'opacity-0'} transition-opacity`} />
+                          <div
+                            className="relative z-10 mb-2 flex h-10 w-10 items-center justify-center rounded-xl"
+                            style={{
+                              background: completed ? 'var(--brand)' : current ? 'rgba(59,130,246,0.16)' : 'rgba(148,163,184,0.2)',
+                              color: completed ? '#fff' : current ? 'var(--brand)' : 'var(--text-3)',
+                            }}
+                          >
+                            {step.icon}
+                          </div>
+                          <span className="relative z-10 block text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: 'var(--text-1)' }}>
+                            {step.label}
+                          </span>
+                          <span className="relative z-10 mt-1 block text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: completed ? 'var(--brand)' : 'var(--text-3)' }}>
+                            {completed ? 'Done' : current ? 'In Progress' : 'Pending'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
 
-              {/* ETA Timer */}
-              {latestOrder && getETA(latestOrder) !== null && getETA(latestOrder)! > 0 && currentStepIndex < 2 && (
-                <div className="flex items-center justify-center gap-2 mb-6 text-orange-600">
-                  <Timer size={16} className="animate-pulse" />
-                  <span className="text-sm font-black">~{getETA(latestOrder)} min remaining</span>
-                </div>
-              )}
-              {latestOrder && (getETA(latestOrder) === 0 || currentStepIndex >= 2) && currentStepIndex < 3 && (
-                <div className="flex items-center justify-center gap-2 mb-6 text-emerald-600">
-                  <span className="text-sm font-black">🔥 Almost there!</span>
-                </div>
-              )}
-...
-              <div className="relative flex justify-between items-start px-2">
-                {STEPS.map((step, idx) => {
-                  const active = idx <= currentStepIndex;
-                  const current = idx === currentStepIndex;
-                  return (
-                    <div key={idx} className="flex flex-col items-center gap-3 w-16 group">
-                      <div
-                        className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 transform ${
-                          current 
-                            ? 'bg-orange-500 text-white shadow-xl shadow-orange-500/40 scale-110 rotate-3' 
-                            : active 
-                              ? 'bg-orange-100 text-orange-600' 
-                              : 'bg-gray-50 text-gray-300'
-                        }`}
-                      >
-                        {step.icon}
+                <div className="space-y-4 pt-4">
+                  <h3 className="px-1 text-lg font-black" style={{ color: 'var(--text-1)' }}>
+                    Order Details
+                  </h3>
+                  {activeOrders.map((order: any) => (
+                    <div
+                      key={order.id}
+                      className="flex flex-col gap-5 rounded-3xl border p-6 shadow-sm"
+                      style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="mb-1 text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>
+                            Order ID
+                          </p>
+                          <h4 className="text-lg font-black" style={{ color: 'var(--text-1)' }}>
+                            #{String(order.orderNumber || order.id).slice(-6).toUpperCase()}
+                          </h4>
+                        </div>
+                        <div className={`rounded-xl border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest ${statusBadgeClass(order.status)}`}>
+                          {order.status}
+                        </div>
                       </div>
-                      <span className={`text-[11px] font-black tracking-tight text-center leading-none ${active ? 'text-gray-900' : 'text-gray-300'}`}>
-                        {step.label}
-                      </span>
+
+                      <div className="space-y-2">
+                        {order.items?.map((item: any) => (
+                          <div key={item.id} className="flex justify-between text-sm font-bold">
+                            <span style={{ color: 'var(--text-2)' }}>
+                              <span style={{ color: 'var(--brand)' }}>{item.quantity}x </span>
+                              {item.name}
+                            </span>
+                            <span style={{ color: 'var(--text-1)' }}>{formatINR(item.totalPrice)}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center justify-between border-t pt-4" style={{ borderColor: 'var(--border)' }}>
+                        <div className="flex items-center gap-2">
+                          <Timer size={14} style={{ color: 'var(--text-3)' }} />
+                          <span className="text-xs font-black uppercase" style={{ color: 'var(--text-3)' }}>
+                            {getETA(order) ? `~${getETA(order)} min` : 'Soon'}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => shareWhatsApp(order)}
+                          className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#25D366] transition-all active:scale-95"
+                        >
+                          <Share2 size={12} />
+                          Share Bill
+                        </button>
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {activeOrders.length === 0 && (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
-                <p className="font-bold text-gray-800">No active orders right now</p>
-                <p className="text-sm text-gray-400 mt-1">Completed orders are available in Order History.</p>
-              </div>
+                  ))}
+                </div>
+              </>
             )}
-
-            {activeOrders.map((order: any) => (
-              <div key={order.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <div className="flex justify-between items-start mb-4 gap-3">
-                  <div className="min-w-0">
-                    <p className="font-black text-gray-900">Ticket #{String(order.orderNumber || order.id).replace('#', '').slice(-6).toUpperCase()}</p>
-                    <p className="text-xs text-gray-400 font-medium mt-0.5">
-                      {order.items?.length || 0} items · {order.table ? `Table ${order.table.name}` : 'Takeaway'}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase ${statusBadgeClass(order.status)}`}>
-                      {order.status}
-                    </span>
-                    <p className="font-black text-orange-500 text-base mt-2">{formatINR(order.totalAmount || 0)}</p>
-                  </div>
-                </div>
-                <div className="text-xs font-medium text-gray-500 leading-relaxed border-t border-gray-50 pt-3 space-y-1">
-                  {Array.isArray(order.items) &&
-                    order.items.map((i: any) => (
-                      <p key={i.id}>
-                        {i.quantity}x {i.menuItem?.name || i.name}
-                      </p>
-                    ))}
-                </div>
-                {/* ETA + Share */}
-                <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
-                  {getETA(order) !== null && getETA(order)! > 0 ? (
-                    <span className="text-xs font-black text-orange-500 flex items-center gap-1">
-                      <Timer size={12} /> ~{getETA(order)} min
-                    </span>
-                  ) : (
-                    <span className="text-xs font-black text-emerald-500">Ready soon!</span>
-                  )}
-                  <button
-                    onClick={() => shareWhatsApp(order)}
-                    className="flex items-center gap-1.5 text-xs font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-full hover:bg-green-100 transition-colors"
-                  >
-                    <Share2 size={12} /> WhatsApp
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            {activeOrders.length > 1 && (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex justify-between items-center">
-                <span className="font-bold text-gray-600">Tracking total</span>
-                <span className="font-black text-gray-900 text-xl">{formatINR(trackingTotal)}</span>
-              </div>
-            )}
-          </>
+          </div>
         )}
 
         {tab === 'HISTORY' && (
-          <>
+          <div className="space-y-6 fade-in">
             {latestCompletedWithoutReview && (
-              <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col items-center text-center">
-                <h2 className="text-xl font-black text-gray-900 mb-1">Rate your last order</h2>
-                <p className="text-gray-400 text-sm mb-6">Share your feedback after completing the meal.</p>
+              <div
+                className="relative overflow-hidden rounded-[40px] border p-8 text-center shadow-2xl"
+                style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+              >
+                <h3 className="mb-2 text-2xl font-black" style={{ color: 'var(--text-1)' }}>
+                  How was your meal?
+                </h3>
+                <p className="mb-8 font-medium" style={{ color: 'var(--text-3)' }}>
+                  Share your feedback to help us improve.
+                </p>
 
-                <div className="flex gap-2 mb-6">
+                <div className="mb-10 flex justify-center gap-3">
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <button key={star} onClick={() => setRating(star)} className="focus:outline-none hover:scale-110 transition-transform active:scale-95">
-                      <Star size={40} className={rating >= star ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'} />
+                    <button
+                      key={star}
+                      onClick={() => setRating(star)}
+                      className="transition-transform hover:scale-110 active:scale-75"
+                    >
+                      <Star size={44} className={rating >= star ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'} />
                     </button>
                   ))}
                 </div>
@@ -359,83 +458,77 @@ export function OrderStatus() {
                 <textarea
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
-                  placeholder="Tell us about the food and service (optional)"
-                  className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 text-sm font-medium text-gray-700 focus:border-orange-400 outline-none resize-none mb-4 min-h-[90px] transition-colors"
+                  placeholder="Tell us what you loved..."
+                  className="mb-6 min-h-[120px] w-full rounded-2xl p-5 font-bold outline-none transition-all placeholder:font-medium"
+                  style={{ background: 'var(--surface-3)', border: '2px solid var(--border)', color: 'var(--text-1)' }}
                 />
 
                 <button
                   onClick={() => feedbackMutation.mutate({ rating, feedback })}
                   disabled={rating === 0 || feedbackMutation.isPending}
-                  className="w-full bg-orange-500 text-white font-black py-3.5 rounded-2xl shadow-lg shadow-orange-500/20 disabled:opacity-40 transition-all active:scale-[0.98] mb-2"
+                  className="w-full rounded-2xl bg-[#1a1c23] py-4 font-black text-white shadow-xl transition-all active:scale-[0.98] disabled:opacity-40"
                 >
-                  {feedbackMutation.isPending ? 'Submitting...' : 'Submit Review'}
+                  {feedbackMutation.isPending ? 'Submitting...' : 'Submit Feedback'}
                 </button>
-                <button onClick={() => feedbackMutation.mutate({ rating: null, feedback: null })} className="text-gray-400 text-sm font-semibold hover:text-gray-600 transition-colors py-2">
-                  Skip for now
+                <button
+                  onClick={() => {
+                    setRating(0);
+                    setFeedback('');
+                  }}
+                  className="mt-6 text-[10px] font-black uppercase tracking-widest opacity-30"
+                >
+                  Skip Review
                 </button>
               </div>
             )}
 
-            {historyOrders.length === 0 && (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
-                <p className="font-bold text-gray-800">No history yet</p>
-                <p className="text-sm text-gray-400 mt-1">Once an order is completed, it will appear here for this restaurant.</p>
-              </div>
-            )}
-
-            {historyOrders.map((order: any) => (
-              <div key={order.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 relative overflow-hidden group hover:shadow-md transition-shadow">
-                <div className="absolute top-0 right-0 py-1 px-4 bg-gray-900 text-[10px] font-black text-white rounded-bl-xl tracking-widest uppercase">
-                  Receipt
-                </div>
-                
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h4 className="font-black text-gray-900 text-lg leading-none">Order #{String(order.orderNumber || order.id).replace('#', '').slice(-6).toUpperCase()}</h4>
-                    <p className="text-xs text-gray-400 font-bold mt-1.5 flex items-center gap-1.5 uppercase tracking-wide">
-                      <Clock3 size={12} /> {new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })}
-                    </p>
+            <div className="space-y-4">
+              <h3 className="px-1 text-lg font-black" style={{ color: 'var(--text-1)' }}>
+                Order Archive
+              </h3>
+              {historyOrders.map((order: any) => (
+                <div
+                  key={order.id}
+                  className="group relative overflow-hidden rounded-3xl border p-6 shadow-sm"
+                  style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="text-base font-black" style={{ color: 'var(--text-1)' }}>
+                        Order #{String(order.orderNumber || order.id).slice(-6).toUpperCase()}
+                      </h4>
+                      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>
+                        {new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-black" style={{ color: 'var(--text-1)' }}>
+                        {formatINR(order.totalAmount)}
+                      </p>
+                      <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Delivered</span>
+                    </div>
                   </div>
-                  <div className={`px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest ${statusBadgeClass(order.status)}`}>
-                    {order.status}
-                  </div>
-                </div>
-
-                <div className="space-y-3 mb-6 relative">
-                  <div className="absolute -left-6 -right-6 top-0 border-t border-gray-50 border-dashed" />
-                  <div className="pt-4 space-y-2">
-                    {Array.isArray(order.items) && order.items.map((i: any) => (
-                      <div key={i.id} className="flex justify-between items-center text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-400 font-bold text-xs">{i.quantity}x</span>
-                          <span className="font-bold text-gray-700">{i.menuItem?.name || i.name}</span>
-                        </div>
-                        <span className="font-bold text-gray-900">{formatINR(i.totalPrice || 0)}</span>
-                      </div>
-                    ))}
+                  <div className="border-t pt-4 text-xs font-medium italic" style={{ borderColor: 'var(--border)', color: 'var(--text-3)' }}>
+                    {order.items?.map((item: any) => item.name).join(', ')}
                   </div>
                 </div>
-
-                <div className="flex justify-between items-center pt-5 border-t-2 border-gray-100 border-dashed">
-                  <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Grand Total</span>
-                  <span className="text-xl font-black text-gray-900">{formatINR(order.totalAmount || 0)}</span>
-                </div>
-              </div>
-            ))}
-
-            {historyOrders.length > 1 && (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex justify-between items-center">
-                <span className="font-bold text-gray-600">History total</span>
-                <span className="font-black text-gray-900 text-xl">{formatINR(historyTotal)}</span>
-              </div>
-            )}
-          </>
+              ))}
+            </div>
+          </div>
         )}
+      </div>
 
-        <div className="text-center pt-2">
-          <p className="text-xs text-gray-300 font-medium">
-            Powered by <span className="font-bold text-gray-400">RestoFlow</span>
-          </p>
+      <div className="fixed bottom-0 left-0 right-0 z-50 p-6 pointer-events-none">
+        <div className="mx-auto max-w-screen-sm pointer-events-auto">
+          <button
+            onClick={() => navigate(addMoreUrl)}
+            className="w-full rounded-3xl py-4.5 font-black text-white shadow-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-3"
+            style={{ background: 'var(--brand)' }}
+          >
+            <UtensilsCrossed size={18} strokeWidth={3} />
+            Add More Dishes
+            <ChevronRight size={18} />
+          </button>
         </div>
       </div>
     </div>

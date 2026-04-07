@@ -88,10 +88,24 @@ export const createOrder = async (req: Request, res: Response) => {
     const { tenantSlug } = req.params;
     const { sessionId, sessionToken, items, tableId, customerName, customerPhone } = req.body;
     const incomingSessionToken = sessionId || sessionToken || null;
+
+    console.log(`[PUBLIC_ORDER] Start createOrder for tenant: ${tenantSlug}`);
+    console.log(`[PUBLIC_ORDER] Payload:`, { 
+      itemsCount: items?.length, 
+      tableId, 
+      hasSession: !!incomingSessionToken,
+      customerName,
+      customerPhone 
+    });
     
     const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-    if (!tenant) return res.status(404).json({ error: 'Vendor not found' });
+    if (!tenant) {
+      console.warn(`[PUBLIC_ORDER] Tenant not found: ${tenantSlug}`);
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+
     if (!Array.isArray(items) || items.length === 0) {
+      console.warn(`[PUBLIC_ORDER] Empty order items for tenant: ${tenantSlug}`);
       return res.status(400).json({ error: 'Order must include at least one item' });
     }
 
@@ -105,6 +119,9 @@ export const createOrder = async (req: Request, res: Response) => {
         select: { id: true }
       });
       safeTableId = table?.id || null;
+      if (!safeTableId) {
+        console.warn(`[PUBLIC_ORDER] Invalid tableId ${tableId} for tenant ${tenant.id}`);
+      }
     }
 
     let resolvedSession = incomingSessionToken
@@ -117,6 +134,10 @@ export const createOrder = async (req: Request, res: Response) => {
         })
       : null;
 
+    if (incomingSessionToken && !resolvedSession) {
+      console.log(`[PUBLIC_ORDER] Provided session token ${incomingSessionToken} is invalid or closed. Attempting to resolve by table...`);
+    }
+
     // If caller didn't pass a sessionId, try joining the active table session first.
     if (!resolvedSession && safeTableId) {
       resolvedSession = await prisma.diningSession.findFirst({
@@ -127,10 +148,14 @@ export const createOrder = async (req: Request, res: Response) => {
         },
         orderBy: { openedAt: 'desc' },
       });
+      if (resolvedSession) {
+        console.log(`[PUBLIC_ORDER] Joined active session ${resolvedSession.id} at table ${safeTableId}`);
+      }
     }
 
     // Always anchor orders to a DiningSession (legacy CustomerSession removed from runtime flow).
     if (!resolvedSession) {
+      console.log(`[PUBLIC_ORDER] No active session found. Creating new guest session...`);
       const normalizedPhone =
         typeof customerPhone === 'string' && customerPhone.trim().length > 0
           ? customerPhone.trim()
@@ -156,6 +181,7 @@ export const createOrder = async (req: Request, res: Response) => {
           source: 'public_order',
         },
       });
+      console.log(`[PUBLIC_ORDER] Created NEW session ${resolvedSession.id} for guest ${normalizedPhone}`);
     }
 
     const menuItemIds = items
@@ -271,7 +297,19 @@ export const createOrder = async (req: Request, res: Response) => {
             create: orderItemsCreate
           }
         },
-        include: { table: true, items: { include: { menuItem: true } } }
+        include: {
+          table: true,
+          diningSession: {
+            include: {
+              customer: true,
+            },
+          },
+          items: {
+            include: {
+              menuItem: true,
+            },
+          },
+        }
       });
     } catch (primaryCreateError) {
       console.error('createOrder primary create error:', primaryCreateError);
@@ -294,7 +332,19 @@ export const createOrder = async (req: Request, res: Response) => {
             }))
           }
         },
-        include: { table: true, items: { include: { menuItem: true } } }
+        include: {
+          table: true,
+          diningSession: {
+            include: {
+              customer: true,
+            },
+          },
+          items: {
+            include: {
+              menuItem: true,
+            },
+          },
+        }
       });
     }
 
@@ -319,8 +369,22 @@ export const createOrder = async (req: Request, res: Response) => {
 
     getIO().to(getTenantRoom(tenant.id)).emit('order:new', order);
     getIO().to(getSessionRoom(tenant.id, resolvedSession.id)).emit('order:new', order);
+    getIO().to(getTenantRoom(tenant.id)).emit('session:update', {
+      sessionId: resolvedSession.id,
+      status: 'ACTIVE',
+      updatedAt: new Date().toISOString(),
+    });
+    getIO().to(getSessionRoom(tenant.id, resolvedSession.id)).emit('session:update', {
+      sessionId: resolvedSession.id,
+      status: 'ACTIVE',
+      updatedAt: new Date().toISOString(),
+    });
 
-    res.status(201).json(order);
+    res.status(201).json({
+      ...order,
+      sessionId: resolvedSession.id,
+      diningSessionId: resolvedSession.id,
+    });
   } catch (error) {
     console.error('createOrder error:', error);
     const message = error instanceof Error ? error.message : 'Failed to create order';
@@ -395,27 +459,58 @@ export const submitFeedback = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { rating, feedback } = req.body;
+    const parsedRating = Number(rating);
+
+    if (!Number.isFinite(parsedRating) || parsedRating < 1 || parsedRating > 5) {
+      return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+    }
 
     const order = await prisma.order.findUnique({ where: { id } });
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
-    // V2 uses Review table instead of tying directly to Order
-    await prisma.review.create({
-      data: {
-        tenantId: order.tenantId,
-        orderId: order.id,
-        diningSessionId: order.diningSessionId,
-        overallRating: rating,
-        comment: feedback,
-      }
-    });
+    // Keep feedback idempotent across the whole dining session.
+    // A session allows only one review row, while multiple orders may exist.
+    const existingSessionReview = order.diningSessionId
+      ? await prisma.review.findFirst({
+          where: { diningSessionId: order.diningSessionId },
+          select: { id: true, orderId: true },
+        })
+      : null;
 
-    const updatedOrder = await prisma.order.update({
-      where: { id },
-      data: { hasReview: true },
-    });
+    if (existingSessionReview) {
+      await prisma.review.update({
+        where: { id: existingSessionReview.id },
+        data: {
+          overallRating: parsedRating,
+          comment: feedback,
+          ...(existingSessionReview.orderId ? {} : { orderId: order.id }),
+        },
+      });
+    } else {
+      await prisma.review.create({
+        data: {
+          tenantId: order.tenantId,
+          orderId: order.id,
+          diningSessionId: order.diningSessionId,
+          overallRating: parsedRating,
+          comment: feedback,
+        },
+      });
+    }
 
-    res.json(updatedOrder);
+    if (order.diningSessionId) {
+      await prisma.order.updateMany({
+        where: { diningSessionId: order.diningSessionId, status: { not: 'CANCELLED' as any } },
+        data: { hasReview: true },
+      });
+    } else {
+      await prisma.order.update({
+        where: { id },
+        data: { hasReview: true },
+      });
+    }
+
+    res.json({ success: true });
   } catch (error) {
     console.error('submitFeedback error:', error);
     res.status(500).json({ error: 'Failed to submit feedback' });

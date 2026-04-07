@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api, publicApi } from '../lib/api';
 import { Phone, User, ArrowRight, ChefHat, AlertCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { setCustomerAuthForTenant } from '../lib/tenantStorage';
 
 export function LoginPage() {
   const { tenantSlug, tableId } = useParams();
@@ -47,11 +48,17 @@ export function LoginPage() {
     setError('');
 
     try {
-      const res = await api.post('/customer/login', { phone, name: name || undefined });
-      localStorage.setItem('rf_customer_token', res.data.token);
-      localStorage.setItem('rf_customer_id', res.data.customer.id);
-      localStorage.setItem('rf_customer_name', res.data.customer.name || '');
-      localStorage.setItem('rf_customer_phone', res.data.customer.phone);
+      const res = await api.post('/customer/login', {
+        phone,
+        name: name || undefined,
+        tenantSlug: tenantSlug || undefined,
+      });
+      setCustomerAuthForTenant(tenantSlug, {
+        token: res.data.token,
+        customerId: res.data.customer.id,
+        customerName: res.data.customer.name || '',
+        customerPhone: res.data.customer.phone,
+      });
       if (rememberMe) {
         localStorage.setItem(
           rememberKey,

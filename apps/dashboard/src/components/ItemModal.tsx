@@ -43,7 +43,6 @@ export function ItemModal({ isOpen, onClose, categoryId, editingItem }: any) {
 
   const mutation = useMutation({
     mutationFn: (data: any) => {
-      // Create if new, update if editing
       if (editingItem?.id) {
         return api.patch(`/menus/items/${editingItem.id}`, data);
       }
@@ -65,50 +64,81 @@ export function ItemModal({ isOpen, onClose, categoryId, editingItem }: any) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-xl w-full max-w-md shadow-2xl">
-        <h2 className="text-xl font-bold mb-4">{editingItem ? 'Edit Item' : 'New Menu Item'}</h2>
+    <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'var(--surface-overlay)' }}>
+      <div className="p-6 rounded-xl w-full max-w-md shadow-2xl" style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)' }}>
+        <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text-1)' }}>{editingItem ? 'Edit Item' : 'New Menu Item'}</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Name</label>
-            <input required value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Cheeseburger" />
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-2)' }}>Name</label>
+            <input
+              required
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="w-full p-2.5 rounded-lg outline-none transition-colors"
+              style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)', color: 'var(--input-text)' }}
+              placeholder="Cheeseburger"
+            />
           </div>
           <div>
             <div className="flex justify-between items-center mb-1">
-              <label className="block text-sm font-medium">Description</label>
+              <label className="block text-sm font-medium" style={{ color: 'var(--text-2)' }}>Description</label>
               <button 
                 type="button" 
                 onClick={handleGenerateAI}
                 disabled={isGenerating || !name}
-                className="text-xs font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-colors disabled:opacity-50"
+                className="text-xs font-bold flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-colors disabled:opacity-50"
+                style={{ color: '#a855f7', background: 'rgba(168,85,247,0.1)' }}
               >
                 {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                 Magic Auto-Write
               </button>
             </div>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" rows={3} placeholder="Juicy beef patty..." />
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              className="w-full p-2.5 rounded-lg outline-none transition-colors"
+              style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)', color: 'var(--input-text)' }}
+              rows={3}
+              placeholder="Juicy beef patty..."
+            />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Price (₹)</label>
-            <input type="number" step="0.01" required value={price} onChange={e => setPrice(Number(e.target.value))} className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-2)' }}>Price (₹)</label>
+            <input
+              type="number"
+              step="0.01"
+              required
+              value={price}
+              onChange={e => setPrice(Number(e.target.value))}
+              className="w-full p-2.5 rounded-lg outline-none transition-colors"
+              style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)', color: 'var(--input-text)' }}
+            />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Image URL</label>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-2)' }}>Image URL</label>
             <input
               value={imageUrl}
               onChange={e => setImageUrl(e.target.value)}
-              className="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full p-2.5 rounded-lg outline-none transition-colors"
+              style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)', color: 'var(--input-text)' }}
               placeholder="https://..."
             />
             {imageUrl && (
-              <div className="mt-2 rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
+              <div className="mt-2 rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)', background: 'var(--surface-3)' }}>
                 <img src={imageUrl} alt="Preview" className="w-full h-28 object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
               </div>
             )}
           </div>
 
           <div className="flex justify-end gap-3 mt-5">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancel</button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg font-medium transition-colors"
+              style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}
+            >
+              Cancel
+            </button>
             <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">Save Item</button>
           </div>
         </form>

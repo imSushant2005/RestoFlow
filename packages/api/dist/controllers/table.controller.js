@@ -191,6 +191,18 @@ const createSession = async (req, res) => {
                 (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(table.tenantId)).emit('table:status_change', { tableId: table.id, status: 'OCCUPIED' });
             }
         }
+        (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(table.tenantId)).emit('session:new', {
+            id: session.id,
+            tableId: table.id,
+            tableName: table.name,
+            partySize: 1,
+            openedAt: session.openedAt,
+        });
+        (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(table.tenantId)).emit('session:update', {
+            sessionId: session.id,
+            status: 'OPEN',
+            updatedAt: new Date().toISOString(),
+        });
         res.json({ success: true, sessionId: session.id, anonymousId: session.id });
     }
     catch (error) {

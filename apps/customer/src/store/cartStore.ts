@@ -18,10 +18,12 @@ export interface CartItem {
 
 interface CartState {
   items: CartItem[];
+  tenantSlug?: string;
   customerName?: string;
   customerPhone?: string;
   orderType?: 'DINE_IN' | 'TAKEAWAY';
   tableSeat?: string;
+  setTenantScope: (tenantSlug?: string) => void;
   addItem: (item: CartItem) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, qty: number) => void;
@@ -32,6 +34,17 @@ interface CartState {
 
 const newStorageKey = 'restoflow-cart';
 const legacyStorageKey = 'dineflow-cart';
+
+function getItemSignature(item: CartItem) {
+  const menuItemId = String(item?.menuItem?.id || item?.id || '');
+  const normalizedNotes = String(item?.notes || '').trim().toLowerCase();
+  const normalizedModifiers = (Array.isArray(item?.modifiers) ? item.modifiers : [])
+    .map((modifier) => `${String(modifier?.id || '')}:${String(modifier?.name || '')}:${Number(modifier?.price || 0)}`)
+    .sort()
+    .join('|');
+
+  return `${menuItemId}__${normalizedNotes}__${normalizedModifiers}`;
+}
 
 if (typeof window !== 'undefined') {
   const legacyCart = localStorage.getItem(legacyStorageKey);
@@ -44,14 +57,60 @@ export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
-      addItem: (item) => set((state) => ({ items: [...state.items, item] })),
-      removeItem: (id) => set((state) => ({ items: state.items.filter(i => i.id !== id) })),
-      updateQuantity: (id, qty) => set((state) => ({
-        items: state.items.map(i => i.id === id ? { ...i, quantity: qty } : i)
-      })),
+      tenantSlug: undefined,
+      setTenantScope: (tenantSlug) =>
+        set((state) => {
+          const nextTenant = tenantSlug || undefined;
+          if (!nextTenant || state.tenantSlug === nextTenant) {
+            return { tenantSlug: nextTenant };
+          }
+          // Keep customer identity but isolate cart/session context per tenant.
+          return { tenantSlug: nextTenant, items: [], tableSeat: undefined };
+        }),
+      addItem: (item) =>
+        set((state) => {
+          const safeItems = Array.isArray(state.items) ? state.items : [];
+          const safeQuantity = Math.max(1, Number(item?.quantity) || 1);
+          const incoming: CartItem = { ...item, quantity: safeQuantity };
+          const incomingSignature = getItemSignature(incoming);
+          const existingIndex = safeItems.findIndex((existing) => getItemSignature(existing) === incomingSignature);
+
+          if (existingIndex === -1) {
+            return { items: [...safeItems, incoming] };
+          }
+
+          return {
+            items: safeItems.map((existing, index) =>
+              index === existingIndex
+                ? {
+                    ...existing,
+                    quantity: existing.quantity + safeQuantity,
+                    totalPrice: incoming.totalPrice,
+                    menuItem: incoming.menuItem,
+                    modifiers: incoming.modifiers,
+                    notes: incoming.notes,
+                  }
+                : existing,
+            ),
+          };
+        }),
+      removeItem: (id) => set((state) => {
+        const safeItems = Array.isArray(state.items) ? state.items : [];
+        return { items: safeItems.filter(i => i.id !== id) };
+      }),
+      updateQuantity: (id, qty) => set((state) => {
+        const safeItems = Array.isArray(state.items) ? state.items : [];
+        return {
+          items: qty <= 0
+            ? safeItems.filter((item) => item.id !== id)
+            : safeItems.map(i => i.id === id ? { ...i, quantity: qty } : i)
+        };
+      }),
       clearCart: () => set({ items: [], tableSeat: undefined }),
       getCartTotal: () => {
-        return get().items.reduce((total, item) => total + (item.totalPrice * item.quantity), 0);
+        const items = get().items;
+        const safeItems = Array.isArray(items) ? items : [];
+        return safeItems.reduce((total, item) => total + ((Number(item.totalPrice) || 0) * (Number(item.quantity) || 1)), 0);
       },
       setCustomerInfo: (info) => set({ customerName: info.name, customerPhone: info.phone, orderType: info.type, tableSeat: info.seat })
     }),

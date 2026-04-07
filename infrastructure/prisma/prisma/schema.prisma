@@ -63,8 +63,13 @@ model User {
   tenantId      String
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name          String
-  email         String
+  email         String   @unique
+  employeeCode  String?  @unique
+  clerkUserId   String?  @unique
   passwordHash  String
+  mustChangePassword Boolean @default(false)
+  securityQuestion String?
+  securityAnswerHash String?
   role          UserRole @default(WAITER)
   avatarUrl     String?
   isActive      Boolean  @default(true)
@@ -74,8 +79,8 @@ model User {
 
   refreshTokens RefreshToken[]
 
-  @@unique([tenantId, email])
   @@index([tenantId])
+  @@index([tenantId, role])
 }
 
 model RefreshToken {
@@ -353,9 +358,7 @@ model Order {
   cancellationReason  String?
   
   // Payment (legacy, bills handle this now for sessions)
-  isPaid              Boolean     @default(false)
-  paymentMethod       String?     // cash|upi|card
-  paymentReference    String?
+  // Fields removed: isPaid, paymentMethod, paymentReference
   
   // Rating
   hasReview           Boolean     @default(false)

@@ -24,7 +24,9 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('accessToken');
-      window.location.pathname = '/';
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('mustChangePassword');
+      window.location.pathname = '/login';
     }
     return Promise.reject(error);
   },

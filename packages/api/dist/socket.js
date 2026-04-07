@@ -13,12 +13,41 @@ const getTenantRoom = (tenantId) => `tenant_${tenantId}`;
 exports.getTenantRoom = getTenantRoom;
 const getSessionRoom = (tenantId, sessionToken) => `session_${tenantId}_${sessionToken}`;
 exports.getSessionRoom = getSessionRoom;
+const tenantPresence = new Map();
+const tenantSlugCache = new Map();
+const emitTenantPresence = (tenantId) => {
+    const connectedClients = tenantPresence.get(tenantId)?.size || 0;
+    exports.io.to((0, exports.getTenantRoom)(tenantId)).emit('tenant:presence', {
+        tenantId,
+        connectedClients,
+        serverTime: new Date().toISOString(),
+    });
+};
+const registerTenantSocket = (tenantId, socketId) => {
+    const activeSockets = tenantPresence.get(tenantId) || new Set();
+    activeSockets.add(socketId);
+    tenantPresence.set(tenantId, activeSockets);
+    emitTenantPresence(tenantId);
+};
+const unregisterTenantSocket = (tenantId, socketId) => {
+    const activeSockets = tenantPresence.get(tenantId);
+    if (!activeSockets)
+        return;
+    activeSockets.delete(socketId);
+    if (activeSockets.size === 0) {
+        tenantPresence.delete(tenantId);
+    }
+    emitTenantPresence(tenantId);
+};
 const initSocket = (server) => {
     exports.io = new socket_io_1.Server(server, {
         cors: {
             origin: true,
             credentials: true,
         },
+        perMessageDeflate: false,
+        pingInterval: 15000,
+        pingTimeout: 10000,
     });
     if (process.env.REDIS_URL) {
         const redisOptions = {
@@ -78,16 +107,24 @@ const initSocket = (server) => {
             if (!tenantSlug || !sessionToken) {
                 throw new Error('Authentication error');
             }
-            const tenant = await prisma_1.prisma.tenant.findUnique({
-                where: { slug: tenantSlug },
-                select: { id: true },
-            });
-            if (!tenant) {
+            let tenantId = tenantSlugCache.get(tenantSlug);
+            if (!tenantId) {
+                const tenant = await prisma_1.prisma.tenant.findUnique({
+                    where: { slug: tenantSlug },
+                    select: { id: true },
+                });
+                if (!tenant) {
+                    throw new Error('Authentication error');
+                }
+                tenantId = tenant.id;
+                tenantSlugCache.set(tenantSlug, tenant.id);
+            }
+            if (!tenantId) {
                 throw new Error('Authentication error');
             }
             socket.data.sessionToken = sessionToken;
-            socket.data.tenantId = tenant.id;
-            socket.join((0, exports.getSessionRoom)(tenant.id, sessionToken));
+            socket.data.tenantId = tenantId;
+            socket.join((0, exports.getSessionRoom)(tenantId, sessionToken));
             next();
         }
         catch (error) {
@@ -97,8 +134,37 @@ const initSocket = (server) => {
     exports.io.on('connection', (socket) => {
         const tenantId = socket.data.user?.tenantId || socket.data.tenantId;
         console.log(`Socket connected: ${socket.id} for tenant: ${tenantId}`);
-        socket.on('disconnect', () => {
-            console.log(`Socket disconnected: ${socket.id}`);
+        const staffTenantId = socket.data.user?.tenantId;
+        if (staffTenantId) {
+            registerTenantSocket(staffTenantId, socket.id);
+        }
+        socket.emit('socket:ready', {
+            socketId: socket.id,
+            serverTime: new Date().toISOString(),
+            tenantId: tenantId || null,
+        });
+        socket.on('client:ping', (payload, ack) => {
+            if (typeof ack === 'function') {
+                ack({
+                    serverTime: new Date().toISOString(),
+                    echoedSentAt: typeof payload?.sentAt === 'number' ? payload.sentAt : null,
+                });
+            }
+        });
+        socket.on('sync:request', (_, ack) => {
+            if (typeof ack === 'function') {
+                ack({
+                    ok: true,
+                    serverTime: new Date().toISOString(),
+                    socketId: socket.id,
+                });
+            }
+        });
+        socket.on('disconnect', (reason) => {
+            if (staffTenantId) {
+                unregisterTenantSocket(staffTenantId, socket.id);
+            }
+            console.log(`Socket disconnected: ${socket.id}. Reason: ${reason}`);
         });
     });
     return exports.io;

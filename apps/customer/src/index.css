@@ -4,31 +4,115 @@
 @tailwind utilities;
 
 :root {
-  --font-main: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --bg-primary: #FAFAFA;
-  --bg-secondary: #FFFFFF;
-  --text-primary: #0f172a;
-  --text-secondary: #64748b;
-  --border-primary: #f1f5f9;
+  --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light;
+  
+  /* Light Theme Tokens (Default) */
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-3: #f1f5f9;
+  --text-1: #0f172a;
+  --text-2: #334155;
+  --text-3: #64748b;
+  --border: #e2e8f0;
+  --brand: #f97316;
+  --brand-soft: rgba(249, 115, 22, 0.1);
+  --success: #10b981;
+  --error: #ef4444;
+  
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+  --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  
+  --input-bg: #ffffff;
+  --input-border: #e2e8f0;
+  --input-text: #0f172a;
+
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(255, 255, 255, 0.5);
+
+  /* Legacy aliases used across older pages */
+  --bg-primary: var(--bg);
+  --bg-secondary: var(--surface);
+  --text-primary: var(--text-1);
+  --text-secondary: var(--text-3);
+  --border-primary: var(--border);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #020617;
+    --surface: #0f172a;
+    --surface-raised: #1e293b;
+    --surface-3: #1e293b;
+    --text-1: #f8fafc;
+    --text-2: #e2e8f0;
+    --text-3: #94a3b8;
+    --border: #1e293b;
+    --brand: #fb923c;
+    --brand-soft: rgba(251, 146, 60, 0.15);
+    
+    --card-bg: #0f172a;
+    --card-border: #1e293b;
+    --card-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.5);
+    
+    --input-bg: #020617;
+    --input-border: #1e293b;
+    --input-text: #f8fafc;
+
+    --glass-bg: rgba(15, 23, 42, 0.8);
+    --glass-border: rgba(30, 41, 59, 0.5);
+
+    --bg-primary: var(--bg);
+    --bg-secondary: var(--surface);
+    --text-primary: var(--text-1);
+    --text-secondary: var(--text-3);
+    --border-primary: var(--border);
+  }
 }
 
 .dark {
-  --bg-primary: #0A0A0A;
-  --bg-secondary: #121212;
-  --text-primary: #F9FAFB;
-  --text-secondary: #9CA3AF;
-  --border-primary: #1F2937;
+  color-scheme: dark;
+  --bg: #020617;
+  --surface: #0f172a;
+  --surface-raised: #1e293b;
+  --surface-3: #1e293b;
+  --text-1: #f8fafc;
+  --text-2: #e2e8f0;
+  --text-3: #94a3b8;
+  --border: #1e293b;
+  --brand: #fb923c;
+  --brand-soft: rgba(251, 146, 60, 0.15);
+  
+  --card-bg: #0f172a;
+  --card-border: #1e293b;
+  --card-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05);
+  
+  --input-bg: #020617;
+  --input-border: #1e293b;
+  --input-text: #f8fafc;
+
+  --glass-bg: rgba(15, 23, 42, 0.8);
+  --glass-border: rgba(30, 41, 59, 0.5);
+
+  --bg-primary: var(--bg);
+  --bg-secondary: var(--surface);
+  --text-primary: var(--text-1);
+  --text-secondary: var(--text-3);
+  --border-primary: var(--border);
 }
 
 * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {
   font-family: var(--font-main);
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  background: var(--bg);
+  color: var(--text-1);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  -moz-osx-smoothing: grayscale;
+  transition: background-color 0.4s ease, color 0.4s ease;
 }
 
 /* ─── Scrollbars ─────────────────────────────────────────── */

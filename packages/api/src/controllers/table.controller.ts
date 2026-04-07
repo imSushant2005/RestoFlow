@@ -123,7 +123,7 @@ export const updateTableStatus = async (req: Request, res: Response) => {
   }
 };
 
-  export const createSession = async (req: Request, res: Response) => {
+export const createSession = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { name, phoneNumber, seat } = req.body;
@@ -195,6 +195,19 @@ export const updateTableStatus = async (req: Request, res: Response) => {
       }
     }
     
+    getIO().to(getTenantRoom(table.tenantId)).emit('session:new', {
+      id: session.id,
+      tableId: table.id,
+      tableName: table.name,
+      partySize: 1,
+      openedAt: session.openedAt,
+    });
+    getIO().to(getTenantRoom(table.tenantId)).emit('session:update', {
+      sessionId: session.id,
+      status: 'OPEN',
+      updatedAt: new Date().toISOString(),
+    });
+
     res.json({ success: true, sessionId: session.id, anonymousId: session.id });
   } catch (error) {
     console.error('Session create error', error);

@@ -22,12 +22,16 @@ function SortableCategoryItem({ id, category, isSelected, onSelect }: any) {
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      className={`flex items-center gap-2 p-3 text-sm font-medium cursor-pointer border-b bg-white ${
-        isSelected ? 'bg-blue-50 text-blue-700 border-l-4 border-l-blue-600' : 'text-gray-700 hover:bg-gray-50'
-      }`}
+      style={{
+        ...style,
+        background: isSelected ? 'var(--sidebar-item-active-bg)' : 'var(--card-bg)',
+        color: isSelected ? 'var(--sidebar-text-active)' : 'var(--text-1)',
+        borderBottom: '1px solid var(--border)',
+        borderLeft: isSelected ? '3px solid var(--brand)' : '3px solid transparent',
+      }}
+      className="flex items-center gap-2 p-3 text-sm font-medium cursor-pointer transition-colors"
     >
-      <div {...attributes} {...listeners} className="cursor-grab text-gray-400 hover:text-gray-600 p-1">
+      <div {...attributes} {...listeners} className="cursor-grab p-1" style={{ color: 'var(--text-3)' }}>
         <GripVertical size={16} />
       </div>
       <div className="flex-1" onClick={() => onSelect(id)}>
@@ -73,18 +77,19 @@ export function CategorySidebar({ categories: initialCategories, selectedId, onS
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] })
   });
 
-  if (isLoading) return <div className="p-4 text-sm text-gray-500">Loading...</div>;
+  if (isLoading) return <div className="p-4 text-sm" style={{ color: 'var(--text-3)' }}>Loading...</div>;
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      <div className="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
-        <h2 className="font-semibold text-gray-800">Categories</h2>
+    <div className="flex flex-col h-full" style={{ background: 'var(--surface)' }}>
+      <div className="p-4 flex justify-between items-center sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+        <h2 className="font-semibold" style={{ color: 'var(--text-1)' }}>Categories</h2>
         <button 
           onClick={() => {
             const name = prompt('Category name:');
             if (name) createMutation.mutate(name);
           }}
-          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md"
+          className="p-1.5 rounded-md transition-colors"
+          style={{ color: 'var(--brand)' }}
         >
           <Plus size={18} />
         </button>

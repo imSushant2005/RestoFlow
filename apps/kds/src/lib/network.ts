@@ -27,3 +27,8 @@ export function getSocketUrl() {
   const override = import.meta.env.VITE_SOCKET_URL;
   return normalizeBaseUrl(override || getApiBaseUrl());
 }
+
+export function getCustomerAppUrl() {
+  const override = import.meta.env.VITE_CUSTOMER_APP_URL;
+  return normalizeBaseUrl(override || withPort('3001'));
+}

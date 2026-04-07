@@ -105,12 +105,12 @@ export function Analytics() {
     return tips;
   }, [data]);
 
-  if (isLoading || !data) return <div className="p-8 text-gray-500 text-xl font-medium animate-pulse">Loading Analytics Data...</div>;
+  if (isLoading || !data) return <div className="p-8 text-xl font-medium animate-pulse" style={{ color: 'var(--text-3)' }}>Loading Analytics Data...</div>;
 
   const TrendBadge = ({ value }: { value: number }) => {
     const positive = value >= 0;
     return (
-      <span className={`inline-flex items-center gap-1 text-xs font-black px-2 py-1 rounded-full ${positive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+      <span className={`inline-flex items-center gap-1 text-xs font-black px-2 py-1 rounded-full ${positive ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}>
         {positive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
         {Math.abs(value).toFixed(1)}%
       </span>
@@ -118,22 +118,22 @@ export function Analytics() {
   };
 
   return (
-    <div className="flex-1 p-8 bg-gray-50 overflow-y-auto w-full">
+    <div className="flex-1 p-8 overflow-y-auto w-full" style={{ background: 'var(--bg)' }}>
       <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
-        <h2 className="text-3xl font-bold tracking-tight text-gray-900">Analytics Insights</h2>
+        <h2 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text-1)' }}>Analytics Insights</h2>
         <div className="flex items-center gap-2">
-          <button onClick={() => setRange('7d')} className={`px-3 py-2 rounded-lg text-sm font-bold ${range === '7d' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border'}`}>7d</button>
-          <button onClick={() => setRange('30d')} className={`px-3 py-2 rounded-lg text-sm font-bold ${range === '30d' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border'}`}>30d</button>
-          <button onClick={() => setRange('custom')} className={`px-3 py-2 rounded-lg text-sm font-bold ${range === 'custom' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border'}`}>Custom</button>
+          <button onClick={() => setRange('7d')} className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${range === '7d' ? 'bg-blue-600 text-white' : 'bg-transparent border'}`} style={range === '7d' ? {} : { color: 'var(--text-2)', borderColor: 'var(--border)' }}>7d</button>
+          <button onClick={() => setRange('30d')} className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${range === '30d' ? 'bg-blue-600 text-white' : 'bg-transparent border'}`} style={range === '30d' ? {} : { color: 'var(--text-2)', borderColor: 'var(--border)' }}>30d</button>
+          <button onClick={() => setRange('custom')} className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${range === 'custom' ? 'bg-blue-600 text-white' : 'bg-transparent border'}`} style={range === 'custom' ? {} : { color: 'var(--text-2)', borderColor: 'var(--border)' }}>Custom</button>
           {range === 'custom' && (
             <>
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="px-2 py-2 rounded-lg border text-sm" />
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="px-2 py-2 rounded-lg border text-sm" />
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="px-2 py-2 rounded-lg outline-none text-sm" style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', color: 'var(--text-1)' }} />
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="px-2 py-2 rounded-lg outline-none text-sm" style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', color: 'var(--text-1)' }} />
             </>
           )}
           <button
             onClick={downloadCSV}
-            className="bg-blue-600 text-white px-4 py-2 flex items-center gap-2 rounded-xl font-bold shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all"
+            className="bg-blue-600 text-white px-4 py-2 flex items-center gap-2 rounded-xl font-bold shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all ml-2"
           >
             <Download size={16} /> Export CSV
           </button>
@@ -165,9 +165,9 @@ export function Analytics() {
       </div>
 
       {insights.length > 0 && (
-        <div className="mb-8 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 rounded-2xl p-6">
-          <h3 className="font-black text-indigo-900 text-lg mb-4 flex items-center gap-2">
-            <Lightbulb size={20} className="text-indigo-600" />
+        <div className="mb-8 rounded-2xl p-6" style={{ background: 'linear-gradient(to right, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1))', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+          <h3 className="font-black text-lg mb-4 flex items-center gap-2" style={{ color: 'var(--text-1)' }}>
+            <Lightbulb size={20} className="text-indigo-400" />
             Smart Insights
           </h3>
           <div className="space-y-3">
@@ -175,7 +175,7 @@ export function Analytics() {
               <div
                 key={idx}
                 className={`flex items-start gap-3 p-3 rounded-xl ${
-                  insight.type === 'warning' ? 'bg-amber-50 text-amber-800' : insight.type === 'tip' ? 'bg-emerald-50 text-emerald-800' : 'bg-blue-50 text-blue-800'
+                  insight.type === 'warning' ? 'bg-amber-500/10 text-amber-500' : insight.type === 'tip' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'
                 }`}
               >
                 <div className="mt-0.5 flex-shrink-0">{insight.icon}</div>
@@ -187,38 +187,38 @@ export function Analytics() {
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-          <h3 className="font-bold text-2xl mb-8 text-gray-900">Revenue Growth</h3>
+        <div className="p-8 rounded-2xl shadow-sm" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}>
+          <h3 className="font-bold text-2xl mb-8" style={{ color: 'var(--text-1)' }}>Revenue Growth</h3>
           <div className="h-80 select-none">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data.revenueChart}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 500 }} dy={15} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 500 }} tickFormatter={(v) => formatINR(v)} dx={-10} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-3)', fontSize: 12, fontWeight: 500 }} dy={15} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-3)', fontSize: 12, fontWeight: 500 }} tickFormatter={(v) => formatINR(v)} dx={-10} />
                 <Tooltip
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)', padding: '12px 16px' }}
-                  labelStyle={{ color: '#64748b', fontWeight: 600, marginBottom: '4px' }}
-                  itemStyle={{ fontWeight: 800, color: '#1e293b' }}
+                  contentStyle={{ background: 'var(--surface-raised)', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.3)', padding: '12px 16px' }}
+                  labelStyle={{ color: 'var(--text-3)', fontWeight: 600, marginBottom: '4px' }}
+                  itemStyle={{ fontWeight: 800, color: 'var(--text-1)' }}
                   formatter={(val: any) => [formatINR(Number(val)), 'Revenue']}
                 />
-                <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={4} dot={{ r: 4, strokeWidth: 3, fill: '#fff', stroke: '#3b82f6' }} activeDot={{ r: 8, strokeWidth: 0, fill: '#2563eb' }} />
+                <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={4} dot={{ r: 4, strokeWidth: 3, fill: 'var(--surface-raised)', stroke: '#3b82f6' }} activeDot={{ r: 8, strokeWidth: 0, fill: '#2563eb' }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-          <h3 className="font-bold text-2xl mb-8 text-gray-900">Peak Dining Hours</h3>
+        <div className="p-8 rounded-2xl shadow-sm" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}>
+          <h3 className="font-bold text-2xl mb-8" style={{ color: 'var(--text-1)' }}>Peak Dining Hours</h3>
           <div className="h-80 select-none">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.peakHours}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 500 }} dy={15} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-3)', fontSize: 12, fontWeight: 500 }} dy={15} />
                 <Tooltip
-                  cursor={{ fill: '#f8fafc' }}
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  labelStyle={{ color: '#64748b', fontWeight: 600 }}
-                  itemStyle={{ fontWeight: 800, color: '#1e293b' }}
+                  cursor={{ fill: 'var(--surface-3)' }}
+                  contentStyle={{ background: 'var(--surface-raised)', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.3)' }}
+                  labelStyle={{ color: 'var(--text-3)', fontWeight: 600 }}
+                  itemStyle={{ fontWeight: 800, color: 'var(--text-1)' }}
                 />
                 <Bar dataKey="count" radius={[6, 6, 0, 0]}>
                   {data.peakHours?.map((entry: any, index: number) => {
@@ -234,22 +234,22 @@ export function Analytics() {
         </div>
       </div>
 
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 mb-8">
-        <h3 className="font-bold text-2xl mb-6 text-gray-900">Top Performing Items</h3>
+      <div className="p-8 rounded-2xl shadow-sm mb-8" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}>
+        <h3 className="font-bold text-2xl mb-6" style={{ color: 'var(--text-1)' }}>Top Performing Items</h3>
         <div className="flex flex-col gap-4">
           {data.topItems.map((item: any, i: number) => (
-            <div key={i} className="flex justify-between items-center p-5 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors">
+            <div key={i} className="flex justify-between items-center p-5 rounded-xl border transition-colors" style={{ background: 'var(--surface-raised)', borderColor: 'var(--border)' }}>
               <div className="flex items-center gap-5">
-                <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">{i + 1}</span>
+                <span className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center font-bold">{i + 1}</span>
                 <div>
-                  <span className="font-bold text-gray-900 block text-lg">{item.name}</span>
-                  <span className="font-medium text-gray-500">{item.count} units sold</span>
+                  <span className="font-bold block text-lg" style={{ color: 'var(--text-1)' }}>{item.name}</span>
+                  <span className="font-medium" style={{ color: 'var(--text-3)' }}>{item.count} units sold</span>
                 </div>
               </div>
               <span className="font-black text-2xl text-blue-600">{formatINR(item.revenue)}</span>
             </div>
           ))}
-          {data.topItems.length === 0 && <div className="py-8 text-center text-gray-500 text-lg">No analytical data generated yet.</div>}
+          {data.topItems.length === 0 && <div className="py-8 text-center text-lg" style={{ color: 'var(--text-3)' }}>No analytical data generated yet.</div>}
         </div>
       </div>
     </div>
@@ -269,21 +269,26 @@ function InsightMetric({
   trend: React.ReactNode;
   accent: 'blue' | 'emerald' | 'violet';
 }) {
-  const accentStyles =
-    accent === 'blue'
-      ? 'from-blue-50 to-blue-100 border-blue-200'
-      : accent === 'emerald'
-      ? 'from-emerald-50 to-emerald-100 border-emerald-200'
-      : 'from-violet-50 to-violet-100 border-violet-200';
-
   return (
-    <div className={`bg-gradient-to-br ${accentStyles} p-6 rounded-2xl border shadow-sm`}>
+    <div
+      className="p-6 rounded-2xl border shadow-sm"
+      style={{
+        background:
+          accent === 'blue'
+            ? 'linear-gradient(135deg, var(--card-bg), rgba(37,99,235,0.08))'
+            : accent === 'emerald'
+              ? 'linear-gradient(135deg, var(--card-bg), rgba(16,185,129,0.08))'
+              : 'linear-gradient(135deg, var(--card-bg), rgba(139,92,246,0.08))',
+        borderColor: 'var(--card-border)',
+        boxShadow: 'var(--card-shadow)',
+      }}
+    >
       <div className="flex items-center justify-between">
-        <p className="text-xs font-black uppercase tracking-wider text-gray-600">{title}</p>
+        <p className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>{title}</p>
         {trend}
       </div>
-      <p className="text-4xl font-black text-gray-900 mt-2">{value}</p>
-      <p className="text-sm text-gray-600 mt-1 font-medium">{subtitle}</p>
+      <p className="text-4xl font-black mt-2" style={{ color: 'var(--text-1)' }}>{value}</p>
+      <p className="text-sm mt-1 font-medium" style={{ color: 'var(--text-3)' }}>{subtitle}</p>
     </div>
   );
 }

@@ -134,18 +134,37 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
       localStorage.getItem('restoflow_token') ||
       localStorage.getItem('dineflow_token') ||
       localStorage.getItem('accessToken');
-    const socket = io(getSocketUrl(), { auth: { token } });
-    
-    socket.on('table:status_change', (payload: any) => {
+    const socket = io(getSocketUrl(), {
+      auth: { token, client: 'dashboard-floor' },
+      transports: ['websocket'],
+      rememberUpgrade: true,
+      reconnection: true,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 3000,
+      timeout: 10000,
+    });
+
+    const handleStatusChange = (payload: any) => {
       if (payload?.tableId) {
         setHighlightedTableId(payload.tableId);
         setTimeout(() => setHighlightedTableId(null), 1800);
       }
       // Invalidate the cache to trigger an immediate refetch when any table status changes
       queryClient.invalidateQueries({ queryKey: ['zones'] });
-    });
+    };
 
-    return () => { socket.disconnect(); };
+    const handleConnectError = () => {
+      queryClient.invalidateQueries({ queryKey: ['zones'] });
+    };
+
+    socket.on('table:status_change', handleStatusChange);
+    socket.on('connect_error', handleConnectError);
+
+    return () => {
+      socket.off('table:status_change', handleStatusChange);
+      socket.off('connect_error', handleConnectError);
+      socket.disconnect();
+    };
   }, [queryClient]);
   
   const createTableMutation = useMutation({

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { publicApi } from '../lib/api';
 import { Users, ArrowRight, AlertCircle } from 'lucide-react';
+import { getTenantStorageItem, setActiveSessionForTenant } from '../lib/tenantStorage';
 
 const PARTY_OPTIONS = [1, 2, 3, 4, 5, 6];
 
@@ -14,8 +15,8 @@ export function PartySizePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const customerName = localStorage.getItem('rf_customer_name') || '';
-  const customerId = localStorage.getItem('rf_customer_id');
+  const customerName = getTenantStorageItem(tenantSlug, 'customer_name') || '';
+  const customerId = getTenantStorageItem(tenantSlug, 'customer_id');
 
   const handleContinue = async () => {
     if (!customerId) {
@@ -36,8 +37,7 @@ export function PartySizePage() {
       });
 
       // Store active session
-      localStorage.setItem('rf_active_session', res.data.id);
-      localStorage.setItem('restoflow_session', res.data.id);
+      setActiveSessionForTenant(tenantSlug, res.data.id);
 
       // Navigate to menu
       navigate(`/order/${tenantSlug}/${tableId}/menu`);
@@ -45,8 +45,7 @@ export function PartySizePage() {
       if (err.response?.status === 409) {
         // Table has an active session — join it
         const existingId = err.response.data.existingSessionId;
-        localStorage.setItem('rf_active_session', existingId);
-        localStorage.setItem('restoflow_session', existingId);
+        setActiveSessionForTenant(tenantSlug, existingId);
         navigate(`/order/${tenantSlug}/${tableId}/menu`);
       } else {
         setError(err.response?.data?.error || 'Failed to start session');

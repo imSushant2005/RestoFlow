@@ -10,7 +10,7 @@ import { env } from '../config/env';
  */
 export const login = async (req: Request, res: Response) => {
   try {
-    const { phone, name } = req.body;
+    const { phone, name, tenantSlug } = req.body;
 
     if (!phone || phone.length < 10) {
       return res.status(400).json({ error: 'Valid phone number is required' });
@@ -37,9 +37,22 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
+    const normalizedTenantSlug =
+      typeof tenantSlug === 'string' && tenantSlug.trim().length > 0 ? tenantSlug.trim() : null;
+
+    if (normalizedTenantSlug) {
+      const tenant = await prisma.tenant.findUnique({
+        where: { slug: normalizedTenantSlug },
+        select: { id: true },
+      });
+      if (!tenant) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+    }
+
     // Generate JWT
     const token = jwt.sign(
-      { customerId: customer.id, phone: customer.phone },
+      { customerId: customer.id, phone: customer.phone, tenantSlug: normalizedTenantSlug },
       env.JWT_SECRET,
       { expiresIn: '30d' }
     );
@@ -96,11 +109,31 @@ export const getProfile = async (req: Request, res: Response) => {
 export const getHistory = async (req: Request, res: Response) => {
   try {
     const customerId = (req as any).customerId;
+    const scopedTenantSlug =
+      (typeof req.query.tenantSlug === 'string' && req.query.tenantSlug.trim().length > 0
+        ? req.query.tenantSlug.trim()
+        : null) ||
+      ((req as any).customerTenantSlug as string | null) ||
+      null;
+
     if (!customerId) return res.status(401).json({ error: 'Not authenticated' });
+
+    let tenantIdFilter: string | null = null;
+    if (scopedTenantSlug) {
+      const tenant = await prisma.tenant.findUnique({
+        where: { slug: scopedTenantSlug },
+        select: { id: true },
+      });
+      if (!tenant) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      tenantIdFilter = tenant.id;
+    }
 
     const sessions = await prisma.diningSession.findMany({
       where: {
         customerId,
+        ...(tenantIdFilter ? { tenantId: tenantIdFilter } : {}),
         sessionStatus: 'CLOSED' as any,
       },
       include: {
@@ -136,10 +169,29 @@ export const getSessionDetail = async (req: Request, res: Response) => {
   try {
     const customerId = (req as any).customerId;
     const { sessionId } = req.params;
+    const scopedTenantSlug =
+      (typeof req.query.tenantSlug === 'string' && req.query.tenantSlug.trim().length > 0
+        ? req.query.tenantSlug.trim()
+        : null) ||
+      ((req as any).customerTenantSlug as string | null) ||
+      null;
+
     if (!customerId) return res.status(401).json({ error: 'Not authenticated' });
 
+    let tenantIdFilter: string | null = null;
+    if (scopedTenantSlug) {
+      const tenant = await prisma.tenant.findUnique({
+        where: { slug: scopedTenantSlug },
+        select: { id: true },
+      });
+      if (!tenant) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+      tenantIdFilter = tenant.id;
+    }
+
     const session = await prisma.diningSession.findFirst({
-      where: { id: sessionId, customerId },
+      where: { id: sessionId, customerId, ...(tenantIdFilter ? { tenantId: tenantIdFilter } : {}) },
       include: {
         tenant: {
           select: { businessName: true, slug: true, logoUrl: true, taxRate: true, currency: true, currencySymbol: true },

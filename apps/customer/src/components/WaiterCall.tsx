@@ -35,10 +35,10 @@ export function WaiterCall({ tenantSlug, tableId }: { tenantSlug: string; tableI
       {/* Floating Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-24 right-4 z-30 w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-700 text-white rounded-full shadow-2xl shadow-blue-300/50 flex items-center justify-center active:scale-90 transition-transform"
+        className="fixed bottom-20 right-4 z-30 py-2 px-4 bg-blue-600 text-white rounded-full shadow-md active:scale-95 transition-transform"
         aria-label="Call Waiter"
       >
-        <Hand size={24} />
+        Call
       </button>
 
       {/* Modal */}

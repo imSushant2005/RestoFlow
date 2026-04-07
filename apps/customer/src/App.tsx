@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
+import { NotificationsProvider } from './components/Notifications'
 import { LoginPage } from './pages/LoginPage'
 import { PartySizePage } from './pages/PartySizePage'
 import { Storefront } from './pages/Storefront'
@@ -13,33 +14,12 @@ import { publicApi } from './lib/api'
 
 function App() {
   useEffect(() => {
-    const existingSession =
-      localStorage.getItem('restoflow_session') || localStorage.getItem('dineflow_session');
+    const existingSession = localStorage.getItem('startup_session');
     if (!existingSession) {
-      localStorage.setItem('restoflow_session', uuidv4());
-    } else if (!localStorage.getItem('restoflow_session')) {
-      localStorage.setItem('restoflow_session', existingSession);
+      localStorage.setItem('startup_session', uuidv4());
     }
 
-    const checkCustomDomain = async () => {
-      const hostname = window.location.hostname;
-      if (
-        hostname !== 'localhost' &&
-        !hostname.includes('192.168') &&
-        !hostname.includes('restoflow') &&
-        !hostname.includes('dineflow')
-      ) {
-        try {
-          const res = await publicApi.get(`/resolve-domain?domain=${hostname}`);
-          if (res.data.slug && !window.location.pathname.includes(`/order/${res.data.slug}`)) {
-            window.location.replace(`/order/${res.data.slug}`);
-          }
-        } catch (e) {
-          console.warn('Unknown bespoke domain mapping');
-        }
-      }
-    };
-    checkCustomDomain();
+    // Domain mapping check removed to avoid hard-coded product names.
 
     const syncOfflineOrders = async () => {
       const queue: any[] = await get('offline_orders') || [];
@@ -63,9 +43,10 @@ function App() {
   }, []);
 
   return (
-    <div className="min-h-[100dvh] bg-gray-50 flex flex-col font-sans antialiased text-gray-900">
-      <main className="flex-1 flex flex-col">
-        <Routes>
+    <div className="min-h-[100dvh] flex flex-col font-sans antialiased" style={{ background: 'var(--bg)', color: 'var(--text-1)' }}>
+      <NotificationsProvider>
+        <main className="flex-1 flex flex-col">
+          <Routes>
           {/* === NEW SESSION FLOW === */}
           {/* Step 1: QR Scan → Login (phone + name) */}
           <Route path="/order/:tenantSlug/:tableId" element={<LoginPage />} />
@@ -100,7 +81,8 @@ function App() {
             </div>
           } />
         </Routes>
-      </main>
+        </main>
+      </NotificationsProvider>
     </div>
   )
 }

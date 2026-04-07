@@ -36,11 +36,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_middleware_1 = require("../middlewares/auth.middleware");
 const role_middleware_1 = require("../middlewares/role.middleware");
-const prisma_1 = require("@dineflow/prisma");
 const BillingController = __importStar(require("../controllers/billing.controller"));
+const rbac_1 = require("../constants/rbac");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.requireAuth);
-router.get('/', (0, role_middleware_1.requireRoles)([prisma_1.UserRole.OWNER, prisma_1.UserRole.MANAGER]), BillingController.getBillingDetails);
-router.post('/checkout', (0, role_middleware_1.requireRoles)([prisma_1.UserRole.OWNER]), BillingController.createCheckoutSession);
+router.get('/', (0, role_middleware_1.requireRoles)(rbac_1.BILLING_VIEW_ROLES), BillingController.getBillingDetails);
+router.post('/checkout', (0, role_middleware_1.requireRoles)(rbac_1.FULL_ACCESS_ROLES), BillingController.createCheckoutSession);
 exports.default = router;
 //# sourceMappingURL=billing.routes.js.map

@@ -1,188 +1,385 @@
-import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/api';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, Store, UtensilsCrossed, LayoutDashboard } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Loader2, PhoneCall, ReceiptText, Store } from 'lucide-react';
+import { api } from '../lib/api';
+import { FormField } from '../components/forms/FormField';
 
-export function Onboarding() {
-  const [step, setStep] = useState(1);
+type OnboardingProps = {
+  nextPath: string;
+};
+
+type SetupFormState = {
+  businessName: string;
+  slug: string;
+  gstin: string;
+  phone: string;
+};
+
+const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+const PHONE_PATTERN = /^[0-9+\-\s()]{7,20}$/;
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function isWorkspaceReady(business: any) {
+  return Boolean(business?.businessName?.trim() && business?.gstin?.trim() && business?.phone?.trim());
+}
+
+const onboardingReasons = [
+  {
+    icon: <Store size={16} />,
+    title: 'Restaurant name',
+    copy: 'Appears on workspace records, customer-facing surfaces, and invoices.',
+  },
+  {
+    icon: <ReceiptText size={16} />,
+    title: 'GSTIN',
+    copy: 'Needed for GST-compliant billing and consistent invoice identity.',
+  },
+  {
+    icon: <PhoneCall size={16} />,
+    title: 'Business phone',
+    copy: 'Used for contact clarity and trust on invoice details.',
+  },
+];
+
+export function Onboarding({ nextPath }: OnboardingProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [step, setStep] = useState<'welcome' | 'identity' | 'done'>('welcome');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const [businessData, setBusinessData] = useState({ name: '', slug: '' });
-  const [tableData, setTableData] = useState({ zoneName: 'Main Dining', tableCount: 5 });
-  const [menuData, setMenuData] = useState({ categoryName: 'Mains', itemName: 'Signature Burger', itemPrice: 12.99 });
+  const { data: business, isLoading } = useQuery({
+    queryKey: ['settings-business'],
+    queryFn: async () => (await api.get('/settings/business')).data,
+    retry: false,
+    staleTime: 1000 * 30,
+  });
+
+  const draftKey = useMemo(() => {
+    const scope = business?.id || business?.slug || 'workspace';
+    return `rf_workspace_setup_draft_${scope}`;
+  }, [business?.id, business?.slug]);
+
+  const [form, setForm] = useState<SetupFormState>({
+    businessName: '',
+    slug: '',
+    gstin: '',
+    phone: '',
+  });
+
+  useEffect(() => {
+    if (!business) return;
+
+    const storedDraft = localStorage.getItem(draftKey);
+    if (storedDraft) {
+      try {
+        const parsed = JSON.parse(storedDraft) as SetupFormState;
+        setForm({
+          businessName: parsed.businessName || '',
+          slug: parsed.slug || '',
+          gstin: parsed.gstin || '',
+          phone: parsed.phone || '',
+        });
+        return;
+      } catch {
+        localStorage.removeItem(draftKey);
+      }
+    }
+
+    const initialName =
+      business.businessName === 'New Workspace' || business.businessName?.endsWith("'s Workspace") ? '' : business.businessName || '';
+
+    setForm({
+      businessName: initialName,
+      slug: business?.slug?.startsWith('workspace') ? '' : business?.slug || '',
+      gstin: business?.gstin || '',
+      phone: business?.phone || '',
+    });
+  }, [business, draftKey]);
+
+  useEffect(() => {
+    if (!form.businessName.trim()) return;
+    setForm((prev) => {
+      if (prev.slug.trim()) return prev;
+      return { ...prev, slug: slugify(prev.businessName) };
+    });
+  }, [form.businessName]);
+
+  useEffect(() => {
+    const hasMeaningfulDraft = form.businessName || form.slug || form.gstin || form.phone;
+    if (!hasMeaningfulDraft) return;
+    localStorage.setItem(draftKey, JSON.stringify(form));
+  }, [draftKey, form]);
+
+  useEffect(() => {
+    if (!isLoading && business && isWorkspaceReady(business)) {
+      navigate(nextPath, { replace: true });
+    }
+  }, [business, isLoading, navigate, nextPath]);
 
   const setupMutation = useMutation({
     mutationFn: async () => {
-      await api.patch('/settings/business', { 
-        name: businessData.name, 
-        slug: businessData.slug,
-        onboardingCompleted: true
-      });
-      
-      if (tableData.tableCount > 0) {
-        const zoneRes = await api.post('/venue/zones', { name: tableData.zoneName, width: 800, height: 600 });
-        const zoneId = zoneRes.data.id;
-        for (let i = 1; i <= tableData.tableCount; i++) {
-          await api.post('/venue/tables', { name: `${i}`, zoneId, x: i * 100, y: 100 });
-        }
-      }
+      const normalizedName = form.businessName.trim();
+      const normalizedSlug = slugify(form.slug || form.businessName);
+      const normalizedGstin = form.gstin.trim().toUpperCase();
+      const normalizedPhone = form.phone.trim();
 
-      if (menuData.itemName) {
-        const catRes = await api.post('/menus/categories', { name: menuData.categoryName, description: 'Our starting menu' });
-        await api.post('/menus/items', { 
-          categoryId: catRes.data.id, 
-          name: menuData.itemName, 
-          price: Number(menuData.itemPrice), 
-          description: 'A delicious starting item',
-          dietaryTags: [] 
-        });
-      }
+      if (!normalizedName) throw new Error('Restaurant name is required.');
+      if (!normalizedSlug) throw new Error('Workspace URL is required.');
+      if (!GSTIN_PATTERN.test(normalizedGstin)) throw new Error('GSTIN format looks incorrect. Please check it once.');
+      if (!PHONE_PATTERN.test(normalizedPhone)) throw new Error('Business phone format looks incorrect.');
+
+      return api.patch('/settings/business', {
+        businessName: normalizedName,
+        slug: normalizedSlug,
+        gstin: normalizedGstin,
+        phone: normalizedPhone,
+      });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries();
-      navigate('/');
-    }
+    onSuccess: async () => {
+      setErrorMessage('');
+      localStorage.removeItem(draftKey);
+      await queryClient.invalidateQueries({ queryKey: ['settings-business'] });
+      setStep('done');
+    },
+    onError: (err: any) => {
+      const apiError = typeof err?.response?.data?.error === 'string' ? err.response.data.error : err?.message || 'Unable to save workspace setup.';
+      setErrorMessage(apiError);
+    },
   });
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-xl bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
-        
-        <div className="bg-blue-600 p-8 text-white flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-black tracking-tight">Welcome to RESTOFLOW</h1>
-            <p className="opacity-80 font-medium mt-1">Let's set up your venue in 3 easy steps.</p>
-          </div>
-          <div className="bg-white/20 p-3 rounded-2xl backdrop-blur flex gap-2">
-             {[1, 2, 3].map(s => (
-               <div key={s} className={`w-3 h-3 rounded-full ${step >= s ? 'bg-white' : 'bg-white/30 transition-all font-bold text-transparent'}`} />
-             ))}
-          </div>
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setupMutation.mutate();
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#07101d]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 size={30} className="animate-spin text-blue-400" />
+          <p className="text-sm font-medium text-slate-400">Preparing workspace setup...</p>
         </div>
+      </div>
+    );
+  }
 
-        <div className="p-8">
-          {step === 1 && (
-            <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-              <div className="flex items-center gap-4 mb-8 text-blue-600 border-b pb-5">
-                <Store size={28} />
-                <h2 className="text-xl font-bold text-gray-900">1. Business Details</h2>
-              </div>
-              <div className="flex flex-col gap-6">
-                <div>
-                  <label className="font-bold text-sm text-gray-700 block mb-2">Venue Name</label>
-                  <input 
-                    value={businessData.name} 
-                    onChange={e => setBusinessData({...businessData, name: e.target.value})} 
-                    className="w-full border-2 border-gray-200 p-3.5 rounded-xl font-medium focus:border-blue-600 outline-none transition-colors"
-                    placeholder="e.g. The Rustic Cafe" autoFocus
-                  />
+  return (
+    <div className="min-h-screen bg-[#07101d] text-slate-100">
+      <div className="bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.12),transparent_28%),linear-gradient(180deg,#07101d_0%,#081220_46%,#07101d_100%)]">
+        <div className="mx-auto max-w-[1180px] px-6 py-10">
+          <div className="mb-10 flex flex-wrap items-end justify-between gap-5">
+            <div className="max-w-[660px]">
+              <p className="text-sm font-semibold text-blue-300">Workspace setup</p>
+              <h1 className="mt-3 text-4xl font-black tracking-tight text-white sm:text-5xl" style={{ fontFamily: 'Space Grotesk, Inter, sans-serif' }}>
+                Finish the business identity behind your restaurant workspace.
+              </h1>
+              <p className="mt-4 text-base leading-7 text-slate-400">
+                This step happens after account creation on purpose. It keeps signup light, then collects the restaurant details needed for billing, invoices, and a trustworthy workspace identity.
+              </p>
+            </div>
+
+            <div className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-slate-300">
+              <span className={step === 'welcome' ? 'text-white' : 'text-slate-500'}>Welcome</span>
+              <span className="mx-2 text-slate-600">/</span>
+              <span className={step === 'identity' ? 'text-white' : 'text-slate-500'}>Identity</span>
+              <span className="mx-2 text-slate-600">/</span>
+              <span className={step === 'done' ? 'text-white' : 'text-slate-500'}>Launch</span>
+            </div>
+          </div>
+
+          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+            <section className="rounded-[32px] border border-white/10 bg-[#0b1524] p-6 shadow-[0_24px_70px_rgba(2,6,23,0.28)] sm:p-8">
+              {step === 'welcome' && (
+                <div className="space-y-6">
+                  <div className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-100">
+                    Step 1 of 3
+                  </div>
+
+                  <div>
+                    <h2 className="text-3xl font-black tracking-tight text-white" style={{ fontFamily: 'Space Grotesk, Inter, sans-serif' }}>
+                      Your account is ready. The setup from here is short and specific.
+                    </h2>
+                    <p className="mt-4 text-base leading-7 text-slate-400">
+                      We only ask for the business details that are genuinely required to run billing and identify the workspace correctly.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    {onboardingReasons.map((item) => (
+                      <div key={item.title} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-300">{item.icon}</div>
+                        <div>
+                          <p className="text-base font-semibold text-white">{item.title}</p>
+                          <p className="mt-2 text-sm leading-6 text-slate-400">{item.copy}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setErrorMessage('');
+                      setStep('identity');
+                    }}
+                    className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
+                  >
+                    Continue to workspace setup
+                    <ArrowRight size={15} />
+                  </button>
                 </div>
-                <div>
-                  <label className="font-bold text-sm text-gray-700 block mb-2">Order URL Slug</label>
-                  <div className="flex items-stretch focus-within:ring-2 focus-within:ring-blue-200 rounded-xl overflow-hidden">
-                    <span className="bg-gray-100 border-2 border-r-0 border-gray-200 px-4 flex items-center text-gray-500 font-medium text-sm select-none">restoflow.com/order/</span>
-                    <input 
-                      value={businessData.slug} 
-                      onChange={e => setBusinessData({...businessData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')})} 
-                      className="flex-1 border-2 border-gray-200 p-3.5 font-bold text-blue-600 outline-none transition-colors"
-                      placeholder="rustic-cafe"
+              )}
+
+              {step === 'identity' && (
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-100">
+                    Step 2 of 3
+                  </div>
+
+                  {errorMessage ? (
+                    <div className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-200">
+                      {errorMessage}
+                    </div>
+                  ) : null}
+
+                  <FormField
+                    label="Restaurant name"
+                    value={form.businessName}
+                    onChange={(e) => setForm((prev) => ({ ...prev, businessName: e.target.value }))}
+                    required
+                    placeholder="Aura Cafe"
+                    hint="This appears on workspace records and invoices."
+                  />
+
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-200">
+                      Workspace URL<span className="ml-1 text-blue-300">*</span>
+                    </label>
+                    <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0f1728] focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
+                      <div className="flex items-center">
+                        <span className="border-r border-white/10 px-4 py-3 text-sm text-slate-500">restoflow.com/order/</span>
+                        <input
+                          value={form.slug}
+                          onChange={(e) => setForm((prev) => ({ ...prev, slug: slugify(e.target.value) }))}
+                          required
+                          placeholder="aura-cafe"
+                          className="flex-1 bg-transparent px-4 py-3 text-sm font-medium text-slate-100 placeholder:text-slate-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs font-medium text-slate-500">We prefill this from your restaurant name so setup feels faster.</p>
+                  </div>
+
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <FormField
+                      label="GSTIN"
+                      value={form.gstin}
+                      onChange={(e) => setForm((prev) => ({ ...prev, gstin: e.target.value.toUpperCase() }))}
+                      required
+                      placeholder="22AAAAA0000A1Z5"
+                      hint="Required for GST-compliant billing."
+                      className="uppercase"
+                    />
+                    <FormField
+                      label="Business phone"
+                      value={form.phone}
+                      onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+                      required
+                      placeholder="+91 9876543210"
+                      hint="Used for contact and invoice details."
                     />
                   </div>
-                </div>
-                <button 
-                  disabled={!businessData.name || !businessData.slug}
-                  onClick={() => setStep(2)}
-                  className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl mt-4 flex justify-center items-center gap-2 hover:bg-blue-700 disabled:opacity-50 transition-all shadow-md active:scale-[0.98]"
-                >
-                  Continue <ChevronRight size={20} />
-                </button>
-              </div>
-            </div>
-          )}
 
-          {step === 2 && (
-            <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-               <div className="flex items-center gap-4 mb-8 text-blue-600 border-b pb-5">
-                <LayoutDashboard size={28} />
-                <h2 className="text-xl font-bold text-gray-900">2. Floor Plan Basics</h2>
-              </div>
-              <div className="flex flex-col gap-6">
-                <div>
-                  <label className="font-bold text-sm text-gray-700 block mb-2">Primary Zone Name</label>
-                  <input 
-                    value={tableData.zoneName} 
-                    onChange={e => setTableData({...tableData, zoneName: e.target.value})} 
-                    className="w-full border-2 border-gray-200 p-3.5 rounded-xl font-medium focus:border-blue-600 outline-none transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-sm text-gray-700 block mb-2">How many tables to generate?</label>
-                  <input 
-                    type="number" min="0" max="50"
-                    value={tableData.tableCount} 
-                    onChange={e => setTableData({...tableData, tableCount: Number(e.target.value)})} 
-                    className="w-full border-2 border-gray-200 p-3.5 rounded-xl font-bold focus:border-blue-600 outline-none transition-colors"
-                  />
-                  <p className="text-xs text-gray-400 mt-2 font-medium">You can reposition them in the Dashboard later.</p>
-                </div>
-                <button 
-                  onClick={() => setStep(3)}
-                  className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl mt-4 flex justify-center items-center gap-2 hover:bg-blue-700 transition-all shadow-md active:scale-[0.98]"
-                >
-                  Continue <ChevronRight size={20} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-               <div className="flex items-center gap-4 mb-8 text-blue-600 border-b pb-5">
-                <UtensilsCrossed size={28} />
-                <h2 className="text-xl font-bold text-gray-900">3. First Menu Item</h2>
-              </div>
-              <div className="flex flex-col gap-6">
-                <div>
-                  <label className="font-bold text-sm text-gray-700 block mb-2">Category Name</label>
-                  <input 
-                    value={menuData.categoryName} 
-                    onChange={e => setMenuData({...menuData, categoryName: e.target.value})} 
-                    className="w-full border-2 border-gray-200 p-3.5 rounded-xl font-medium focus:border-blue-600 outline-none transition-colors"
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="col-span-2">
-                    <label className="font-bold text-sm text-gray-700 block mb-2">Item Name</label>
-                    <input 
-                      value={menuData.itemName} 
-                      onChange={e => setMenuData({...menuData, itemName: e.target.value})} 
-                      className="w-full border-2 border-gray-200 p-3.5 rounded-xl font-bold focus:border-blue-600 outline-none transition-colors"
-                    />
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <button
+                      type="submit"
+                      disabled={setupMutation.isPending}
+                      className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:opacity-60"
+                    >
+                      {setupMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                      {setupMutation.isPending ? 'Saving workspace...' : 'Save workspace details'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStep('welcome')}
+                      className="rounded-full border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]"
+                    >
+                      Back
+                    </button>
                   </div>
-                  <div className="col-span-1">
-                    <label className="font-bold text-sm text-gray-700 block mb-2">Price ($)</label>
-                    <input 
-                      type="number" step="0.01" min="0"
-                      value={menuData.itemPrice} 
-                      onChange={e => setMenuData({...menuData, itemPrice: Number(e.target.value)})} 
-                      className="w-full border-2 border-gray-200 p-3.5 rounded-xl font-bold focus:border-blue-600 outline-none transition-colors"
-                    />
+                </form>
+              )}
+
+              {step === 'done' && (
+                <div className="space-y-6">
+                  <div className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200">
+                    Step 3 of 3
+                  </div>
+
+                  <div>
+                    <h2 className="text-3xl font-black tracking-tight text-white" style={{ fontFamily: 'Space Grotesk, Inter, sans-serif' }}>
+                      Workspace identity is ready.
+                    </h2>
+                    <p className="mt-4 text-base leading-7 text-slate-400">
+                      Restaurant name, GSTIN, and business phone are now connected to the workspace and available in billing surfaces.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => navigate(nextPath, { replace: true })}
+                    className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                  >
+                    Enter dashboard
+                    <ArrowRight size={15} />
+                  </button>
+                </div>
+              )}
+            </section>
+
+            <aside className="rounded-[32px] border border-white/10 bg-[#0b1524] p-6 shadow-[0_24px_70px_rgba(2,6,23,0.28)] sm:p-8">
+              <p className="text-sm font-semibold text-blue-300">Invoice identity preview</p>
+              <h3 className="mt-3 text-3xl font-black tracking-tight text-white" style={{ fontFamily: 'Space Grotesk, Inter, sans-serif' }}>
+                The same setup details power billing trust.
+              </h3>
+              <p className="mt-4 text-sm leading-7 text-slate-400">
+                This is why business setup happens here: the data should clearly connect to invoice output, not feel like bureaucratic form filling.
+              </p>
+
+              <div className="mt-8 rounded-[30px] border border-white/10 bg-white p-5 text-slate-900 shadow-[0_18px_40px_rgba(15,23,42,0.16)]">
+                <div className="border-b border-slate-100 pb-4">
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Business identity</p>
+                  <p className="mt-2 text-2xl font-black text-slate-950">{form.businessName || 'Your restaurant name'}</p>
+                </div>
+
+                <div className="mt-5 grid gap-3">
+                  <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                    <p className="text-xs font-medium text-slate-400">Workspace URL</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">restoflow.com/order/{form.slug || 'your-workspace'}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                    <p className="text-xs font-medium text-slate-400">GSTIN</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">{form.gstin || '22AAAAA0000A1Z5'}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                    <p className="text-xs font-medium text-slate-400">Business phone</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">{form.phone || '+91 9876543210'}</p>
                   </div>
                 </div>
-                
-                <button 
-                  disabled={setupMutation.isPending || !menuData.itemName}
-                  onClick={() => setupMutation.mutate()}
-                  className="w-full bg-green-600 text-white font-bold py-4 rounded-xl mt-4 flex justify-center items-center gap-2 hover:bg-green-700 disabled:opacity-50 transition-all shadow-lg shadow-green-600/20 active:scale-[0.98]"
-                >
-                  {setupMutation.isPending ? 'Building Venue...' : 'Complete Setup'} <Check size={20} strokeWidth={3} />
-                </button>
               </div>
-            </div>
-          )}
 
+              <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm leading-6 text-slate-400">
+                Keep it fast, but explicit: owners should understand why these details matter and where they will appear next.
+              </div>
+            </aside>
+          </div>
         </div>
       </div>
     </div>

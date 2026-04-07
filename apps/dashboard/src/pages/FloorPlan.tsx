@@ -24,10 +24,10 @@ export function FloorPlan() {
 
   if (isLoading) return (
     <div className="p-8">
-      <div className="w-48 h-10 bg-gray-200 rounded-lg animate-pulse mb-8"></div>
+      <div className="w-48 h-10 rounded-lg animate-pulse mb-8" style={{ background: 'var(--surface-3)' }}></div>
       <div className="flex gap-8 flex-wrap">
         {[1, 2, 3, 4, 5].map(i => (
-          <div key={i} className="bg-gray-100 rounded-2xl w-[120px] h-[120px] animate-pulse border-4 border-gray-200"></div>
+          <div key={i} className="rounded-2xl w-[120px] h-[120px] animate-pulse border-4" style={{ background: 'var(--surface-3)', borderColor: 'var(--border)' }}></div>
         ))}
       </div>
     </div>
@@ -45,11 +45,11 @@ export function FloorPlan() {
   const reserved = allTables.filter((t: any) => t.status === 'RESERVED').length;
 
   return (
-    <div className="flex w-full h-full bg-gray-50">
+    <div className="flex w-full h-full" style={{ background: 'var(--bg)' }}>
       {/* Zone Sidebar */}
-      <div className="w-56 border-r border-gray-200 bg-white h-full flex flex-col shadow-sm">
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center sticky top-0 z-10 bg-white">
-          <h2 className="font-black text-gray-800 text-sm uppercase tracking-wider">Zones</h2>
+      <div className="w-56 h-full flex flex-col shadow-sm" style={{ background: 'var(--surface)', borderRight: '1px solid var(--border)' }}>
+        <div className="p-4 flex justify-between items-center sticky top-0 z-10" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+          <h2 className="font-black text-sm uppercase tracking-wider" style={{ color: 'var(--text-1)' }}>Zones</h2>
           <button
             onClick={() => {
               const name = prompt('Zone name:');
@@ -67,57 +67,58 @@ export function FloorPlan() {
               onClick={() => setSelectedZoneId(zone.id)}
               className={`mx-2 mb-1 px-3 py-2.5 rounded-xl cursor-pointer text-sm font-semibold transition-all ${
                 selectedZone?.id === zone.id
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20 shadow-sm'
+                  : 'hover:bg-gray-500/5'
               }`}
+              style={selectedZone?.id === zone.id ? {} : { color: 'var(--text-3)' }}
             >
               {zone.name}
-              <span className="ml-2 text-xs font-bold text-gray-400">{zone.tables?.length || 0}</span>
+              <span className="ml-2 text-xs font-bold" style={{ color: 'var(--text-3)' }}>{zone.tables?.length || 0}</span>
             </div>
           ))}
-          {zones.length === 0 && <div className="p-4 text-xs text-gray-400 text-center">No zones yet. Create one ↑</div>}
+          {zones.length === 0 && <div className="p-4 text-xs text-center" style={{ color: 'var(--text-3)' }}>No zones yet. Create one ↑</div>}
         </div>
       </div>
 
       {/* Main Area */}
       <div className="flex-1 overflow-hidden flex flex-col">
         {/* Summary Stats Bar */}
-        <div className="bg-white border-b border-gray-100 px-6 py-3 flex items-center gap-4 shadow-sm">
-          <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 px-3 py-1.5 rounded-xl">
+        <div className="px-6 py-3 flex items-center gap-4 shadow-sm" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl" style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', color: 'var(--success)' }}>
             <div className="w-2 h-2 rounded-full bg-green-500"></div>
             <span className="text-xs font-black">Available</span>
-            <span className="bg-green-100 text-green-800 font-black text-xs px-1.5 py-0.5 rounded-full">{available}</span>
+            <span className="font-black text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16, 185, 129, 0.2)' }}>{available}</span>
           </div>
-          <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-3 py-1.5 rounded-xl">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', color: 'var(--error)' }}>
             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
             <span className="text-xs font-black">Occupied</span>
-            <span className="bg-red-100 text-red-800 font-black text-xs px-1.5 py-0.5 rounded-full">{occupied}</span>
+            <span className="font-black text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(239, 68, 68, 0.2)' }}>{occupied}</span>
           </div>
           {reserved > 0 && (
-            <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 text-orange-700 px-3 py-1.5 rounded-xl">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl" style={{ background: 'rgba(249, 115, 22, 0.1)', border: '1px solid rgba(249, 115, 22, 0.2)', color: '#f97316' }}>
               <div className="w-2 h-2 rounded-full bg-orange-400"></div>
               <span className="text-xs font-black">Reserved</span>
-              <span className="bg-orange-100 text-orange-800 font-black text-xs px-1.5 py-0.5 rounded-full">{reserved}</span>
+              <span className="font-black text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(249, 115, 22, 0.2)' }}>{reserved}</span>
             </div>
           )}
           {cleaning > 0 && (
-            <div className="flex items-center gap-2 bg-gray-100 border border-gray-200 text-gray-600 px-3 py-1.5 rounded-xl">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl" style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', color: 'var(--text-2)' }}>
               <div className="w-2 h-2 rounded-full bg-gray-500"></div>
               <span className="text-xs font-black">Cleaning</span>
-              <span className="bg-gray-200 text-gray-700 font-black text-xs px-1.5 py-0.5 rounded-full">{cleaning}</span>
+              <span className="font-black text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--border)' }}>{cleaning}</span>
             </div>
           )}
-          <div className="ml-auto text-xs text-gray-400 font-semibold">
+          <div className="ml-auto text-xs font-semibold" style={{ color: 'var(--text-3)' }}>
             {allTables.length} total tables
           </div>
         </div>
 
         {/* Floor Builder Canvas */}
-        <div className="flex-1 overflow-auto p-6 bg-gray-50">
+        <div className="flex-1 overflow-auto p-6" style={{ background: 'var(--bg)' }}>
           {selectedZone ? (
             <FloorBuilder zone={selectedZone} tenantSlug={tenantSlug} />
           ) : (
-            <div className="h-full w-full flex flex-col items-center justify-center text-gray-400 gap-3">
+            <div className="h-full w-full flex flex-col items-center justify-center gap-3" style={{ color: 'var(--text-3)' }}>
               <div className="text-4xl">🍽️</div>
               <p className="font-semibold">Select or create a zone to get started</p>
             </div>
