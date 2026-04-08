@@ -405,7 +405,7 @@ export const login = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'User not found. Please create an account first from the signup page.' });
     }
 
     const isPasswordValid = await verifyPassword(validatedData.password, user.passwordHash);

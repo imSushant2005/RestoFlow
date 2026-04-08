@@ -195,13 +195,14 @@ body.light {
   --scrollbar-thumb: #cbd5e1;
   --scrollbar-thumb-hover: #94a3b8;
 
-  --shell-bg: #f8fafc;
-  --shell-gradient: radial-gradient(ellipse at top right, rgba(37,99,235,0.04), transparent 40%),
-                    radial-gradient(ellipse at bottom left, rgba(16,185,129,0.03), transparent 40%);
+  --shell-bg: #fdfdff;
+  --shell-gradient: radial-gradient(ellipse at top right, rgba(37,99,235,0.06), transparent 50%),
+                    radial-gradient(ellipse at bottom left, rgba(16,185,129,0.05), transparent 50%),
+                    linear-gradient(135deg, rgba(37,99,235,0.02) 0%, rgba(16,185,129,0.02) 100%);
 
   --bg: var(--shell-bg);
   --bg-primary: var(--shell-bg);
-  --bg-secondary: var(--surface);
+  --bg-secondary: #ffffff;
   --text-primary: var(--text-1);
   --text-secondary: var(--text-3);
   --border-primary: var(--border);

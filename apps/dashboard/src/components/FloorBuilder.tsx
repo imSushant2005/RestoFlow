@@ -33,34 +33,34 @@ const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus, highligh
   const isActiveMeal = table.status === 'ACTIVE_MEAL';
   const isAwaitingBill = table.status === 'AWAITING_BILL';
 
-  let statusColor = 'bg-white border-green-500 text-green-900 shadow-green-100';
+  let statusColor = 'bg-[var(--surface-raised)] border-green-500/50 text-green-700 shadow-lg';
   let badgeText = occupiedList.length > 0 ? 'Partially Full' : 'Available';
-  let badgeColor = occupiedList.length > 0 ? 'bg-green-600 text-white' : 'bg-green-500 text-white';
+  let badgeColor = occupiedList.length > 0 ? 'bg-gradient-to-r from-green-600 to-green-500 text-white' : 'bg-gradient-to-r from-emerald-500 to-emerald-400 text-white';
   
   if (isReserved) {
-    statusColor = 'bg-white border-purple-400 text-purple-900 shadow-purple-100';
+    statusColor = 'bg-[var(--surface-raised)] border-purple-500/50 text-purple-700 shadow-lg';
     badgeText = 'Reserved';
-    badgeColor = 'bg-purple-400 text-white';
+    badgeColor = 'bg-gradient-to-r from-purple-500 to-pink-500 text-white';
   } else if (isOrdering) {
-    statusColor = 'bg-blue-50 border-blue-500 text-blue-900 shadow-blue-100';
+    statusColor = 'bg-[var(--surface-raised)] border-blue-500/50 text-blue-700 shadow-lg';
     badgeText = 'Ordering...';
-    badgeColor = 'bg-blue-500 text-white animate-pulse';
+    badgeColor = 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white animate-pulse';
   } else if (isActiveMeal) {
-    statusColor = 'bg-orange-50 border-orange-500 text-orange-900 shadow-orange-100';
+    statusColor = 'bg-[var(--surface-raised)] border-orange-500/50 text-orange-700 shadow-lg';
     badgeText = 'Active Meal';
-    badgeColor = 'bg-orange-500 text-white';
+    badgeColor = 'bg-gradient-to-r from-orange-500 to-amber-500 text-white';
   } else if (isAwaitingBill) {
-    statusColor = 'bg-yellow-50 border-yellow-500 text-yellow-900 shadow-yellow-100';
+    statusColor = 'bg-[var(--surface-raised)] border-yellow-500/50 text-yellow-700 shadow-lg';
     badgeText = 'Awaiting Bill';
-    badgeColor = 'bg-yellow-500 text-white animate-pulse';
+    badgeColor = 'bg-gradient-to-r from-yellow-500 to-amber-400 text-white animate-pulse';
   } else if (isOccupied) {
-    statusColor = 'bg-white border-red-500 text-red-900 shadow-red-100';
+    statusColor = 'bg-[var(--surface-raised)] border-red-500/50 text-red-700 shadow-lg';
     badgeText = 'Occupied';
-    badgeColor = 'bg-red-500 text-white animate-pulse';
+    badgeColor = 'bg-gradient-to-r from-red-500 to-rose-500 text-white animate-pulse';
   } else if (isCleaning) {
-    statusColor = 'bg-gray-100 border-gray-400 text-gray-700 shadow-gray-200';
+    statusColor = 'bg-[var(--surface-raised)] border-gray-500/50 text-gray-400 shadow-lg opacity-80';
     badgeText = 'Cleaning';
-    badgeColor = 'bg-gray-500 text-white';
+    badgeColor = 'bg-gradient-to-r from-gray-500 to-slate-400 text-white';
   }
 
   const seatsTotal = table.seats || table.capacity || 4;
@@ -69,49 +69,50 @@ const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus, highligh
 
   return (
     <div
-      className={`relative min-w-[120px] min-h-[120px] rounded-2xl flex flex-col items-center justify-center hover:scale-105 shadow-sm hover:shadow-lg group border-4 transition-all duration-300 ${statusColor} overflow-hidden ${highlight ? 'ring-4 ring-blue-300 animate-pulse' : ''}`}
+      className={`relative min-w-[120px] min-h-[120px] rounded-2xl flex flex-col items-center justify-center hover:scale-105 group border-2 backdrop-blur-xl transition-all duration-300 ${statusColor} overflow-hidden ${highlight ? 'ring-4 ring-blue-500/50 animate-pulse' : ''}`}
       onClick={() => setShowActions((v) => !v)}
     >
       <div className="absolute inset-0 grid gap-1 p-1.5 pointer-events-none" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
         {seatsArray.map(seat => {
           const isSeatOccupied = occupiedList.includes(seat.toString()) || isGloballyOccupied;
           const seatColor = isSeatOccupied 
-            ? 'bg-red-500 border-red-600 opacity-60' 
-            : 'bg-green-400 border-green-500 opacity-30';
+            ? 'bg-red-500/30 border-red-500/40' 
+            : 'bg-emerald-500/20 border-emerald-500/30';
             
           return (
-            <div key={seat} className={`border-2 rounded-lg flex items-center justify-center ${seatColor} transition-all`}>
-              <span className="text-[11px] font-black text-white/90 mix-blend-overlay">{seat}</span>
+            <div key={seat} className={`border rounded-lg flex items-center justify-center ${seatColor} transition-all`}>
+              <span className="text-[11px] font-black text-[var(--text-1)] mix-blend-overlay opacity-60">{seat}</span>
             </div>
           );
         })}
       </div>
 
-      <span className="font-bold text-3xl mb-1 z-10">{table.name}</span>
-      <span className="text-xs font-medium opacity-80 z-10">{seatsTotal} Seats</span>
-      <span className={`text-[10px] font-bold uppercase tracking-wider mt-1 px-3 py-1 rounded-full z-10 backdrop-blur-sm ${badgeColor}`}>
+      <span className="font-bold text-3xl mb-1 z-10" style={{ color: 'var(--text-1)' }}>{table.name}</span>
+      <span className="text-xs font-medium opacity-80 z-10" style={{ color: 'var(--text-2)' }}>{seatsTotal} Seats</span>
+      <span className={`text-[10px] font-bold uppercase tracking-wider mt-1 px-3 py-1 rounded-full z-10 shadow-lg ${badgeColor}`}>
         {badgeText}
       </span>
       
       {showActions && (
-        <div ref={actionRef} className="absolute bottom-2 left-2 right-2 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2 space-y-1">
+        <div ref={actionRef} className="absolute bottom-2 left-2 right-2 z-20 border rounded-xl shadow-2xl p-2 space-y-1 backdrop-blur-3xl" style={{ background: 'var(--surface-raised)', borderColor: 'var(--border)' }}>
           <button
             onClick={(e) => { e.stopPropagation(); onToggleStatus(table); setShowActions(false); }}
-            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-xs font-bold text-gray-700 flex items-center gap-2"
+            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-500/10 text-xs font-bold flex items-center gap-2 transition-colors"
+            style={{ color: 'var(--text-1)' }}
           >
-            <Power size={13} className={table.status === 'OCCUPIED' ? 'text-red-500' : 'text-green-500'} />
+            <Power size={13} className={table.status === 'OCCUPIED' ? 'text-red-500' : 'text-emerald-500'} />
             {table.status === 'OCCUPIED' ? 'Mark Available' : 'Mark Occupied'}
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); setSelectedTable(table); setShowActions(false); }}
-            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-xs font-bold text-blue-700 flex items-center gap-2"
+            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-blue-500/10 text-xs font-bold text-blue-500 flex items-center gap-2 transition-colors"
           >
             <QrCode size={13} />
             View QR Code
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(table); setShowActions(false); }}
-            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-red-50 text-xs font-bold text-red-600 flex items-center gap-2"
+            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-red-500/10 text-xs font-bold text-red-500 flex items-center gap-2 transition-colors"
           >
             <Trash2 size={13} />
             Delete Table
@@ -256,8 +257,8 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
   return (
     <div className="flex flex-col h-full gap-4">
       {/* Header Bar */}
-      <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
-        <h2 className="text-xl font-bold">{zone.name} Details</h2>
+      <div className="flex justify-between items-center p-4 rounded-xl shadow-sm border border-transparent backdrop-blur-md" style={{ background: 'var(--surface-raised)', borderColor: 'var(--border)' }}>
+        <h2 className="text-xl font-bold" style={{ color: 'var(--text-1)' }}>{zone.name} Details</h2>
         <div className="flex gap-3">
           <button 
             onClick={() => setSelectedTable('roaming')}
@@ -282,21 +283,21 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
       
       {/* Summary Stats Bar */}
       <div className="flex gap-4">
-        <div className="bg-white border-l-4 border-green-500 shadow-sm px-5 py-3 rounded-r-xl font-medium flex-1 flex flex-col">
-          <span className="text-gray-500 text-xs">Available</span>
-          <span className="text-2xl font-bold text-gray-900">{availableCount}</span>
+        <div className="border-l-4 border-green-500 shadow-sm px-5 py-3 rounded-r-xl font-medium flex-1 flex flex-col" style={{ background: 'var(--surface-raised)' }}>
+          <span className="text-xs" style={{ color: 'var(--text-3)' }}>Available</span>
+          <span className="text-2xl font-bold" style={{ color: 'var(--text-1)' }}>{availableCount}</span>
         </div>
-        <div className="bg-white border-l-4 border-red-500 shadow-sm px-5 py-3 rounded-r-xl font-medium flex-1 flex flex-col">
-          <span className="text-gray-500 text-xs">Occupied</span>
-          <span className="text-2xl font-bold text-gray-900">{occupiedCount}</span>
+        <div className="border-l-4 border-red-500 shadow-sm px-5 py-3 rounded-r-xl font-medium flex-1 flex flex-col" style={{ background: 'var(--surface-raised)' }}>
+          <span className="text-xs" style={{ color: 'var(--text-3)' }}>Occupied</span>
+          <span className="text-2xl font-bold" style={{ color: 'var(--text-1)' }}>{occupiedCount}</span>
         </div>
-        <div className="bg-white border-l-4 border-yellow-500 shadow-sm px-5 py-3 rounded-r-xl font-medium flex-1 flex flex-col">
-          <span className="text-gray-500 text-xs">Reserved</span>
-          <span className="text-2xl font-bold text-gray-900">{reservedCount}</span>
+        <div className="border-l-4 border-yellow-500 shadow-sm px-5 py-3 rounded-r-xl font-medium flex-1 flex flex-col" style={{ background: 'var(--surface-raised)' }}>
+          <span className="text-xs" style={{ color: 'var(--text-3)' }}>Reserved</span>
+          <span className="text-2xl font-bold" style={{ color: 'var(--text-1)' }}>{reservedCount}</span>
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-3 flex flex-wrap gap-3 text-xs font-semibold text-gray-600">
+      <div className="rounded-xl p-3 flex flex-wrap gap-3 text-xs font-semibold shadow-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)', borderWidth: 1, color: 'var(--text-2)' }}>
         <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Available</span>
         <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Occupied</span>
         <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Ordering</span>
@@ -306,12 +307,12 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
       </div>
 
       {/* CSS Grid Floor Plan */}
-      <div className="bg-slate-50 border border-gray-200 rounded-xl p-6 flex-1 shadow-inner overflow-y-auto">
+      <div className="rounded-xl p-6 flex-1 overflow-y-auto" style={{ background: 'var(--shell-bg)', border: '1px solid var(--border)', boxShadow: 'inset 0 2px 4px 0 rgba(0,0,0,0.02)' }}>
         {zone.tables?.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-gray-400">
+          <div className="h-full flex flex-col items-center justify-center" style={{ color: 'var(--text-3)' }}>
             <Plus size={48} className="mb-2 opacity-20" />
-            <p>No tables configured for this zone yet.</p>
-            <p className="text-sm">Click 'Add Table' to begin mapping your floor plan.</p>
+            <p className="font-semibold text-lg">No tables configured for this zone yet.</p>
+            <p className="text-sm mt-1">Click 'Add Table' to begin mapping your floor plan.</p>
           </div>
         ) : (
           <div className="w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-6">
@@ -332,15 +333,15 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
 
       {/* QR Modal */}
       {selectedTable && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-8 rounded-2xl max-w-sm w-full shadow-2xl flex flex-col items-center text-center">
-            <h3 className="text-2xl font-bold mb-2">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="p-8 rounded-3xl max-w-sm w-full shadow-[0_24px_64px_rgba(0,0,0,0.2)] flex flex-col items-center text-center transform transition-all border" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+            <h3 className="text-2xl font-black mb-3 tracking-tight" style={{ color: 'var(--text-1)' }}>
               {selectedTable === 'roaming' ? 'Roaming Vendor QR' : `Table ${selectedTable.name}`}
             </h3>
-            <div className="flex flex-wrap gap-2 mb-4 justify-center select-none">
+            <div className="flex flex-wrap gap-2 mb-6 justify-center select-none w-full">
               <button 
                 onClick={() => setSelectedSeatQR('FULL')} 
-                className={`px-3 py-1.5 text-xs rounded-full font-bold transition-colors ${selectedSeatQR === 'FULL' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                className={`px-4 py-2 text-xs rounded-full font-bold transition-all shadow-sm ${selectedSeatQR === 'FULL' ? 'bg-blue-600 text-white ring-2 ring-blue-600/30' : 'bg-[var(--surface-3)] hover:bg-[var(--surface-2)] text-[var(--text-2)] border border-[var(--border)]'}`}
               >
                 Full Table
               </button>
@@ -348,14 +349,14 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
                 <button 
                   key={seat}
                   onClick={() => setSelectedSeatQR(seat)} 
-                  className={`px-3 py-1.5 text-xs rounded-full font-bold transition-colors ${selectedSeatQR === seat ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                  className={`px-4 py-2 text-xs rounded-full font-bold transition-all shadow-sm ${selectedSeatQR === seat ? 'bg-blue-600 text-white ring-2 ring-blue-600/30' : 'bg-[var(--surface-3)] hover:bg-[var(--surface-2)] text-[var(--text-2)] border border-[var(--border)]'}`}
                 >
                   Seat {seat}
                 </button>
               ))}
             </div>
             
-            <div className="p-4 bg-white rounded-xl shadow-inner border border-gray-100" ref={qrRef}>
+            <div className="p-5 rounded-2xl shadow-inner border w-full flex justify-center bg-white" style={{ borderColor: 'var(--border)' }} ref={qrRef}>
               <QRCodeSVG 
                 value={
                   selectedTable === 'roaming' 
@@ -371,8 +372,8 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
             </div>
 
             <div className="flex gap-3 mt-8 w-full">
-              <button onClick={() => { setSelectedTable(null); setSelectedSeatQR('FULL'); }} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors">Close</button>
-              <button onClick={downloadQR} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2">
+              <button onClick={() => { setSelectedTable(null); setSelectedSeatQR('FULL'); }} className="flex-1 py-3 text-sm font-bold rounded-xl transition-colors border" style={{ background: 'var(--surface-3)', color: 'var(--text-2)', borderColor: 'var(--border)' }}>Close</button>
+              <button onClick={downloadQR} className="flex-1 py-3 text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25">
                 Download PNG
               </button>
             </div>

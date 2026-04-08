@@ -122,7 +122,7 @@ export function DashboardOverview() {
   }, [liveOrders]);
 
   return (
-    <div className="h-full overflow-y-auto p-3 sm:p-5 lg:p-6">
+    <div className="p-3 sm:p-5 lg:p-6 min-h-full">
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
           {[

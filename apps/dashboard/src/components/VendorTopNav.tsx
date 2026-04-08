@@ -150,8 +150,8 @@ export function VendorTopNav({
 
   return (
     <header
-      className="relative flex flex-wrap items-center justify-between gap-3 rounded-2xl px-2 py-2 sm:px-3"
-      style={{ borderBottom: '1px solid var(--border)' }}
+      className="relative flex flex-wrap items-center justify-between gap-3 rounded-2xl px-2 py-2 sm:px-3 shadow-sm backdrop-blur-md"
+      style={{ border: '1px solid var(--border)', background: 'var(--sidebar-bg)' }}
     >
       <div className="min-w-0">
         <h1

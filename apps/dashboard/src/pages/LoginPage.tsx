@@ -204,6 +204,11 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           }
         >
           {authError}
+          {authError.toLowerCase().includes('create an account') && (
+            <div className="mt-2 pt-2 border-t border-red-500/20">
+              <Link to="/signup" className="font-bold underline hover:no-underline">Go to Sign Up page →</Link>
+            </div>
+          )}
         </div>
       ) : null}
 

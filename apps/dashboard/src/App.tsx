@@ -34,6 +34,8 @@ import { DashboardErrorBoundary } from './components/DashboardErrorBoundary';
 import { VendorTopNav, type OpsNotification } from './components/VendorTopNav';
 import { useRealtimeSocket } from './hooks/useRealtimeSocket';
 import { api } from './lib/api';
+import { driver } from 'driver.js';
+import 'driver.js/dist/driver.css';
 
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER' | 'UNKNOWN';
 
@@ -42,93 +44,7 @@ const ORDERS_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER
 const BILLING_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER']);
 const BUSINESS_READ_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER']);
 
-type DemoStep = {
-  title: string;
-  summary: string;
-  actionLabel: string;
-  route: string;
-  checklist: string[];
-};
-
-const DASHBOARD_DEMO_STEPS: DemoStep[] = [
-  {
-    title: 'Menu Management',
-    summary: 'Create categories and menu items here. This is the source of truth for what guests can order.',
-    actionLabel: 'Menu',
-    route: '/app/menu',
-    checklist: [
-      'Add categories like Starters, Mains, and Desserts.',
-      'Create items, set prices, and keep descriptions up to date.',
-      'Use View Live Site to preview how customers will see your menu.',
-    ],
-  },
-  {
-    title: 'Tables & QR Setup',
-    summary: 'Design your floor layout and generate tables linked to QR ordering.',
-    actionLabel: 'Tables & QR',
-    route: '/app/tables',
-    checklist: [
-      'Create zones and place tables where they belong.',
-      'Track table statuses: available, occupied, reserved, or cleaning.',
-      'Use QR links so guests can start sessions directly from their table.',
-    ],
-  },
-  {
-    title: 'Live Orders Pipeline',
-    summary: 'Monitor incoming orders in real time and move them through kitchen and service stages.',
-    actionLabel: 'Live Orders',
-    route: '/app/orders',
-    checklist: [
-      'Watch orders appear instantly as guests place them.',
-      'Update status to keep kitchen and service teams synced.',
-      'Handle waiter calls and close sessions once service is complete.',
-    ],
-  },
-  {
-    title: 'Billing & Invoices',
-    summary: 'Finalize completed sessions, collect payments, and generate invoices.',
-    actionLabel: 'Billing',
-    route: '/app/billing',
-    checklist: [
-      'Review completed orders with tax and discount totals.',
-      'Print or download invoices when needed.',
-      'Split bills and mark payments to close the loop quickly.',
-    ],
-  },
-  {
-    title: 'Analytics Insights',
-    summary: 'Understand revenue trends, peak hours, and top-performing items.',
-    actionLabel: 'Analytics',
-    route: '/app/analytics',
-    checklist: [
-      'Choose a date range to compare business performance.',
-      'Track conversion and order volume to spot bottlenecks.',
-      'Export data when you need reporting outside the dashboard.',
-    ],
-  },
-  {
-    title: 'Settings & Team Controls',
-    summary: 'Manage business profile, team accounts, and operational defaults.',
-    actionLabel: 'Settings',
-    route: '/app/settings',
-    checklist: [
-      'Update restaurant details and customer-facing settings.',
-      'Add staff members and assign roles safely.',
-      'Adjust system options as your operations grow.',
-    ],
-  },
-  {
-    title: 'Daily Workflow',
-    summary: 'Most teams run this loop: update menu, monitor live orders, then settle billing and review analytics.',
-    actionLabel: 'Live Orders',
-    route: '/app/orders',
-    checklist: [
-      "Start by confirming today's menu and table readiness.",
-      'Keep the Orders view open during service for real-time control.',
-      'Close the day with billing checks and analytics review.',
-    ],
-  },
-];
+// REMOVED STATIC DASHBOARD_DEMO_STEPS
 
 function normalizeDashboardRole(rawRole?: string | null): DashboardRole {
   const normalized = (rawRole || '').toUpperCase();
@@ -256,12 +172,10 @@ function PostLoginRedirect({ mustChangePassword }: { mustChangePassword: boolean
 
 function DashboardShell() {
   const location = useLocation();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [liveOrderCount, setLiveOrderCount] = useState(0);
   const [showFirstTimeDemo, setShowFirstTimeDemo] = useState(false);
-  const [demoStep, setDemoStep] = useState(0);
   const [notifications, setNotifications] = useState<OpsNotification[]>([]);
   const [notificationsHydrated, setNotificationsHydrated] = useState(false);
   const role = normalizeDashboardRole(localStorage.getItem('userRole'));
@@ -300,8 +214,6 @@ function DashboardShell() {
   const isLoading = canShowAdminShellData && (businessQuery.isLoading || billingQuery.isLoading);
   const demoStorageKey = getDemoStorageKey(business);
   const notificationStorageKey = useMemo(() => getDemoStorageKey(business).replace('demo_seen', 'notifications'), [business]);
-  const activeDemoStep = DASHBOARD_DEMO_STEPS[demoStep];
-  const isLastDemoStep = demoStep === DASHBOARD_DEMO_STEPS.length - 1;
 
   const refreshLiveOrderCount = useCallback(async () => {
     if (!canAccessOrders) {
@@ -489,32 +401,30 @@ function DashboardShell() {
     const hasSeenDemo = localStorage.getItem(demoStorageKey) === '1';
     if (hasSeenDemo) return;
     setShowFirstTimeDemo(true);
-    setDemoStep(0);
+
+    const driverObj = driver({
+      showProgress: true,
+      steps: [
+        { popover: { title: 'Welcome to RestoFlow', description: 'Let us take a quick tour of your workspace. Click Next to begin.' }},
+        { element: '#nav-menu', popover: { title: 'Menu Management', description: 'Create categories and menu items here. This is the source of truth for what guests can order.', side: "right", align: 'start' }},
+        { element: '#nav-tables-qr', popover: { title: 'Tables & QR Setup', description: 'Design your floor layout and generate tables linked to QR ordering.', side: "right", align: 'start' }},
+        { element: '#nav-live-orders', popover: { title: 'Live Orders Pipeline', description: 'Monitor incoming orders in real time and move them through kitchen and service stages.', side: "right", align: 'start' }},
+        { element: '#nav-billing', popover: { title: 'Billing & Invoices', description: 'Finalize completed sessions, collect payments, and generate invoices.', side: "right", align: 'start' }},
+        { element: '#nav-analytics', popover: { title: 'Analytics Insights', description: 'Understand revenue trends, peak hours, and top-performing items.', side: "right", align: 'start' }},
+        { element: '#nav-settings', popover: { title: 'Settings & Team Controls', description: 'Manage business profile, team accounts, and operational defaults.', side: "right", align: 'start' }},
+        { popover: { title: 'You are all set!', description: 'Explore the dashboard on your own. You can update your settings at any time.' }},
+      ],
+      onDestroyStarted: () => {
+        if (!driverObj.hasNextStep() || confirm("Are you sure you want to skip the tour?")) {
+           driverObj.destroy();
+           localStorage.setItem(demoStorageKey, '1');
+        }
+      }
+    });
+
+    driverObj.drive();
+
   }, [business, canShowFirstTimeDemo, demoStorageKey, isLoading, showFirstTimeDemo]);
-
-  const finishDemo = () => {
-    localStorage.setItem(demoStorageKey, '1');
-    setShowFirstTimeDemo(false);
-  };
-
-  const goToPreviousDemoStep = () => {
-    setDemoStep((prev) => Math.max(prev - 1, 0));
-  };
-
-  const goToNextDemoStep = () => {
-    if (isLastDemoStep) {
-      finishDemo();
-      return;
-    }
-    setDemoStep((prev) => Math.min(prev + 1, DASHBOARD_DEMO_STEPS.length - 1));
-  };
-
-  const openDemoSection = () => {
-    if (!activeDemoStep) return;
-    if (location.pathname !== activeDemoStep.route) {
-      navigate(activeDemoStep.route);
-    }
-  };
 
   if (isLoading) {
     return <ScreenLoader message="Syncing profile..." />;
@@ -601,6 +511,7 @@ function DashboardShell() {
               <Link
                 key={to}
                 to={to}
+                id={`nav-${label.toLowerCase().replace(/ & /g, '-').replace(' ', '-')}`}
                 className={`flex items-center ${sidebarCollapsed ? 'justify-center' : ''} gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all relative group border ${
                   active ? 'border-blue-500/20' : 'border-transparent'
                 }`}
@@ -665,7 +576,7 @@ function DashboardShell() {
           />
         </div>
 
-        <div className="min-h-0 flex-1 px-2 pb-2 pt-2 sm:px-3 sm:pb-3 lg:px-5 lg:pb-5">
+        <div id="scroll-container" className="min-h-0 flex-1 px-2 pb-2 pt-2 sm:px-3 sm:pb-3 lg:px-5 lg:pb-5 overflow-y-auto custom-scrollbar relative">
           <DashboardErrorBoundary>
             <Routes>
               {canAccessDashboard && <Route index element={<DashboardOverview />} />}
@@ -682,74 +593,7 @@ function DashboardShell() {
         </div>
       </main>
 
-      {showFirstTimeDemo && activeDemoStep && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-            <div className="bg-slate-900 px-6 py-5 text-white">
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-blue-300">First-Time Demo</p>
-              <h3 className="mt-1 text-2xl font-black tracking-tight">How RestoFlow Works</h3>
-              <p className="mt-2 text-sm text-slate-300">
-                Step {demoStep + 1} of {DASHBOARD_DEMO_STEPS.length}
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {DASHBOARD_DEMO_STEPS.map((stepItem, index) => (
-                  <span
-                    key={stepItem.title}
-                    className={`h-1.5 min-w-[28px] flex-1 rounded-full ${index <= demoStep ? 'bg-blue-400' : 'bg-slate-700'}`}
-                  />
-                ))}
-              </div>
-            </div>
 
-            <div className="space-y-5 px-6 py-6">
-              <div>
-                <h4 className="text-xl font-black text-slate-900">{activeDemoStep.title}</h4>
-                <p className="mt-1 text-sm font-medium text-slate-600">{activeDemoStep.summary}</p>
-              </div>
-
-              <ul className="space-y-2">
-                {activeDemoStep.checklist.map((point) => (
-                  <li key={point} className="flex items-start gap-2 text-sm text-slate-700">
-                    <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
-                    <span>{point}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
-                <button
-                  onClick={finishDemo}
-                  className="text-sm font-bold text-slate-500 transition-colors hover:text-slate-800"
-                >
-                  Skip Demo
-                </button>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={goToPreviousDemoStep}
-                    disabled={demoStep === 0}
-                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    onClick={openDemoSection}
-                    className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 transition-colors hover:bg-blue-100"
-                  >
-                    Open {activeDemoStep.actionLabel}
-                  </button>
-                  <button
-                    onClick={goToNextDemoStep}
-                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700"
-                  >
-                    {isLastDemoStep ? 'Finish Demo' : 'Next'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -45,9 +45,9 @@ export function FloorPlan() {
   const reserved = allTables.filter((t: any) => t.status === 'RESERVED').length;
 
   return (
-    <div className="flex w-full h-full" style={{ background: 'var(--bg)' }}>
+    <div className="flex w-full min-h-full" style={{ background: 'var(--bg)' }}>
       {/* Zone Sidebar */}
-      <div className="w-56 h-full flex flex-col shadow-sm" style={{ background: 'var(--surface)', borderRight: '1px solid var(--border)' }}>
+      <div className="w-56 flex flex-col shadow-sm" style={{ background: 'var(--surface)', borderRight: '1px solid var(--border)' }}>
         <div className="p-4 flex justify-between items-center sticky top-0 z-10" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
           <h2 className="font-black text-sm uppercase tracking-wider" style={{ color: 'var(--text-1)' }}>Zones</h2>
           <button
