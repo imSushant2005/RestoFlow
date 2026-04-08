@@ -5,15 +5,24 @@ import { publicApi } from '../lib/api';
 const CALL_TYPES = [
   { id: 'WAITER', label: 'Call Waiter', icon: <Hand size={22} />, color: 'bg-blue-500', desc: 'A waiter will come to your table' },
   { id: 'BILL', label: 'Request Bill', icon: <Receipt size={22} />, color: 'bg-emerald-500', desc: 'Get the bill at your table' },
+  { id: 'WATER', label: 'Request Water', icon: <Hand size={22} />, color: 'bg-cyan-500', desc: 'Need fresh water' },
+  { id: 'EXTRA', label: 'Request Extra', icon: <Receipt size={22} />, color: 'bg-indigo-500', desc: 'Need spoons, napkins, etc.' },
   { id: 'HELP', label: 'Need Help', icon: <HelpCircle size={22} />, color: 'bg-orange-500', desc: 'Need assistance with something' },
 ];
 
-export function WaiterCall({ tenantSlug, tableId }: { tenantSlug: string; tableId?: string }) {
+export function WaiterCall({ tenantSlug, tableId: initialTableId }: { tenantSlug: string; tableId?: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [status, setStatus] = useState<'IDLE' | 'SENDING' | 'SENT'>('IDLE');
   const [sentType, setSentType] = useState('');
+  const [manualTable, setManualTable] = useState('');
+
+  const tableId = initialTableId || manualTable;
 
   const handleCall = async (type: string) => {
+    if (!tableId) {
+      alert('Please enter your table number first.');
+      return;
+    }
     setStatus('SENDING');
     setSentType(type);
     try {
@@ -28,17 +37,17 @@ export function WaiterCall({ tenantSlug, tableId }: { tenantSlug: string; tableI
     }
   };
 
-  if (!tableId) return null;
+  // Removed the !tableId return to allow showing the button for all users
 
   return (
     <>
       {/* Floating Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-20 right-4 z-30 py-2 px-4 bg-blue-600 text-white rounded-full shadow-md active:scale-95 transition-transform"
+        className="fixed bottom-20 right-4 z-30 w-14 h-14 bg-blue-600 text-white rounded-full shadow-2xl shadow-blue-500/40 active:scale-95 transition-all flex items-center justify-center border-4 border-white/20 backdrop-blur-sm group"
         aria-label="Call Waiter"
       >
-        Call
+        <Hand size={24} className="group-hover:rotate-12 transition-transform" />
       </button>
 
       {/* Modal */}
@@ -67,6 +76,19 @@ export function WaiterCall({ tenantSlug, tableId }: { tenantSlug: string; tableI
                     <X size={18} className="text-[color:var(--text-secondary)]" />
                   </button>
                 </div>
+
+                {!initialTableId && (
+                  <div className="mb-6 p-4 rounded-xl bg-blue-50 border border-blue-100">
+                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-2">Assign Table First</p>
+                    <input
+                      type="text"
+                      placeholder="Enter Table Number (e.g. T4)"
+                      value={manualTable}
+                      onChange={(e) => setManualTable(e.target.value)}
+                      className="w-full px-4 py-2 rounded-lg border border-blue-200 bg-white text-sm font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
                 <div className="grid gap-3">
                   {CALL_TYPES.map((ct) => (
                     <button

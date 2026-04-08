@@ -12,6 +12,7 @@ import {
   Phone,
   Settings,
   UserCircle2,
+  Zap,
 } from 'lucide-react';
 import { getCustomerAppUrl } from '../lib/network';
 
@@ -21,7 +22,7 @@ export type OpsNotification = {
   id: string;
   title: string;
   message: string;
-  level: 'info' | 'warning' | 'success';
+  level: 'info' | 'warning' | 'success' | 'error';
   createdAt: string;
   read: boolean;
 };
@@ -76,6 +77,7 @@ function safeDateLabel(value: string) {
 function levelDot(level: OpsNotification['level']) {
   if (level === 'success') return '#10b981';
   if (level === 'warning') return '#f59e0b';
+  if (level === 'error') return '#ef4444';
   return '#3b82f6';
 }
 
@@ -107,6 +109,10 @@ export function VendorTopNav({
     const id = window.setInterval(() => setNow(new Date()), 30000);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    document.title = `${headerLabel} | Restoflow Dashboard`;
+  }, [headerLabel]);
 
   useEffect(() => {
     const onMouseDown = (event: MouseEvent) => {
@@ -324,20 +330,20 @@ export function VendorTopNav({
                   <button
                     onClick={() => canAccessBilling && navigate('/app/billing')}
                     disabled={!canAccessBilling}
-                    className="inline-flex items-center justify-center gap-1 rounded-xl border px-3 py-2 text-xs font-black uppercase tracking-[0.08em] transition disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex items-center justify-center gap-1 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-[0.08em] transition disabled:cursor-not-allowed disabled:opacity-50"
                     style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-2)' }}
                   >
                     <CreditCard size={13} />
-                    Billing
+                    Invoices
                   </button>
                   <button
-                    onClick={() => canAccessSettings && navigate('/app/settings')}
-                    disabled={!canAccessSettings}
-                    className="inline-flex items-center justify-center gap-1 rounded-xl border px-3 py-2 text-xs font-black uppercase tracking-[0.08em] transition disabled:cursor-not-allowed disabled:opacity-50"
-                    style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-2)' }}
+                    onClick={() => canAccessBilling && navigate('/app/subscription')}
+                    disabled={!canAccessBilling}
+                    className="inline-flex items-center justify-center gap-1 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-[0.08em] transition disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--brand)' }}
                   >
-                    <Settings size={13} />
-                    Profile
+                    <Zap size={13} />
+                    Plans
                   </button>
                 </div>
                 <button

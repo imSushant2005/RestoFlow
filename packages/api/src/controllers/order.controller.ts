@@ -165,25 +165,25 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
       });
     }
 
-    if ((normalizedStatus === 'RECEIVED' || normalizedStatus === 'CANCELLED') && order.tableId) {
-      await prisma.table.update({
-        where: { id: order.tableId },
-        data: { status: 'CLEANING', currentOrderId: null, occupiedSeats: [] },
-      });
-      getIO().to(tenantRoom).emit('table:status_change', { tableId: order.tableId, status: 'CLEANING' });
-    }
+    // Table status is now managed exclusively by DiningSession creation and closure to support multi-order sessions.
+    // Individual order completion should NOT trigger a table reset to CLEANING.
 
     if (order.customerPhone) {
-      if (normalizedStatus === 'ACCEPTED') {
-        await sendWhatsAppNotification(
-          order.customerPhone,
-          `Hi ${order.customerName || 'Customer'}! Your order ${order.orderNumber} has been accepted and is being prepared.`
-        );
-      } else if (normalizedStatus === 'READY') {
-        await sendWhatsAppNotification(
-          order.customerPhone,
-          `Great news! Your order ${order.orderNumber} is ready. Please collect it or our staff will serve it shortly.`
-        );
+      try {
+        if (normalizedStatus === 'ACCEPTED') {
+          await sendWhatsAppNotification(
+            order.customerPhone,
+            `Hi ${order.customerName || 'Customer'}! Your order ${order.orderNumber} has been accepted and is being prepared.`
+          );
+        } else if (normalizedStatus === 'READY') {
+          await sendWhatsAppNotification(
+            order.customerPhone,
+            `Great news! Your order ${order.orderNumber} is ready. Please collect it or our staff will serve it shortly.`
+          );
+        }
+      } catch (notifError) {
+        console.error('[NOTIF_ERROR] WhatsApp delivery failed:', notifError);
+        // We continue as the order update itself was successful in the DB.
       }
     }
 

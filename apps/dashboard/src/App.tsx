@@ -21,7 +21,8 @@ import { DashboardOverview } from './pages/DashboardOverview';
 import { Analytics } from './pages/Analytics';
 import { Settings } from './pages/Settings';
 import { Onboarding } from './pages/Onboarding';
-import { Billing } from './pages/Billing';
+import { InvoicesPage as Billing } from './pages/InvoicesPage';
+import { PlansHub as SubscriptionPage } from './pages/PlansHub';
 import { Admin } from './pages/Admin';
 import { WaiterPage } from './pages/WaiterPage';
 import { FirstLoginPasswordGate } from './components/FirstLoginPasswordGate';
@@ -40,9 +41,9 @@ import 'driver.js/dist/driver.css';
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER' | 'UNKNOWN';
 
 const FULL_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER']);
-const ORDERS_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'KITCHEN']);
+const ORDERS_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'KITCHEN', 'WAITER']);
 const BILLING_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER']);
-const BUSINESS_READ_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER']);
+const BUSINESS_READ_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'KITCHEN', 'WAITER']);
 
 // REMOVED STATIC DASHBOARD_DEMO_STEPS
 
@@ -178,6 +179,7 @@ function DashboardShell() {
   const [liveOrderCount, setLiveOrderCount] = useState(0);
   const [showFirstTimeDemo, setShowFirstTimeDemo] = useState(false);
   const [notifications, setNotifications] = useState<OpsNotification[]>([]);
+  const [toasts, setToasts] = useState<OpsNotification[]>([]);
   const [notificationsHydrated, setNotificationsHydrated] = useState(false);
   const role = normalizeDashboardRole(localStorage.getItem('userRole'));
   const defaultRoute = getDefaultRouteForRole(role);
@@ -213,6 +215,7 @@ function DashboardShell() {
   const business = businessQuery.data;
   const billing = billingQuery.data;
   const isLoading = canShowAdminShellData && (businessQuery.isLoading || billingQuery.isLoading);
+  const isError = canShowAdminShellData && (businessQuery.isError || billingQuery.isError);
   const demoStorageKey = getDemoStorageKey(business);
   const notificationStorageKey = useMemo(() => getDemoStorageKey(business).replace('demo_seen', 'notifications'), [business]);
 
@@ -231,17 +234,31 @@ function DashboardShell() {
 
   const pushNotification = useCallback(
     (entry: Omit<OpsNotification, 'id' | 'read' | 'createdAt'> & { createdAt?: string }) => {
-      setNotifications((previous) => {
-        const next: OpsNotification = {
-          id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-          title: entry.title,
-          message: entry.message,
-          level: entry.level,
-          createdAt: entry.createdAt || new Date().toISOString(),
-          read: false,
-        };
-        return [next, ...previous].slice(0, 60);
-      });
+      const id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const next: OpsNotification = {
+        id,
+        title: entry.title,
+        message: entry.message,
+        level: entry.level,
+        createdAt: entry.createdAt || new Date().toISOString(),
+        read: false,
+      };
+
+      setNotifications((previous) => [next, ...previous].slice(0, 60));
+      
+      console.log('Pushing Notification:', next);
+      // TRIGGER TOAST & SOUND
+      setToasts((prev) => [...prev, next]);
+      try {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.volume = 0.5;
+        audio.play().catch((err) => console.warn('Notification sound blocked:', err));
+      } catch (e) {}
+
+      // AUTO REMOVE TOAST AFTER 6s
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 6000);
     },
     [],
   );
@@ -349,17 +366,25 @@ function DashboardShell() {
           });
           return;
         }
-        if (callType === 'HELP') {
+        if (callType === 'WATER') {
           pushNotification({
-            title: 'Help Request',
-            message: `${tableName} requested staff assistance.`,
-            level: 'warning',
+            title: 'Water Request',
+            message: `${tableName} needs fresh water.`,
+            level: 'info',
+          });
+          return;
+        }
+        if (callType === 'EXTRA') {
+          pushNotification({
+            title: 'Service Request',
+            message: `${tableName} requested spoons/napkins.`,
+            level: 'info',
           });
           return;
         }
         pushNotification({
-          title: 'Water Call',
-          message: `${tableName} requested water or waiter attention.`,
+          title: 'Waiter Call',
+          message: `${tableName} requested attention.`,
           level: 'info',
         });
       },
@@ -382,7 +407,7 @@ function DashboardShell() {
   );
 
   useRealtimeSocket({
-    enabled: canAccessOrders && role !== 'WAITER',
+    enabled: canAccessOrders,
     handlers: realtimeHandlers,
     onReconnect: () => {
       queryClient.invalidateQueries({ queryKey: ['live-orders'] });
@@ -454,7 +479,16 @@ function DashboardShell() {
     );
   }
 
-  if (canShowAdminShellData && business && needsWorkspaceSetup(business)) {
+  if (canShowAdminShellData && isError && role !== 'WAITER' && role !== 'KITCHEN') {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen space-y-4">
+        <div className="text-red-500 font-bold">Error loading workspace data</div>
+        <button onClick={() => window.location.reload()} className="px-4 py-2 bg-blue-600 text-white rounded-lg">Retry</button>
+      </div>
+    );
+  }
+
+  if (canShowAdminShellData && business && needsWorkspaceSetup(business) && FULL_ACCESS_ROLES.has(role)) {
     return <Navigate to="/setup" replace />;
   }
 
@@ -473,12 +507,20 @@ function DashboardShell() {
     ...(canAccessMenu ? ['/app/menu'] : []),
     ...(canAccessTables ? ['/app/tables'] : []),
     ...(canAccessOrders ? ['/app/orders'] : []),
-    ...(canAccessBilling ? ['/app/billing'] : []),
+    ...(canAccessBilling ? ['/app/billing', '/app/subscription'] : []),
     ...(canAccessAnalytics ? ['/app/analytics'] : []),
     ...(canAccessSettings ? ['/app/settings'] : []),
   ]);
 
-  if (!allowedPaths.has(location.pathname)) {
+  const isPathAllowed = (() => {
+    // Exact match for the dashboard home or specific tools
+    if (allowedPaths.has(location.pathname)) return true;
+    // Special case for sub-paths or trailing slashes
+    if (allowedPaths.has(location.pathname.replace(/\/\$/, ''))) return true;
+    return false;
+  })();
+
+  if (!isPathAllowed) {
     return <Navigate to={defaultRoute} replace />;
   }
 
@@ -589,6 +631,7 @@ function DashboardShell() {
               {canAccessAnalytics && <Route path="analytics" element={<Analytics />} />}
               {canAccessSettings && <Route path="settings" element={<Settings />} />}
               {canAccessBilling && <Route path="billing" element={<Billing />} />}
+              {canAccessBilling && <Route path="subscription" element={<SubscriptionPage />} />}
               {role === 'WAITER' && <Route path="waiter" element={<WaiterPage />} />}
               <Route path="*" element={<Navigate to={defaultRoute} replace />} />
             </Routes>
@@ -596,7 +639,40 @@ function DashboardShell() {
         </div>
       </main>
 
+      {/* Floating Toasts */}
+      <div className="fixed top-6 right-6 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className="pointer-events-auto flex items-start gap-4 p-4 rounded-2xl shadow-2xl border transition-all active:scale-95"
+            style={{ 
+              background: 'var(--surface)', 
+              borderColor: toast.level === 'warning' ? '#f59e0b66' : toast.level === 'error' ? '#ef444466' : 'var(--border)',
+              boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.15), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
+              animation: 'toast-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+            }}
+          >
+            <div 
+              className="mt-1 h-3 w-3 rounded-full flex-shrink-0 animate-pulse" 
+              style={{ 
+                background: toast.level === 'warning' ? '#f59e0b' : toast.level === 'error' ? '#ef4444' : '#3b82f6',
+                boxShadow: toast.level === 'warning' ? '0 0 10px #f59e0b' : toast.level === 'error' ? '0 0 10px #ef4444' : '0 0 10px #3b82f6'
+              }} 
+            />
+            <div className="flex-1 min-w-0">
+              <p className="font-black text-sm uppercase tracking-tight" style={{ color: 'var(--text-1)' }}>{toast.title}</p>
+              <p className="text-xs font-bold mt-1 leading-relaxed" style={{ color: 'var(--text-2)' }}>{toast.message}</p>
+            </div>
+          </div>
+        ))}
+      </div>
 
+      <style>{`
+        @keyframes toast-enter {
+          0% { transform: translateX(100%) scale(0.9); opacity: 0; }
+          100% { transform: translateX(0) scale(1); opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }

@@ -20,6 +20,8 @@ export const BUSINESS_SETTINGS_READ_ROLES: UserRole[] = [
   UserRole.OWNER,
   UserRole.MANAGER,
   UserRole.CASHIER,
+  UserRole.WAITER,
+  UserRole.KITCHEN,
 ];
 
 export const BILLING_VIEW_ROLES: UserRole[] = [

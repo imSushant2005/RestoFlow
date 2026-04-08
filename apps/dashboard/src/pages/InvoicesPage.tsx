@@ -30,7 +30,7 @@ type OrderRow = {
   }>;
 };
 
-export function Billing() {
+export function InvoicesPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<OrderRow | null>(null);
 
   const { data: business } = useQuery({

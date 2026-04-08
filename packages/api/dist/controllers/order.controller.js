@@ -158,19 +158,20 @@ const updateOrderStatus = async (req, res) => {
                 updatedAt: new Date().toISOString(),
             });
         }
-        if ((normalizedStatus === 'RECEIVED' || normalizedStatus === 'CANCELLED') && order.tableId) {
-            await prisma_1.prisma.table.update({
-                where: { id: order.tableId },
-                data: { status: 'CLEANING', currentOrderId: null, occupiedSeats: [] },
-            });
-            (0, socket_1.getIO)().to(tenantRoom).emit('table:status_change', { tableId: order.tableId, status: 'CLEANING' });
-        }
+        // Table status is now managed exclusively by DiningSession creation and closure to support multi-order sessions.
+        // Individual order completion should NOT trigger a table reset to CLEANING.
         if (order.customerPhone) {
-            if (normalizedStatus === 'ACCEPTED') {
-                await (0, notification_service_1.sendWhatsAppNotification)(order.customerPhone, `Hi ${order.customerName || 'Customer'}! Your order ${order.orderNumber} has been accepted and is being prepared.`);
+            try {
+                if (normalizedStatus === 'ACCEPTED') {
+                    await (0, notification_service_1.sendWhatsAppNotification)(order.customerPhone, `Hi ${order.customerName || 'Customer'}! Your order ${order.orderNumber} has been accepted and is being prepared.`);
+                }
+                else if (normalizedStatus === 'READY') {
+                    await (0, notification_service_1.sendWhatsAppNotification)(order.customerPhone, `Great news! Your order ${order.orderNumber} is ready. Please collect it or our staff will serve it shortly.`);
+                }
             }
-            else if (normalizedStatus === 'READY') {
-                await (0, notification_service_1.sendWhatsAppNotification)(order.customerPhone, `Great news! Your order ${order.orderNumber} is ready. Please collect it or our staff will serve it shortly.`);
+            catch (notifError) {
+                console.error('[NOTIF_ERROR] WhatsApp delivery failed:', notifError);
+                // We continue as the order update itself was successful in the DB.
             }
         }
         res.json(order);

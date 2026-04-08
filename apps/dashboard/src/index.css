@@ -89,53 +89,41 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --brand-soft: rgba(37,99,235,0.15);
-    --brand-glow: rgba(37,99,235,0.25);
-
+    --brand-soft: rgba(37, 99, 235, 0.15);
+    --brand-glow: rgba(37, 99, 235, 0.25);
     --surface: #0f1729;
     --surface-2: #030712;
     --surface-3: #1e293b;
     --surface-raised: #111827;
-    --surface-overlay: rgba(0,0,0,0.7);
-
+    --surface-overlay: rgba(0, 0, 0, 0.7);
     --text-1: #f1f5f9;
     --text-2: #94a3b8;
     --text-3: #64748b;
     --text-inverse: #0f172a;
-
-    --border: rgba(255,255,255,0.08);
-    --border-strong: rgba(255,255,255,0.15);
-
-    --sidebar-bg: rgba(2,6,23,0.8);
-    --sidebar-border: rgba(255,255,255,0.08);
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.15);
+    --sidebar-bg: rgba(2, 6, 23, 0.8);
+    --sidebar-border: rgba(255, 255, 255, 0.08);
     --sidebar-text: #94a3b8;
     --sidebar-text-active: #ffffff;
-    --sidebar-item-active-bg: rgba(37,99,235,0.1);
-    --sidebar-item-hover-bg: rgba(255,255,255,0.04);
+    --sidebar-item-active-bg: rgba(37, 99, 235, 0.1);
+    --sidebar-item-hover-bg: rgba(255, 255, 255, 0.04);
     --sidebar-logo-bg: #2563eb;
-
-    --card-bg: rgba(255,255,255,0.03);
-    --card-border: rgba(255,255,255,0.08);
-    --card-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    --card-shadow-hover: 0 8px 24px rgba(0,0,0,0.3);
-
-    --input-bg: rgba(255,255,255,0.05);
-    --input-border: rgba(255,255,255,0.12);
+    --card-bg: rgba(255, 255, 255, 0.03);
+    --card-border: rgba(255, 255, 255, 0.08);
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    --card-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.3);
+    --input-bg: rgba(255, 255, 255, 0.05);
+    --input-border: rgba(255, 255, 255, 0.12);
     --input-text: #f1f5f9;
     --input-placeholder: #64748b;
-    --input-focus-ring: rgba(37,99,235,0.4);
-
-    --kanban-bg: rgba(15,23,42,0.5);
-    --kanban-col-bg: rgba(255,255,255,0.02);
-    --kanban-col-border: rgba(255,255,255,0.06);
-
+    --input-focus-ring: rgba(37, 99, 235, 0.4);
+    --kanban-bg: rgba(15, 23, 42, 0.5);
+    --kanban-col-bg: rgba(255, 255, 255, 0.02);
+    --kanban-col-border: rgba(255, 255, 255, 0.06);
     --scrollbar-thumb: #334155;
     --scrollbar-thumb-hover: #475569;
-
     --shell-bg: #030712;
-    --shell-gradient: radial-gradient(ellipse at top right, rgba(37,99,235,0.08), transparent 40%),
-                      radial-gradient(ellipse at bottom left, rgba(16,185,129,0.05), transparent 40%);
-
     --bg: var(--shell-bg);
     --bg-primary: var(--shell-bg);
     --bg-secondary: var(--surface);
@@ -151,56 +139,25 @@ html[data-theme='light'],
 body[data-theme='light'],
 html.light,
 body.light {
-  --brand: #2563eb;
-  --brand-dark: #1d4ed8;
-  --brand-soft: #eff6ff;
-  --brand-glow: rgba(37,99,235,0.15);
-
   --surface: #ffffff;
   --surface-2: #f8fafc;
   --surface-3: #f1f5f9;
   --surface-raised: #ffffff;
   --surface-overlay: rgba(0,0,0,0.5);
-
   --text-1: #0f172a;
   --text-2: #475569;
   --text-3: #94a3b8;
   --text-inverse: #ffffff;
-
   --border: #e2e8f0;
   --border-strong: #cbd5e1;
-
-  --sidebar-bg: rgba(255,255,255,0.85);
+  --sidebar-bg: #ffffff;
   --sidebar-border: #e2e8f0;
-  --sidebar-text: #475569;
-  --sidebar-text-active: #2563eb;
-  --sidebar-item-active-bg: #eff6ff;
-  --sidebar-item-hover-bg: #f8fafc;
-  --sidebar-logo-bg: #2563eb;
-
   --card-bg: #ffffff;
   --card-border: #e2e8f0;
-  --card-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
-  --card-shadow-hover: 0 8px 24px rgba(0,0,0,0.08);
-
-  --input-bg: #ffffff;
-  --input-border: #d1d5db;
-  --input-text: #0f172a;
-  --input-placeholder: #9ca3af;
-  --input-focus-ring: rgba(37,99,235,0.3);
-
-  --kanban-bg: #f8fafc;
-  --kanban-col-bg: #ffffff;
-  --kanban-col-border: #e2e8f0;
-
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  --shell-bg: #fdfdff;
   --scrollbar-thumb: #cbd5e1;
   --scrollbar-thumb-hover: #94a3b8;
-
-  --shell-bg: #fdfdff;
-  --shell-gradient: radial-gradient(ellipse at top right, rgba(37,99,235,0.06), transparent 50%),
-                    radial-gradient(ellipse at bottom left, rgba(16,185,129,0.05), transparent 50%),
-                    linear-gradient(135deg, rgba(37,99,235,0.02) 0%, rgba(16,185,129,0.02) 100%);
-
   --bg: var(--shell-bg);
   --bg-primary: var(--shell-bg);
   --bg-secondary: #ffffff;
@@ -214,53 +171,25 @@ html[data-theme='dark'],
 body[data-theme='dark'],
 html.dark,
 body.dark {
-  --brand-soft: rgba(37,99,235,0.15);
-  --brand-glow: rgba(37,99,235,0.25);
-
   --surface: #0f1729;
   --surface-2: #030712;
   --surface-3: #1e293b;
   --surface-raised: #111827;
   --surface-overlay: rgba(0,0,0,0.7);
-
   --text-1: #f1f5f9;
   --text-2: #94a3b8;
   --text-3: #64748b;
   --text-inverse: #0f172a;
-
   --border: rgba(255,255,255,0.08);
   --border-strong: rgba(255,255,255,0.15);
-
-  --sidebar-bg: rgba(2,6,23,0.8);
+  --sidebar-bg: #020617;
   --sidebar-border: rgba(255,255,255,0.08);
-  --sidebar-text: #94a3b8;
-  --sidebar-text-active: #ffffff;
-  --sidebar-item-active-bg: rgba(37,99,235,0.1);
-  --sidebar-item-hover-bg: rgba(255,255,255,0.04);
-  --sidebar-logo-bg: #2563eb;
-
   --card-bg: rgba(255,255,255,0.03);
   --card-border: rgba(255,255,255,0.08);
   --card-shadow: 0 1px 3px rgba(0,0,0,0.2);
-  --card-shadow-hover: 0 8px 24px rgba(0,0,0,0.3);
-
-  --input-bg: rgba(255,255,255,0.05);
-  --input-border: rgba(255,255,255,0.12);
-  --input-text: #f1f5f9;
-  --input-placeholder: #64748b;
-  --input-focus-ring: rgba(37,99,235,0.4);
-
-  --kanban-bg: rgba(15,23,42,0.5);
-  --kanban-col-bg: rgba(255,255,255,0.02);
-  --kanban-col-border: rgba(255,255,255,0.06);
-
+  --shell-bg: #030712;
   --scrollbar-thumb: #334155;
   --scrollbar-thumb-hover: #475569;
-
-  --shell-bg: #030712;
-  --shell-gradient: radial-gradient(ellipse at top right, rgba(37,99,235,0.08), transparent 40%),
-                    radial-gradient(ellipse at bottom left, rgba(16,185,129,0.05), transparent 40%);
-
   --bg: var(--shell-bg);
   --bg-primary: var(--shell-bg);
   --bg-secondary: var(--surface);

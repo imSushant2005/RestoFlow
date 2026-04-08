@@ -370,6 +370,7 @@ export const clerkSync = async (req: Request, res: Response) => {
     }
 
     if (code === 'P2022') {
+      console.error('[PRISMA_SYNC_DEBUG] Column/Table missing:', error);
       return res.status(500).json({
         error: 'Database schema is out of sync. Run Prisma migration/db push and try again.',
       });
@@ -437,7 +438,7 @@ export const login = async (req: Request, res: Response) => {
         details: error.issues,
       });
     }
-    console.error('Login error:', error);
+    console.error('[LOGIN_ERROR_DEBUG]:', error);
     return res.status(500).json({ error: 'Internal server error. Please try again later.' });
   }
 };

@@ -247,7 +247,7 @@ const clerkSync = async (req, res) => {
         }
         if (normalizedIntent === 'LOGIN') {
             return res.status(404).json({
-                error: 'No account found for this Google login. Please create a workspace first.',
+                error: 'User not found. Please create an account first from the signup page.',
             });
         }
         const baseName = payload.name?.trim();
@@ -318,6 +318,7 @@ const clerkSync = async (req, res) => {
             });
         }
         if (code === 'P2022') {
+            console.error('[PRISMA_SYNC_DEBUG] Column/Table missing:', error);
             return res.status(500).json({
                 error: 'Database schema is out of sync. Run Prisma migration/db push and try again.',
             });
@@ -348,7 +349,7 @@ const login = async (req, res) => {
             },
         });
         if (!user) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+            return res.status(401).json({ error: 'User not found. Please create an account first from the signup page.' });
         }
         const isPasswordValid = await (0, hash_1.verifyPassword)(validatedData.password, user.passwordHash);
         if (!isPasswordValid) {
@@ -377,7 +378,7 @@ const login = async (req, res) => {
                 details: error.issues,
             });
         }
-        console.error('Login error:', error);
+        console.error('[LOGIN_ERROR_DEBUG]:', error);
         return res.status(500).json({ error: 'Internal server error. Please try again later.' });
     }
 };
