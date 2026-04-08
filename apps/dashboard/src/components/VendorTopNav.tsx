@@ -174,6 +174,7 @@ export function VendorTopNav({
       <div className="relative flex items-center gap-2">
         <div className="relative" ref={notificationRef}>
           <button
+            id="nav-notifications-btn"
             onClick={() => setNotificationsOpen((prev) => !prev)}
             className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border transition"
             style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-2)' }}
@@ -266,6 +267,7 @@ export function VendorTopNav({
 
         <div className="relative" ref={profileRef}>
           <button
+            id="nav-profile-btn"
             onClick={() => setProfileOpen((prev) => !prev)}
             className="inline-flex h-10 items-center gap-1.5 rounded-xl border px-2.5 transition"
             style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-2)' }}

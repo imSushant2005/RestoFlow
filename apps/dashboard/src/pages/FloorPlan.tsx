@@ -114,7 +114,7 @@ export function FloorPlan() {
         </div>
 
         {/* Floor Builder Canvas */}
-        <div className="flex-1 overflow-auto p-6" style={{ background: 'var(--bg)' }}>
+        <div id="floor-builder-canvas" className="flex-1 overflow-auto p-6" style={{ background: 'var(--bg)' }}>
           {selectedZone ? (
             <FloorBuilder zone={selectedZone} tenantSlug={tenantSlug} />
           ) : (

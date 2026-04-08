@@ -74,7 +74,7 @@ export function MenuBuilder() {
             isLoading={isLoadingCategories}
           />
         </div>
-        <div className="flex-1 p-6 h-full overflow-y-auto custom-scrollbar bg-transparent">
+        <div id="item-list-container" className="flex-1 p-6 h-full overflow-y-auto custom-scrollbar bg-transparent">
           {selectedCategoryId ? (
             <ItemList categoryId={selectedCategoryId} />
           ) : (

@@ -12,11 +12,12 @@
   --font-display: 'Space Grotesk', 'Inter', sans-serif;
   --sidebar-w: 240px;
 
-  /* Brand */
-  --brand: #2563eb;
-  --brand-dark: #1d4ed8;
+  /* Brand - Upgraded for Vibrancy */
+  --brand: #3b82f6;
+  --brand-dark: #2563eb;
   --brand-soft: #eff6ff;
-  --brand-glow: rgba(37,99,235,0.15);
+  --brand-glow: rgba(59, 130, 246, 0.25);
+  --brand-rainbow: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
 
   /* Surfaces */
   --surface: #ffffff;

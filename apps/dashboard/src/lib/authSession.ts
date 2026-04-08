@@ -1,12 +1,17 @@
 export function parseApiError(err: any, fallback: string) {
-  if (typeof err?.response?.data?.error === 'string') {
-    const responseError = err.response.data.error.trim();
-    if (responseError) return responseError;
+  const responseData = err?.response?.data;
+  
+  if (typeof responseData?.error === 'string' && responseData.error.trim()) {
+    return responseData.error.trim();
   }
 
-  if (typeof err?.message === 'string') {
-    const message = err.message.trim();
-    if (message) return message;
+  if (typeof responseData === 'string' && responseData.trim()) {
+    return responseData.trim();
+  }
+  
+  const axiosMessage = typeof err?.message === 'string' ? err.message.trim() : '';
+  if (axiosMessage && axiosMessage.toLowerCase() !== 'network error' && !axiosMessage.includes('status code')) {
+    return axiosMessage;
   }
 
   return fallback;

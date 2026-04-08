@@ -124,7 +124,7 @@ export function DashboardOverview() {
   return (
     <div className="p-3 sm:p-5 lg:p-6 min-h-full">
       <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+        <div id="dashboard-stats-grid" className="grid grid-cols-1 gap-3 lg:grid-cols-4">
           {[
             { label: 'Daily Revenue', value: formatINR(stats.revenue), sub: 'Today + history' },
             { label: 'Live Orders', value: `${stats.liveOrders}`, sub: 'Current active flow' },

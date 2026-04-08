@@ -406,14 +406,16 @@ function DashboardShell() {
     const driverObj = driver({
       showProgress: true,
       steps: [
-        { popover: { title: 'Welcome to RestoFlow', description: 'Let us take a quick tour of your workspace. Click Next to begin.' }},
-        { element: '#nav-menu', onHighlightStarted: () => navigate('/app/menu'), popover: { title: 'Menu Studio', description: 'Create and organize your digital menu. Add categories, items with photos, and customization options that sync instantly to your shop.', side: "right", align: 'start' }},
-        { element: '#nav-tables-qr', onHighlightStarted: () => navigate('/app/tables'), popover: { title: 'Tables & QR Design', description: 'Map out your physical restaurant layout and generate secure QR codes for દરેક table to enable instant checkout.', side: "right", align: 'start' }},
-        { element: '#nav-live-orders', onHighlightStarted: () => navigate('/app/orders'), popover: { title: 'Real-time Order Track', description: 'Manage the flow of orders from placement to service. Track kitchen status and keep staff updated in real time.', side: "right", align: 'start' }},
-        { element: '#nav-billing', onHighlightStarted: () => navigate('/app/billing'), popover: { title: 'Billing & Checkout', description: 'Manage payments, print invoices, and close dining sessions once customers are ready to pay.', side: "right", align: 'start' }},
-        { element: '#nav-analytics', onHighlightStarted: () => navigate('/app/analytics'), popover: { title: 'Business Insights', description: 'View heatmaps of your best days, track revenue at a glance, and understand which menu items are your top sellers.', side: "right", align: 'start' }},
-        { element: '#nav-settings', onHighlightStarted: () => navigate('/app/settings'), popover: { title: 'Operational Settings', description: 'Configure business hours, printer settings, and manage your team roles and permissions.', side: "right", align: 'start' }},
-        { popover: { title: 'You are all set!', description: 'Explore the dashboard on your own. You can update your settings at any time.' }},
+        { popover: { title: 'Welcome to Restoflow 🚀', description: 'Your all-in-one restaurant operating system. Let us show you how to dominate your operations in 60 seconds.', side: "bottom", align: 'center' }},
+        { element: '#dashboard-stats-grid', onHighlightStarted: () => navigate('/app'), popover: { title: 'Real-time Pulse', description: 'Monitor your revenue, occupancy, and live order flow at a glance. Everything syncs instantly from your customer app.', side: "bottom", align: 'start' }},
+        { element: '#nav-menu', onHighlightStarted: () => navigate('/app/menu'), popover: { title: 'Menu Studio', description: 'Design your digital menu with zero configuration. Add items, modifiers, and high-res photos that update live for every guest.', side: "right", align: 'start' }},
+        { element: '#item-list-container', onHighlightStarted: () => navigate('/app/menu'), popover: { title: 'Instant Preview', description: 'Click "Live Preview" at any time to see exactly what your customers see. No more guessing how your menu looks.', side: "left", align: 'start' }},
+        { element: '#nav-tables-qr', onHighlightStarted: () => navigate('/app/tables'), popover: { title: 'Design & QR', description: 'Map your floor zones and generate table-specific QR codes. Our perceptual engine ensures perfect scanner readability.', side: "right", align: 'start' }},
+        { element: '#floor-builder-canvas', onHighlightStarted: () => navigate('/app/tables'), popover: { title: 'Interactive Layout', description: 'Drag and drop tables to match your physical space. Each table becomes a live point-of-sale for your guests.', side: "left", align: 'start' }},
+        { element: '#nav-live-orders', onHighlightStarted: () => navigate('/app/orders'), popover: { title: 'Kitchen Pipeline', description: 'Move orders through preparation and service stages. Track speed-of-service and keep your staff synchronized.', side: "right", align: 'start' }},
+        { element: '#nav-notifications-btn', popover: { title: 'Staff Alerts', description: 'Real-time notifications for new orders, payment requests, and table assistance. Never miss a customer need.', side: "bottom", align: 'end' }},
+        { element: '#nav-profile-btn', popover: { title: 'Global Settings', description: 'Manage your profile, team permissions, and workspace identifiers. Copy your ordering link to social media here!', side: "bottom", align: 'end' }},
+        { popover: { title: 'Legendary Start! 🎉', description: 'You are ready to transform your restaurant. Start by adding your first menu category or designing your tables.' }},
       ],
       onDestroyStarted: () => {
         if (!driverObj.hasNextStep() || confirm("Are you sure you want to skip the tour?")) {
