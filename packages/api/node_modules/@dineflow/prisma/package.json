@@ -1,7 +1,7 @@
 {
   "name": "@dineflow/prisma",
   "version": "1.0.0",
-  "main": "src/index.ts",
+  "main": "src/index.js",
   "types": "src/index.ts",
   "scripts": {
     "db:push": "prisma db push",

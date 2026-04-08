@@ -40,14 +40,14 @@ const express_1 = require("express");
 const auth_middleware_1 = require("../middlewares/auth.middleware");
 const PaymentController = __importStar(require("../controllers/payment.controller"));
 const express_2 = __importDefault(require("express"));
-const rbac_1 = require("../constants/rbac");
+const rbac_js_1 = require("../constants/rbac.js");
 const router = (0, express_1.Router)();
 // Secure Webhooks don't use standard parsed JSON if utilizing raw signatures, but we mapped it with body parse text.
 // The public webhook listener
 router.post('/webhook', express_2.default.raw({ type: 'application/json' }), PaymentController.handleWebhook);
 // Protected Tenant Financial Routes
 router.use(auth_middleware_1.requireAuth);
-router.post('/create-order', (0, auth_middleware_1.requireRole)(rbac_1.FULL_ACCESS_ROLES), PaymentController.createSubscriptionOrder);
-router.post('/verify', (0, auth_middleware_1.requireRole)(rbac_1.FULL_ACCESS_ROLES), PaymentController.verifyPayment);
+router.post('/create-order', (0, auth_middleware_1.requireRole)(rbac_js_1.FULL_ACCESS_ROLES), PaymentController.createSubscriptionOrder);
+router.post('/verify', (0, auth_middleware_1.requireRole)(rbac_js_1.FULL_ACCESS_ROLES), PaymentController.verifyPayment);
 exports.default = router;
 //# sourceMappingURL=payment.routes.js.map

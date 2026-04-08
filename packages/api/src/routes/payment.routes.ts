@@ -2,7 +2,7 @@ import { Router, Request } from 'express';
 import { requireAuth, requireRole } from '../middlewares/auth.middleware';
 import * as PaymentController from '../controllers/payment.controller';
 import express from 'express';
-import { FULL_ACCESS_ROLES } from '../constants/rbac';
+import { FULL_ACCESS_ROLES } from '../constants/rbac.js';
 
 const router: Router = Router();
 

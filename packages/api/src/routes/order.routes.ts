@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middlewares/auth.middleware';
 import { requireRoles } from '../middlewares/role.middleware';
 import * as OrderController from '../controllers/order.controller';
-import { ORDER_ACCESS_ROLES, ORDER_HISTORY_ROLES } from '../constants/rbac';
+import { ORDER_ACCESS_ROLES, ORDER_HISTORY_ROLES } from '../constants/rbac.js';
 
 const router: Router = Router();
 

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middlewares/auth.middleware';
 import { requireRoles } from '../middlewares/role.middleware';
 import * as SettingsController from '../controllers/settings.controller';
-import { BUSINESS_SETTINGS_READ_ROLES, FULL_ACCESS_ROLES } from '../constants/rbac';
+import { BUSINESS_SETTINGS_READ_ROLES, FULL_ACCESS_ROLES } from '../constants/rbac.js';
 
 const router: Router = Router();
 
