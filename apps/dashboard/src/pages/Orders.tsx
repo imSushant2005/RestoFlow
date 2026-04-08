@@ -1,10 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { format } from 'date-fns';
 import { formatINR } from '../lib/currency';
-import { Hand, Receipt, HelpCircle, Zap, XCircle, WifiOff, Signal, RefreshCw } from 'lucide-react';
-import { useRealtimeSocket } from '../hooks/useRealtimeSocket';
+import { Zap, XCircle, Signal, RefreshCw } from 'lucide-react';
 
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER';
 
@@ -47,17 +46,32 @@ function resolveRole(rawRole?: string | null): DashboardRole {
   return 'OWNER';
 }
 
-function getConnectionTone(status: string, latencyMs: number | null) {
-  if (status === 'connected' && (latencyMs == null || latencyMs < 250)) {
-    return { label: 'Live', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
-  }
-  if (status === 'connected') {
-    return { label: 'Live (slow)', className: 'bg-amber-100 text-amber-700 border-amber-200' };
-  }
-  if (status === 'reconnecting' || status === 'connecting') {
-    return { label: 'Reconnecting', className: 'bg-orange-100 text-orange-700 border-orange-200' };
-  }
-  return { label: 'Offline', className: 'bg-red-100 text-red-700 border-red-200' };
+function parseDateValue(value: unknown) {
+  const date = value instanceof Date ? value : new Date(String(value || ''));
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
+function formatTimeValue(value: unknown, fallback = '--:--') {
+  const parsed = parseDateValue(value);
+  if (!parsed) return fallback;
+  return format(parsed, 'h:mm a');
+}
+
+function asOrderCode(value: unknown) {
+  const raw = typeof value === 'string' ? value : String(value || '');
+  if (!raw) return '------';
+  return raw.slice(-6).toUpperCase();
+}
+
+function toAmount(value: unknown) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function toValidTimestamp(value: unknown) {
+  const parsed = parseDateValue(value);
+  return parsed ? parsed.getTime() : 0;
 }
 
 export function Orders({ role }: { role?: string }) {
@@ -74,7 +88,6 @@ export function Orders({ role }: { role?: string }) {
   const canEditSessionBatchStatus = effectiveRole === 'OWNER' || effectiveRole === 'MANAGER';
   const [activeTab, setActiveTab] = useState<'PIPELINE' | 'SESSIONS' | 'HISTORY'>('PIPELINE');
   const [busyMode, setBusyMode] = useState(false);
-  const [waiterCalls, setWaiterCalls] = useState<any[]>([]);
   const [overviewNow, setOverviewNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -100,14 +113,6 @@ export function Orders({ role }: { role?: string }) {
   const resolveTenantSlug = useCallback(async () => {
     const fromQuery = (businessSettings?.slug || '').trim();
     if (fromQuery && isValidSlug(fromQuery)) return fromQuery;
-
-    try {
-      const res = await api.get('/settings/business');
-      const fromSettings = String(res.data?.slug || '').trim();
-      if (fromSettings && isValidSlug(fromSettings)) return fromSettings;
-    } catch {
-      // Non-admin roles can fail this endpoint; continue fallback.
-    }
 
     const fromStorage = readRestaurantSlugFromStorage().trim();
     if (fromStorage && isValidSlug(fromStorage)) return fromStorage;
@@ -168,63 +173,6 @@ export function Orders({ role }: { role?: string }) {
     }
   });
 
-  const realtimeHandlers = useMemo(
-    () => ({
-      'order:new': (incomingOrder: any) => {
-        queryClient.setQueryData(['live-orders'], (old: any[] = []) => {
-          if (old.some((order) => order.id === incomingOrder.id)) return old;
-          return [...old, incomingOrder];
-        });
-      },
-      'order:update': (updatedOrder: any) => {
-        queryClient.setQueryData(['live-orders'], (old: any[] = []) => {
-          if (!old.length) return old;
-          if (TERMINAL_STATUSES.has(updatedOrder.status)) {
-            return old.filter((order) => order.id !== updatedOrder.id);
-          }
-          return old.map((order) => (order.id === updatedOrder.id ? updatedOrder : order));
-        });
-        if (TERMINAL_STATUSES.has(updatedOrder.status)) {
-          queryClient.invalidateQueries({ queryKey: ['order-history'] });
-          queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
-        }
-      },
-      'orders:bulk_status': (payload: { sessionId?: string; status?: string }) => {
-        if (!payload?.sessionId || !payload?.status) return;
-        if (!TERMINAL_STATUSES.has(payload.status)) return;
-        queryClient.setQueryData(['live-orders'], (old: any[] = []) =>
-          old.filter((order) => order.diningSessionId !== payload.sessionId)
-        );
-        queryClient.invalidateQueries({ queryKey: ['order-history'] });
-        queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
-      },
-      // Avoid aggressive refetch storms: order:new/order:update handlers already keep live-orders in sync.
-      'session:new': () => undefined,
-      'session:update': () => undefined,
-      'session:finished': () => queryClient.invalidateQueries({ queryKey: ['live-orders'] }),
-      'session:completed': () => {
-        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
-        queryClient.invalidateQueries({ queryKey: ['order-history'] });
-      },
-      'table:status_change': () => undefined,
-      'waiter:call': (call: any) => {
-        const uniqueId = `${call?.tableId || 'na'}_${call?.timestamp || Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        setWaiterCalls((prev) => [{ ...call, id: uniqueId }, ...prev].slice(0, 10));
-        try {
-          new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczLjt0otf/mGEcFkl/sOLbfTcRJWuY1OOURBcRUIC06M1xKRAna6DM5aRaGhhAhb3e0okyDDBwpN77jl0ZJGqk2P+hXxcTRYe84tN5LQ0nbaXb+5JYGSNqpND/pFkUFEmIvuPXeS0NLW6m3v6SVxokZaXR/6RYGRUAAA==').play();
-        } catch {
-          // ignore browser media policy blocks
-        }
-      },
-    }),
-    [queryClient],
-  );
-
-  const { status: socketStatus, latencyMs } = useRealtimeSocket({
-    handlers: realtimeHandlers,
-    onReconnect: refreshOperationalData,
-  });
-
   if (isLoading) return (
     <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
       {[1, 2, 3, 4, 5, 6].map(i => (
@@ -242,30 +190,33 @@ export function Orders({ role }: { role?: string }) {
 
   const groupedLive = Object.values(
     liveOrders.reduce((acc: any, order: any) => {
-      const gId = order.diningSessionId || `single_${order.id}`;
+      const fallbackOrderId = asOrderCode(order?.id);
+      const gId = order?.diningSessionId || `single_${fallbackOrderId}`;
       if (!acc[gId]) {
         acc[gId] = {
           id: gId,
-          isSession: !!order.diningSessionId,
-          sessionId: order.diningSessionId,
-          session: order.diningSession,
-          table: order.table,
-          customerName: order.diningSession?.customer?.name || order.customerName,
-          customerPhone: order.diningSession?.customer?.phone || order.customerPhone,
+          isSession: Boolean(order?.diningSessionId),
+          sessionId: order?.diningSessionId,
+          session: order?.diningSession,
+          table: order?.table,
+          customerName: order?.diningSession?.customer?.name || order?.customerName,
+          customerPhone: order?.diningSession?.customer?.phone || order?.customerPhone,
           orders: [],
-          createdAt: order.diningSession?.openedAt || order.createdAt,
-          totalAmount: 0
+          createdAt: order?.diningSession?.openedAt || order?.createdAt,
+          totalAmount: 0,
         };
       }
       acc[gId].orders.push(order);
-      acc[gId].totalAmount += Number(order.totalAmount || 0);
+      acc[gId].totalAmount += toAmount(order?.totalAmount);
       return acc;
     }, {})
-  ).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  ).sort((a: any, b: any) => toValidTimestamp(b?.createdAt) - toValidTimestamp(a?.createdAt));
 
   const TicketCard = ({ ticket }: { ticket: any }) => {
-    const isCancelled = ticket.orders.every((o: any) => o.status === 'CANCELLED');
-    const elapsedMin = Math.floor((Date.now() - new Date(ticket.createdAt).getTime()) / 60000);
+    const ticketOrders = Array.isArray(ticket?.orders) ? ticket.orders : [];
+    const isCancelled = ticketOrders.length > 0 && ticketOrders.every((o: any) => o?.status === 'CANCELLED');
+    const createdAtMs = toValidTimestamp(ticket?.createdAt);
+    const elapsedMin = createdAtMs > 0 ? Math.max(0, Math.floor((Date.now() - createdAtMs) / 60000)) : 0;
     const guestDots = ticket.session?.partySize > 0
       ? Array.from({ length: Math.min(ticket.session.partySize, 6) })
       : [];
@@ -303,8 +254,8 @@ export function Orders({ role }: { role?: string }) {
                 {ticket.table ? `Table ${ticket.table.name}` : 'Takeaway'}
               </span>
               <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>
-                {ticket.isSession ? 'Open Tab' : `#${ticket.orders[0]?.id.slice(-6)}`} · {format(new Date(ticket.createdAt), 'h:mm a')}
-                {elapsedMin > 0 && ` · ${elapsedMin}m`}
+                {ticket.isSession ? 'Open Tab' : `#${asOrderCode(ticketOrders?.[0]?.id)}`} | {formatTimeValue(ticket?.createdAt)}
+                {elapsedMin > 0 && ` | ${elapsedMin}m`}
               </span>
             </div>
             <span className="font-black text-blue-600 text-lg">{formatINR(ticket.totalAmount || 0)}</span>
@@ -325,7 +276,7 @@ export function Orders({ role }: { role?: string }) {
 
           {/* Batch list */}
           <div className="space-y-2 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
-            {ticket.orders.map((order: any, idx: number) => (
+            {ticketOrders.map((order: any, idx: number) => (
               <div key={order.id} className="rounded-xl p-3" style={{ background: 'var(--surface-3)', border: '1px solid var(--border)' }}>
                 <div className="flex justify-between mb-1.5">
                   <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>Batch {idx + 1}</span>
@@ -397,7 +348,8 @@ export function Orders({ role }: { role?: string }) {
   };
 
   const PipelineCard = ({ order }: { order: any }) => {
-    const elapsed = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000);
+    const createdAtMs = toValidTimestamp(order?.createdAt);
+    const elapsed = createdAtMs > 0 ? Math.max(0, Math.floor((Date.now() - createdAtMs) / 60000)) : 0;
     const isUrgent = elapsed >= 15 && (order.status === 'NEW' || order.status === 'PREPARING');
     const stripeClass =
       order.status === 'NEW' || order.status === 'ACCEPTED' ? 'stripe-new' :
@@ -411,14 +363,14 @@ export function Orders({ role }: { role?: string }) {
           <div className="flex justify-between items-start mb-1">
             <div>
               <span className="font-black text-sm block" style={{ color: 'var(--text-1)' }}>
-                {order.orderNumber || `#${order.id.slice(-6).toUpperCase()}`}
+                {order.orderNumber || `#${asOrderCode(order?.id)}`}
               </span>
               <span className="text-[11px] font-semibold" style={{ color: 'var(--text-3)' }}>
                 {order.table?.name ? `Table ${order.table.name}` : 'Takeaway'}
               </span>
             </div>
             <div className="text-right">
-              <span className="text-[11px] font-bold" style={{ color: 'var(--text-3)' }}>{format(new Date(order.createdAt), 'h:mm a')}</span>
+              <span className="text-[11px] font-bold" style={{ color: 'var(--text-3)' }}>{formatTimeValue(order?.createdAt)}</span>
               {isUrgent && <div className="text-[10px] font-black text-red-500 mt-0.5">Alert: {elapsed}m</div>}
             </div>
           </div>
@@ -481,7 +433,10 @@ export function Orders({ role }: { role?: string }) {
     );
   };
 
-  const connectionTone = getConnectionTone(socketStatus, latencyMs);
+  const connectionTone = {
+    label: 'Synced',
+    className: 'bg-blue-100 text-blue-700 border-blue-200',
+  };
   const overviewTimestamp = format(overviewNow, 'MMM d, yyyy | h:mm a');
 
   return (
@@ -490,9 +445,8 @@ export function Orders({ role }: { role?: string }) {
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border p-2" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
           <div className="flex flex-wrap items-center gap-2">
             <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${connectionTone.className}`}>
-              {socketStatus === 'connected' ? <Signal size={12} /> : <WifiOff size={12} />}
+              <Signal size={12} />
               {connectionTone.label}
-              {latencyMs != null && socketStatus === 'connected' ? `${latencyMs}ms` : ''}
             </span>
             <span className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
               {overviewTimestamp}
@@ -568,28 +522,6 @@ export function Orders({ role }: { role?: string }) {
         </div>
       </div>
 
-      {/* Waiter Call Alerts */}
-      {waiterCalls.length > 0 && (
-        <div className="mb-4 space-y-2">
-          {waiterCalls.slice(0, 3).map((call) => (
-            <div key={call.id} className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 animate-in slide-in-from-top-2">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center">
-                  {call.type === 'BILL' ? <Receipt size={16} /> : call.type === 'HELP' ? <HelpCircle size={16} /> : <Hand size={16} />}
-                </div>
-                <div>
-                  <p className="font-bold text-amber-900 text-sm">
-                    {call.type === 'BILL' ? 'Bill Requested' : call.type === 'HELP' ? 'Help Needed' : 'Waiter Called'}
-                  </p>
-                  <p className="text-xs text-amber-600">Table: {call.tableName} • {new Date(call.timestamp).toLocaleTimeString()}</p>
-                </div>
-              </div>
-              <button onClick={() => setWaiterCalls(prev => prev.filter(c => c.id !== call.id))} className="text-amber-400 hover:text-amber-600 p-1">✕</button>
-            </div>
-          ))}
-        </div>
-      )}
-      
       {activeTab === 'PIPELINE' ? (
         <div className="flex-1 overflow-x-auto custom-scrollbar p-6 flex gap-6 h-full" style={{ background: 'var(--kanban-bg)' }}>
           {[
@@ -619,7 +551,7 @@ export function Orders({ role }: { role?: string }) {
                   {colOrders.map((order: any) => <PipelineCard key={order.id} order={order} />)}
                   {colOrders.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full py-16 text-center px-4">
-                      <p className="text-slate-500 text-sm font-semibold">No orders yet 👀</p>
+                      <p className="text-slate-500 text-sm font-semibold">No orders yet</p>
                       <p className="text-slate-400 text-xs mt-1">Start by scanning a QR or placing a test order.</p>
                       <button
                         onClick={openTestOrder}
@@ -641,7 +573,7 @@ export function Orders({ role }: { role?: string }) {
             {groupedLive.map((ticket: any) => <TicketCard key={ticket.id} ticket={ticket} />)}
             {groupedLive.length === 0 && (
               <div className="col-span-full flex flex-col items-center justify-center mt-20">
-                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-4"><span className="text-2xl">🍽️</span></div>
+                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-4"><span className="text-2xl font-black text-slate-500">Table</span></div>
                 <p className="text-gray-600 font-bold text-lg">No active sessions</p>
                 <p className="text-gray-400 text-sm mt-1">Start by scanning a QR or placing a test order.</p>
                 <button

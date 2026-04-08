@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
-import { PLAN_LIMITS } from '../config/plans';
+import { getPlanLimits } from '../config/plans';
 import { UserRole } from '@dineflow/prisma';
 import { hashPassword } from '../utils/hash';
 import { z } from 'zod';
@@ -267,9 +267,9 @@ export const createStaff = async (req: Request, res: Response) => {
     const requestedEmployeeCode = baseEmployeeCode;
 
     const count = await prisma.user.count({ where: { tenantId: req.tenantId } });
-    const planLimits = PLAN_LIMITS[tenant.plan as keyof typeof PLAN_LIMITS];
+    const planLimits = getPlanLimits(tenant.plan);
 
-    if (planLimits && count >= planLimits.staff) {
+    if (count >= planLimits.staff) {
       return res.status(403).json({ error: `Plan limit reached. Your ${tenant.plan} plan allows up to ${planLimits.staff} staff members.` });
     }
 

@@ -1,6 +1,6 @@
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
 import {
   LayoutDashboard,
@@ -17,6 +17,7 @@ import {
 import { MenuBuilder } from './pages/MenuBuilder';
 import { FloorPlan } from './pages/FloorPlan';
 import { Orders } from './pages/Orders';
+import { DashboardOverview } from './pages/DashboardOverview';
 import { Analytics } from './pages/Analytics';
 import { Settings } from './pages/Settings';
 import { Onboarding } from './pages/Onboarding';
@@ -30,7 +31,8 @@ import { AuthLaunch45Page } from './pages/AuthLaunch45Page';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { DashboardErrorBoundary } from './components/DashboardErrorBoundary';
-import { VendorTopNav } from './components/VendorTopNav';
+import { VendorTopNav, type OpsNotification } from './components/VendorTopNav';
+import { useRealtimeSocket } from './hooks/useRealtimeSocket';
 import { api } from './lib/api';
 
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER' | 'UNKNOWN';
@@ -53,7 +55,7 @@ const DASHBOARD_DEMO_STEPS: DemoStep[] = [
     title: 'Menu Management',
     summary: 'Create categories and menu items here. This is the source of truth for what guests can order.',
     actionLabel: 'Menu',
-    route: '/app',
+    route: '/app/menu',
     checklist: [
       'Add categories like Starters, Mains, and Desserts.',
       'Create items, set prices, and keep descriptions up to date.',
@@ -255,12 +257,16 @@ function PostLoginRedirect({ mustChangePassword }: { mustChangePassword: boolean
 function DashboardShell() {
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [liveOrderCount, setLiveOrderCount] = useState(0);
   const [showFirstTimeDemo, setShowFirstTimeDemo] = useState(false);
   const [demoStep, setDemoStep] = useState(0);
+  const [notifications, setNotifications] = useState<OpsNotification[]>([]);
+  const [notificationsHydrated, setNotificationsHydrated] = useState(false);
   const role = normalizeDashboardRole(localStorage.getItem('userRole'));
   const defaultRoute = getDefaultRouteForRole(role);
+  const canAccessDashboard = FULL_ACCESS_ROLES.has(role);
   const canAccessMenu = FULL_ACCESS_ROLES.has(role);
   const canAccessTables = FULL_ACCESS_ROLES.has(role);
   const canAccessOrders = ORDERS_ACCESS_ROLES.has(role);
@@ -293,16 +299,189 @@ function DashboardShell() {
   const billing = billingQuery.data;
   const isLoading = canShowAdminShellData && (businessQuery.isLoading || billingQuery.isLoading);
   const demoStorageKey = getDemoStorageKey(business);
+  const notificationStorageKey = useMemo(() => getDemoStorageKey(business).replace('demo_seen', 'notifications'), [business]);
   const activeDemoStep = DASHBOARD_DEMO_STEPS[demoStep];
   const isLastDemoStep = demoStep === DASHBOARD_DEMO_STEPS.length - 1;
 
-  useEffect(() => {
+  const refreshLiveOrderCount = useCallback(async () => {
     if (!canAccessOrders) {
       setLiveOrderCount(0);
       return;
     }
-    api.get('/orders').then((r) => setLiveOrderCount(Array.isArray(r.data) ? r.data.length : 0)).catch(() => {});
-  }, [canAccessOrders, location.pathname]);
+    try {
+      const response = await api.get('/orders');
+      setLiveOrderCount(Array.isArray(response.data) ? response.data.length : 0);
+    } catch {
+      setLiveOrderCount(0);
+    }
+  }, [canAccessOrders]);
+
+  const pushNotification = useCallback(
+    (entry: Omit<OpsNotification, 'id' | 'read' | 'createdAt'> & { createdAt?: string }) => {
+      setNotifications((previous) => {
+        const next: OpsNotification = {
+          id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          title: entry.title,
+          message: entry.message,
+          level: entry.level,
+          createdAt: entry.createdAt || new Date().toISOString(),
+          read: false,
+        };
+        return [next, ...previous].slice(0, 60);
+      });
+    },
+    [],
+  );
+
+  const unreadNotificationCount = useMemo(
+    () => notifications.reduce((total, notification) => total + (notification.read ? 0 : 1), 0),
+    [notifications],
+  );
+
+  const markNotificationsRead = useCallback(() => {
+    setNotifications((previous) => previous.map((notification) => ({ ...notification, read: true })));
+  }, []);
+
+  const clearNotifications = useCallback(() => {
+    setNotifications([]);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(notificationStorageKey);
+      if (!raw) {
+        setNotifications([]);
+        setNotificationsHydrated(true);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        setNotifications([]);
+        setNotificationsHydrated(true);
+        return;
+      }
+      setNotifications(
+        parsed
+          .filter((item) => item && typeof item === 'object')
+          .slice(0, 60),
+      );
+      setNotificationsHydrated(true);
+    } catch {
+      setNotifications([]);
+      setNotificationsHydrated(true);
+    }
+  }, [notificationStorageKey]);
+
+  useEffect(() => {
+    if (!notificationsHydrated) return;
+    localStorage.setItem(notificationStorageKey, JSON.stringify(notifications.slice(0, 60)));
+  }, [notificationStorageKey, notifications, notificationsHydrated]);
+
+  const realtimeHandlers = useMemo(
+    () => ({
+      'order:new': (order: any) => {
+        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+        void refreshLiveOrderCount();
+        pushNotification({
+          title: 'New Order',
+          message: `${order?.table?.name ? `Table ${order.table.name}` : 'Takeaway'} placed ${order?.orderNumber || `#${String(order?.id || '').slice(-6)}`}`,
+          level: 'warning',
+        });
+      },
+      'order:update': (order: any) => {
+        const status = String(order?.status || '').toUpperCase();
+        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+        queryClient.invalidateQueries({ queryKey: ['order-history'] });
+        queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
+        void refreshLiveOrderCount();
+
+        if (status === 'READY') {
+          pushNotification({
+            title: 'Food Ready',
+            message: `${order?.orderNumber || `#${String(order?.id || '').slice(-6)}`} is ready for service.`,
+            level: 'success',
+          });
+          return;
+        }
+        if (status === 'SERVED') {
+          pushNotification({
+            title: 'Food Served',
+            message: `${order?.orderNumber || `#${String(order?.id || '').slice(-6)}`} has been served.`,
+            level: 'info',
+          });
+          return;
+        }
+        if (status === 'CANCELLED') {
+          pushNotification({
+            title: 'Order Cancelled',
+            message: `${order?.orderNumber || `#${String(order?.id || '').slice(-6)}`} was cancelled.`,
+            level: 'warning',
+          });
+        }
+      },
+      'orders:bulk_status': () => {
+        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+        queryClient.invalidateQueries({ queryKey: ['order-history'] });
+        queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
+        void refreshLiveOrderCount();
+      },
+      'waiter:call': (call: any) => {
+        const callType = String(call?.type || 'WAITER').toUpperCase();
+        const tableName = call?.tableName ? `Table ${call.tableName}` : 'A table';
+        if (callType === 'BILL') {
+          pushNotification({
+            title: 'Bill Request',
+            message: `${tableName} asked for billing.`,
+            level: 'warning',
+          });
+          return;
+        }
+        if (callType === 'HELP') {
+          pushNotification({
+            title: 'Help Request',
+            message: `${tableName} requested staff assistance.`,
+            level: 'warning',
+          });
+          return;
+        }
+        pushNotification({
+          title: 'Water Call',
+          message: `${tableName} requested water or waiter attention.`,
+          level: 'info',
+        });
+      },
+      'table:status_change': () => {
+        queryClient.invalidateQueries({ queryKey: ['zones-overview'] });
+      },
+      'session:new': () => queryClient.invalidateQueries({ queryKey: ['live-orders'] }),
+      'session:update': () => queryClient.invalidateQueries({ queryKey: ['live-orders'] }),
+      'session:finished': () => {
+        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+        queryClient.invalidateQueries({ queryKey: ['order-history'] });
+      },
+      'session:completed': () => {
+        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+        queryClient.invalidateQueries({ queryKey: ['order-history'] });
+        queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
+      },
+    }),
+    [pushNotification, queryClient, refreshLiveOrderCount],
+  );
+
+  useRealtimeSocket({
+    enabled: canAccessOrders && role !== 'WAITER',
+    handlers: realtimeHandlers,
+    onReconnect: () => {
+      queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['order-history'] });
+      queryClient.invalidateQueries({ queryKey: ['zones-overview'] });
+      void refreshLiveOrderCount();
+    },
+  });
+
+  useEffect(() => {
+    void refreshLiveOrderCount();
+  }, [location.pathname, refreshLiveOrderCount]);
 
   useEffect(() => {
     if (isLoading || showFirstTimeDemo) return;
@@ -377,7 +556,8 @@ function DashboardShell() {
   }
 
   const allowedPaths = new Set<string>([
-    ...(canAccessMenu ? ['/app'] : []),
+    ...(canAccessDashboard ? ['/app'] : []),
+    ...(canAccessMenu ? ['/app/menu'] : []),
     ...(canAccessTables ? ['/app/tables'] : []),
     ...(canAccessOrders ? ['/app/orders'] : []),
     ...(canAccessBilling ? ['/app/billing'] : []),
@@ -390,8 +570,9 @@ function DashboardShell() {
   }
 
   const navItems = [
-    ...(canAccessMenu ? [{ to: '/app', label: 'Menu', icon: <UtensilsCrossed size={18} /> }] : []),
-    ...(canAccessTables ? [{ to: '/app/tables', label: 'Tables & QR', icon: <LayoutDashboard size={18} /> }] : []),
+    ...(canAccessDashboard ? [{ to: '/app', label: 'Dashboard', icon: <LayoutDashboard size={18} /> }] : []),
+    ...(canAccessMenu ? [{ to: '/app/menu', label: 'Menu', icon: <UtensilsCrossed size={18} /> }] : []),
+    ...(canAccessTables ? [{ to: '/app/tables', label: 'Tables & QR', icon: <Store size={18} /> }] : []),
     ...(canAccessOrders ? [{ to: '/app/orders', label: 'Live Orders', icon: <Receipt size={18} />, badge: liveOrderCount }] : []),
     ...(canAccessBilling ? [{ to: '/app/billing', label: 'Billing', icon: <CreditCard size={18} /> }] : []),
     ...(canAccessAnalytics ? [{ to: '/app/analytics', label: 'Analytics', icon: <BarChart3 size={18} /> }] : []),
@@ -412,20 +593,6 @@ function DashboardShell() {
             </span>
           )}
         </div>
-
-        {!sidebarCollapsed && business?.businessName && (
-          <div className="px-4 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}>
-                <Store size={14} className="text-blue-400" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-bold truncate" style={{ color: 'var(--text-1)' }}>{business.businessName}</p>
-                <p className="text-[10px] uppercase tracking-widest font-semibold mt-0.5" style={{ color: 'var(--text-3)' }}>{billing?.plan || 'Free'} plan</p>
-              </div>
-            </div>
-          </div>
-        )}
 
         <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto overflow-x-hidden custom-scrollbar">
           {navItems.map(({ to, label, icon, badge }) => {
@@ -490,6 +657,10 @@ function DashboardShell() {
             liveOrderCount={liveOrderCount}
             canAccessSettings={canAccessSettings}
             canAccessBilling={canAccessBilling}
+            notifications={notifications}
+            unreadNotificationCount={unreadNotificationCount}
+            onMarkNotificationsRead={markNotificationsRead}
+            onClearNotifications={clearNotifications}
             onLogout={logoutAndReload}
           />
         </div>
@@ -497,7 +668,8 @@ function DashboardShell() {
         <div className="min-h-0 flex-1 px-2 pb-2 pt-2 sm:px-3 sm:pb-3 lg:px-5 lg:pb-5">
           <DashboardErrorBoundary>
             <Routes>
-              {canAccessMenu && <Route index element={<MenuBuilder />} />}
+              {canAccessDashboard && <Route index element={<DashboardOverview />} />}
+              {canAccessMenu && <Route path="menu" element={<MenuBuilder />} />}
               {canAccessTables && <Route path="tables" element={<FloorPlan />} />}
               {canAccessOrders && <Route path="orders" element={<Orders role={role} />} />}
               {canAccessAnalytics && <Route path="analytics" element={<Analytics />} />}

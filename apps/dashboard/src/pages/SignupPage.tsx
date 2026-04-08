@@ -26,9 +26,19 @@ export function SignupPage({ onLogin }: SignupPageProps) {
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
+  const parseGoogleSyncError = (err: any, fallback: string) => {
+    const message = typeof err?.message === 'string' ? err.message.trim() : '';
+    if (!err?.response) {
+      if (message && message.toLowerCase() !== 'network error') return message;
+      const base = String(api.defaults.baseURL || 'http://localhost:4000');
+      return `Cannot reach API server (${base}). Start backend and try again.`;
+    }
+    return parseApiError(err, fallback);
+  };
+
   const syncGoogleSignup = async (clerkUser: any) => {
     const primaryEmail = getClerkPrimaryEmail(clerkUser);
-    if (!primaryEmail) throw new Error('Google account did not provide an email address.');
+    if (!primaryEmail) throw new Error('Google profile is still loading. Please try again.');
     const resolvedName = getClerkDisplayName(clerkUser, primaryEmail);
     const res = await api.post('/auth/clerk-sync', {
       clerkUserId: clerkUser.id,
@@ -44,13 +54,14 @@ export function SignupPage({ onLogin }: SignupPageProps) {
     if (!clerkEnabled || !isUserLoaded || !user) return;
     if (localStorage.getItem('accessToken')) return;
     if (syncInFlight.current) return;
+    if (!getClerkPrimaryEmail(user)) return;
 
     syncInFlight.current = true;
     setAuthLoading(true);
     setAuthError('');
     syncGoogleSignup(user)
       .catch((err: any) => {
-        setAuthError(parseApiError(err, 'Unable to continue with Google signup.'));
+        setAuthError(parseGoogleSyncError(err, 'Unable to continue with Google signup.'));
       })
       .finally(() => {
         syncInFlight.current = false;
@@ -149,12 +160,16 @@ export function SignupPage({ onLogin }: SignupPageProps) {
     }
 
     if (isUserLoaded && user) {
+      if (!getClerkPrimaryEmail(user)) {
+        setAuthError('Google profile is still loading. Please try again in a moment.');
+        return;
+      }
       setAuthLoading(true);
       setAuthError('');
       try {
         await syncGoogleSignup(user);
       } catch (err: any) {
-        setAuthError(parseApiError(err, 'Unable to continue with Google signup.'));
+        setAuthError(parseGoogleSyncError(err, 'Unable to continue with Google signup.'));
       } finally {
         setAuthLoading(false);
       }
@@ -191,7 +206,10 @@ export function SignupPage({ onLogin }: SignupPageProps) {
       alternateCta="Login instead"
     >
       {authError ? (
-        <div className="mb-5 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-200">
+        <div
+          className="mb-5 rounded-2xl border px-4 py-3 text-sm font-medium"
+          style={{ borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)', color: '#b91c1c' }}
+        >
           {authError}
         </div>
       ) : null}
@@ -228,7 +246,7 @@ export function SignupPage({ onLogin }: SignupPageProps) {
             hint="After account creation, you will complete workspace identity in the next step."
           />
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm leading-6 text-slate-400">
+          <div className="rounded-2xl border px-4 py-4 text-sm leading-6" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-2)' }}>
             What happens next: we create the account first, then guide you through restaurant name, GSTIN, and business phone so billing identity stays clear.
           </div>
 
@@ -242,8 +260,8 @@ export function SignupPage({ onLogin }: SignupPageProps) {
           </button>
 
           <div className="relative py-1">
-            <div className="h-px bg-white/10" />
-            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#0b1524] px-3 text-xs text-slate-500">
+            <div className="h-px" style={{ background: 'var(--border)' }} />
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-3 text-xs" style={{ background: 'var(--surface)', color: 'var(--text-3)' }}>
               or continue with
             </span>
           </div>
@@ -252,7 +270,8 @@ export function SignupPage({ onLogin }: SignupPageProps) {
             type="button"
             onClick={startGoogleSignup}
             disabled={authLoading || (clerkEnabled && !isSignUpLoaded && !user)}
-            className="flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06] disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-full border px-4 py-3 text-sm font-semibold transition disabled:opacity-60"
+            style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)' }}
           >
             {authLoading ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
             Continue with Google
@@ -262,8 +281,8 @@ export function SignupPage({ onLogin }: SignupPageProps) {
 
       {signupStep === 'verify' && (
         <form onSubmit={verifySubmit} className="space-y-4">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm leading-6 text-slate-300">
-            We sent a verification code to <span className="font-semibold text-white">{email}</span>. Enter it below to finish account creation.
+          <div className="rounded-2xl border px-4 py-4 text-sm leading-6" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-2)' }}>
+            We sent a verification code to <span className="font-semibold" style={{ color: 'var(--text-1)' }}>{email}</span>. Enter it below to finish account creation.
           </div>
 
           <FormField
@@ -289,7 +308,8 @@ export function SignupPage({ onLogin }: SignupPageProps) {
               setSignupStep('details');
               setAuthError('');
             }}
-            className="text-sm font-semibold text-slate-400 transition hover:text-white"
+            className="text-sm font-semibold transition hover:brightness-110"
+            style={{ color: 'var(--text-2)' }}
           >
             Back to signup details
           </button>

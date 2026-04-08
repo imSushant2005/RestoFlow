@@ -39,7 +39,12 @@ export function useRealtimeSocket({
   }, [onReconnect]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      setStatus('disconnected');
+      setLatencyMs(null);
+      setLastHeartbeatAt(null);
+      return;
+    }
 
     const accessToken = token ?? localStorage.getItem('accessToken');
     if (!accessToken) {
@@ -47,14 +52,16 @@ export function useRealtimeSocket({
       return;
     }
 
+    setStatus('connecting');
+
     const socket = io(getSocketUrl(), {
       auth: { token: accessToken, client: 'dashboard' },
-      transports: ['websocket'],
-      rememberUpgrade: true,
+      transports: ['websocket', 'polling'],
+      rememberUpgrade: false,
       reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 12,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
       timeout: 12000,
     });
 
@@ -85,10 +92,15 @@ export function useRealtimeSocket({
       setStatus('reconnecting');
     };
 
+    const handleReconnectFailed = () => {
+      setStatus('disconnected');
+    };
+
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('connect_error', handleConnectError);
     socket.io.on('reconnect_attempt', handleReconnectAttempt);
+    socket.io.on('reconnect_failed', handleReconnectFailed);
 
     const offHandlers: Array<() => void> = [];
     Object.entries(handlers).forEach(([eventName, handler]) => {
@@ -113,6 +125,7 @@ export function useRealtimeSocket({
       socket.off('disconnect', handleDisconnect);
       socket.off('connect_error', handleConnectError);
       socket.io.off('reconnect_attempt', handleReconnectAttempt);
+      socket.io.off('reconnect_failed', handleReconnectFailed);
       socket.disconnect();
     };
   }, [enabled, handlers, token]);

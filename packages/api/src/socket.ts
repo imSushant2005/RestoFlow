@@ -59,6 +59,8 @@ type ClientToServerEvents = {
 };
 
 type ServerToClientEvents = {
+  [event: string]: (...args: any[]) => void;
+
   'socket:ready': (payload: {
     socketId: string;
     serverTime: string;
@@ -342,11 +344,11 @@ async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void):
 
       const user = await prisma.user.findUnique({
         where: { id: verifiedToken.userId },
-        select: { id: true, disabled: true },
+        select: { id: true, isActive: true },
       });
 
-      if (!user || user.disabled) {
-        return rejectAuth(socket, next, 'user_missing_or_disabled');
+      if (!user || !user.isActive) {
+        return rejectAuth(socket, next, 'user_missing_or_inactive');
       }
 
       socket.data.user = verifiedToken;

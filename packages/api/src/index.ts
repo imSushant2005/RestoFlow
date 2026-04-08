@@ -61,7 +61,10 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-initSocket(httpServer);
+void initSocket(httpServer).catch((error) => {
+  logger.error({ error }, 'Socket initialization failed');
+  process.exit(1);
+});
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', version: '1.0.0' });

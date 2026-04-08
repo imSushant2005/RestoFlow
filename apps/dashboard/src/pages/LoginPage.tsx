@@ -35,9 +35,19 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
   const isSuccessMessage = authError.toLowerCase().includes('complete');
 
+  const parseGoogleSyncError = (err: any, fallback: string) => {
+    const message = typeof err?.message === 'string' ? err.message.trim() : '';
+    if (!err?.response) {
+      if (message && message.toLowerCase() !== 'network error') return message;
+      const base = String(api.defaults.baseURL || 'http://localhost:4000');
+      return `Cannot reach API server (${base}). Start backend and try again.`;
+    }
+    return parseApiError(err, fallback);
+  };
+
   const syncGoogleLogin = async (clerkUser: any) => {
     const email = getClerkPrimaryEmail(clerkUser);
-    if (!email) throw new Error('Google account did not provide an email address.');
+    if (!email) throw new Error('Google profile is still loading. Please try again.');
     const name = getClerkDisplayName(clerkUser, email);
     const res = await api.post('/auth/clerk-sync', {
       clerkUserId: clerkUser.id,
@@ -53,13 +63,14 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     if (!clerkEnabled || !isUserLoaded || !user) return;
     if (localStorage.getItem('accessToken')) return;
     if (syncInFlight.current) return;
+    if (!getClerkPrimaryEmail(user)) return;
 
     syncInFlight.current = true;
     setAuthLoading(true);
     setAuthError('');
     syncGoogleLogin(user)
       .catch((err: any) => {
-        setAuthError(parseApiError(err, 'Unable to continue with Google login.'));
+        setAuthError(parseGoogleSyncError(err, 'Unable to continue with Google login.'));
       })
       .finally(() => {
         syncInFlight.current = false;
@@ -95,12 +106,16 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     }
 
     if (isUserLoaded && user) {
+      if (!getClerkPrimaryEmail(user)) {
+        setAuthError('Google profile is still loading. Please try again in a moment.');
+        return;
+      }
       setAuthLoading(true);
       setAuthError('');
       try {
         await syncGoogleLogin(user);
       } catch (err: any) {
-        setAuthError(parseApiError(err, 'Unable to continue with Google login.'));
+        setAuthError(parseGoogleSyncError(err, 'Unable to continue with Google login.'));
       } finally {
         setAuthLoading(false);
       }
@@ -181,11 +196,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     >
       {authError ? (
         <div
-          className={`mb-5 rounded-2xl border px-4 py-3 text-sm font-medium ${
+          className="mb-5 rounded-2xl border px-4 py-3 text-sm font-medium"
+          style={
             isSuccessMessage
-              ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
-              : 'border-red-400/30 bg-red-500/10 text-red-200'
-          }`}
+              ? { borderColor: 'rgba(16,185,129,0.25)', background: 'rgba(16,185,129,0.12)', color: '#047857' }
+              : { borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)', color: '#b91c1c' }
+          }
         >
           {authError}
         </div>
@@ -213,12 +229,13 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           />
 
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-            <label className="inline-flex items-center gap-2 text-slate-400">
+            <label className="inline-flex items-center gap-2" style={{ color: 'var(--text-2)' }}>
               <input
                 type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-4 w-4 rounded border-white/15 bg-[#0f1728] text-blue-600 focus:ring-blue-500/20"
+                className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500/20"
+                style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
               />
               Remember me
             </label>
@@ -228,7 +245,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 setForgotStep('reset');
                 setAuthError('');
               }}
-              className="font-semibold text-blue-300 transition hover:text-blue-200"
+              className="font-semibold transition hover:brightness-110"
+              style={{ color: 'var(--brand)' }}
             >
               Forgot password?
             </button>
@@ -244,8 +262,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           </button>
 
           <div className="relative py-1">
-            <div className="h-px bg-white/10" />
-            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#0b1524] px-3 text-xs text-slate-500">
+            <div className="h-px" style={{ background: 'var(--border)' }} />
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-3 text-xs" style={{ background: 'var(--surface)', color: 'var(--text-3)' }}>
               or continue with
             </span>
           </div>
@@ -254,15 +272,16 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             type="button"
             onClick={startGoogleLogin}
             disabled={authLoading || (clerkEnabled && !isSignInLoaded && !user)}
-            className="flex w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06] disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-full border px-4 py-3 text-sm font-semibold transition disabled:opacity-60"
+            style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)' }}
           >
             {authLoading ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
             Continue with Google
           </button>
 
-          <div className="text-sm text-slate-400">
+          <div className="text-sm" style={{ color: 'var(--text-2)' }}>
             Need an account?{' '}
-            <Link to="/signup" className="font-semibold text-blue-300 transition hover:text-blue-200">
+            <Link to="/signup" className="font-semibold transition hover:brightness-110" style={{ color: 'var(--brand)' }}>
               Create one here
             </Link>
           </div>
@@ -294,7 +313,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               setForgotStep('request');
               setAuthError('');
             }}
-            className="text-sm font-semibold text-slate-400 transition hover:text-white"
+            className="text-sm font-semibold transition hover:brightness-110"
+            style={{ color: 'var(--text-2)' }}
           >
             Back to login
           </button>
@@ -303,9 +323,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
       {forgotStep === 'reset' && question && (
         <form onSubmit={resetPassword} className="space-y-4">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-            <p className="text-sm font-medium text-slate-400">Security question</p>
-            <p className="mt-2 text-sm font-semibold text-white">{question}</p>
+          <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-3)' }}>Security question</p>
+            <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{question}</p>
           </div>
 
           <FormField
@@ -353,7 +373,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               setConfirmPassword('');
               setAuthError('');
             }}
-            className="text-sm font-semibold text-slate-400 transition hover:text-white"
+            className="text-sm font-semibold transition hover:brightness-110"
+            style={{ color: 'var(--text-2)' }}
           >
             Back to login
           </button>

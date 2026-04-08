@@ -1,5 +1,15 @@
 export function parseApiError(err: any, fallback: string) {
-  return typeof err?.response?.data?.error === 'string' ? err.response.data.error.trim() : fallback;
+  if (typeof err?.response?.data?.error === 'string') {
+    const responseError = err.response.data.error.trim();
+    if (responseError) return responseError;
+  }
+
+  if (typeof err?.message === 'string') {
+    const message = err.message.trim();
+    if (message) return message;
+  }
+
+  return fallback;
 }
 
 export function parseClerkError(err: any, fallback: string) {

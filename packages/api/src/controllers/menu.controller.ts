@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
 import { getIO } from '../socket';
-import { PLAN_LIMITS } from '../config/plans';
+import { getPlanLimits } from '../config/plans';
 import { deleteCache } from '../services/cache.service';
 
 const invalidateMenuCache = async (tenantId: string) => {
@@ -84,9 +84,9 @@ export const createMenuItem = async (req: Request, res: Response) => {
     if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
 
     const count = await prisma.menuItem.count({ where: { tenantId: req.tenantId } });
-    const planLimits = PLAN_LIMITS[tenant.plan as keyof typeof PLAN_LIMITS];
+    const planLimits = getPlanLimits(tenant.plan);
 
-    if (planLimits && count >= planLimits.items) {
+    if (count >= planLimits.items) {
       return res.status(403).json({ error: `Plan limit reached. Your ${tenant.plan} plan allows up to ${planLimits.items} menu items.` });
     }
 
