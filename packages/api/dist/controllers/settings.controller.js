@@ -242,8 +242,8 @@ const createStaff = async (req, res) => {
         const baseEmployeeCode = payload.employeeCode?.trim().toUpperCase() || defaultEmployeeCode(name, tenant.slug);
         const requestedEmployeeCode = baseEmployeeCode;
         const count = await prisma_1.prisma.user.count({ where: { tenantId: req.tenantId } });
-        const planLimits = plans_1.PLAN_LIMITS[tenant.plan];
-        if (planLimits && count >= planLimits.staff) {
+        const planLimits = (0, plans_1.getPlanLimits)(tenant.plan);
+        if (count >= planLimits.staff) {
             return res.status(403).json({ error: `Plan limit reached. Your ${tenant.plan} plan allows up to ${planLimits.staff} staff members.` });
         }
         const [existingByEmail, existingByEmployeeCode] = await Promise.all([

@@ -81,8 +81,8 @@ const createMenuItem = async (req, res) => {
         if (!tenant)
             return res.status(404).json({ error: 'Tenant not found' });
         const count = await prisma_1.prisma.menuItem.count({ where: { tenantId: req.tenantId } });
-        const planLimits = plans_1.PLAN_LIMITS[tenant.plan];
-        if (planLimits && count >= planLimits.items) {
+        const planLimits = (0, plans_1.getPlanLimits)(tenant.plan);
+        if (count >= planLimits.items) {
             return res.status(403).json({ error: `Plan limit reached. Your ${tenant.plan} plan allows up to ${planLimits.items} menu items.` });
         }
         const tags = Array.isArray(dietaryTags) ? dietaryTags : [];

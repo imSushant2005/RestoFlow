@@ -6,16 +6,18 @@ const plans_1 = require("../config/plans");
 const socket_1 = require("../socket");
 const getZones = async (req, res) => {
     try {
-        console.log('Fetching zones for tenant:', req.tenantId);
         const zones = await prisma_1.prisma.zone.findMany({
             where: { tenantId: req.tenantId },
+            orderBy: { sortOrder: 'asc' },
             include: {
                 tables: {
+                    orderBy: { name: 'asc' },
                     include: {
                         orders: {
                             where: {
                                 status: { in: ['NEW', 'ACCEPTED', 'PREPARING'] }
-                            }
+                            },
+                            select: { id: true, status: true },
                         }
                     }
                 }
@@ -33,7 +35,20 @@ const getZones = async (req, res) => {
 exports.getZones = getZones;
 const createZone = async (req, res) => {
     try {
-        const { name } = req.body;
+        const name = String(req.body?.name || '').trim();
+        if (!name) {
+            return res.status(400).json({ error: 'Zone name is required' });
+        }
+        const existingZone = await prisma_1.prisma.zone.findFirst({
+            where: {
+                tenantId: req.tenantId,
+                name: { equals: name, mode: 'insensitive' },
+            },
+            select: { id: true },
+        });
+        if (existingZone) {
+            return res.status(409).json({ error: `Zone '${name}' already exists.` });
+        }
         const zone = await prisma_1.prisma.zone.create({
             data: {
                 name,
@@ -43,45 +58,73 @@ const createZone = async (req, res) => {
         res.status(201).json(zone);
     }
     catch (error) {
+        console.error('createZone error:', error);
         res.status(500).json({ error: 'Failed to create zone' });
     }
 };
 exports.createZone = createZone;
 const createTable = async (req, res) => {
     try {
-        const { name, zoneId, x, y, seats } = req.body;
-        console.log('Creating table:', { name, zoneId, x, y, seats });
-        const tenant = await prisma_1.prisma.tenant.findUnique({ where: { id: req.tenantId } });
+        const name = String(req.body?.name || '').trim();
+        const zoneId = String(req.body?.zoneId || '').trim();
+        const rawCapacity = req.body?.capacity ?? req.body?.seats;
+        const rawX = req.body?.positionX ?? req.body?.x;
+        const rawY = req.body?.positionY ?? req.body?.y;
+        if (!name) {
+            return res.status(400).json({ error: 'Table name is required' });
+        }
+        if (!zoneId) {
+            return res.status(400).json({ error: 'Zone is required' });
+        }
+        const parsedCapacity = Number(rawCapacity);
+        const capacity = Number.isFinite(parsedCapacity)
+            ? Math.max(1, Math.min(24, Math.round(parsedCapacity)))
+            : 4;
+        const parsedX = Number(rawX);
+        const parsedY = Number(rawY);
+        const positionX = Number.isFinite(parsedX) ? parsedX : 50;
+        const positionY = Number.isFinite(parsedY) ? parsedY : 50;
+        const [tenant, zone] = await Promise.all([
+            prisma_1.prisma.tenant.findUnique({ where: { id: req.tenantId }, select: { id: true, plan: true } }),
+            prisma_1.prisma.zone.findFirst({
+                where: { id: zoneId, tenantId: req.tenantId },
+                select: { id: true },
+            }),
+        ]);
         if (!tenant)
             return res.status(404).json({ error: 'Tenant not found' });
+        if (!zone)
+            return res.status(404).json({ error: 'Zone not found' });
         // Check for duplicate table name in the same zone
-        const existingTable = await prisma_1.prisma.table.findFirst({
-            where: {
-                name,
-                zoneId,
-                tenantId: req.tenantId
-            }
-        });
+        const [existingTable, count] = await Promise.all([
+            prisma_1.prisma.table.findFirst({
+                where: {
+                    name: { equals: name, mode: 'insensitive' },
+                    zoneId: zone.id,
+                    tenantId: req.tenantId,
+                },
+                select: { id: true },
+            }),
+            prisma_1.prisma.table.count({ where: { tenantId: req.tenantId } }),
+        ]);
         if (existingTable) {
             return res.status(400).json({ error: `Table '${name}' already exists in this zone.` });
         }
-        console.log('Tenant plan inside createTable:', tenant.plan);
-        const count = await prisma_1.prisma.table.count({ where: { tenantId: req.tenantId } });
-        console.log('Current table count:', count);
-        if (count >= plans_1.PLAN_LIMITS[tenant.plan].tables) {
-            return res.status(403).json({ error: `Plan limit reached. Your ${tenant.plan} plan allows up to ${plans_1.PLAN_LIMITS[tenant.plan].tables} tables.` });
+        const planLimits = (0, plans_1.getPlanLimits)(tenant.plan);
+        if (count >= planLimits.tables) {
+            return res.status(403).json({ error: `Plan limit reached. Your ${tenant.plan} plan allows up to ${planLimits.tables} tables.` });
         }
         const table = await prisma_1.prisma.table.create({
             data: {
                 name,
-                zoneId,
-                positionX: x || 50,
-                positionY: y || 50,
-                capacity: seats ? parseInt(seats.toString(), 10) : 4,
+                zoneId: zone.id,
+                positionX,
+                positionY,
+                capacity,
+                seats: capacity,
                 tenantId: req.tenantId,
             },
         });
-        console.log('Table created:', table);
         res.status(201).json(table);
     }
     catch (error) {

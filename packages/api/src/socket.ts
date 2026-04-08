@@ -73,6 +73,61 @@ type ServerToClientEvents = {
     serverTime: string;
   }) => void;
 
+  'menu:availability_changed': (payload: {
+    itemId: string;
+    isAvailable: boolean;
+  }) => void;
+
+  'order:update': (payload: any) => void;
+
+  'order:new': (payload: any) => void;
+
+  'session:new': (payload: {
+    id: string;
+    tableId: string | null;
+    tableName?: string;
+    customerName?: string;
+    partySize: number;
+    openedAt: Date;
+  }) => void;
+
+  'session:update': (payload: {
+    sessionId: string;
+    status: string;
+    updatedAt: string;
+  }) => void;
+
+  'session:finished': (payload: {
+    sessionId: string;
+    tableName?: string;
+    totalAmount?: number;
+  }) => void;
+
+  'session:completed': (payload: {
+    sessionId: string;
+    paymentMethod: string;
+    closedAt: string | Date;
+  }) => void;
+
+  'orders:bulk_status': (payload: {
+    sessionId: string;
+    status: string;
+    updatedAt: string;
+  }) => void;
+
+  'table:status_change': (payload: {
+    tableId: string;
+    status: string;
+    orderNumber?: string;
+  }) => void;
+
+  'waiter:call': (payload: {
+    tableId?: string;
+    tableName: string;
+    type: string;
+    timestamp: string;
+  }) => void;
+
   error: (payload: {
     code: string;
     message?: string;
