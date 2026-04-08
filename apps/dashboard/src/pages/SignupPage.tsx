@@ -207,8 +207,8 @@ export function SignupPage({ onLogin }: SignupPageProps) {
     >
       {authError ? (
         <div
-          className="mb-5 rounded-2xl border px-4 py-3 text-sm font-medium"
-          style={{ borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)', color: '#b91c1c' }}
+          className="mb-6 rounded-2xl border-2 px-5 py-4 text-sm font-semibold shadow-2xl animate-in fade-in slide-in-from-top-2 duration-300"
+          style={{ borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.06)', color: '#991b1b' }}
         >
           {authError}
         </div>

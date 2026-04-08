@@ -150,15 +150,15 @@ export function VendorTopNav({
 
   return (
     <header
-      className="relative flex flex-wrap items-center justify-between gap-3 rounded-2xl px-2 py-2 sm:px-3 shadow-sm backdrop-blur-md"
+      className="relative z-[100] flex flex-wrap items-center justify-between gap-3 rounded-2xl px-2 py-2 sm:px-3 shadow-sm backdrop-blur-md"
       style={{ border: '1px solid var(--border)', background: 'var(--sidebar-bg)' }}
     >
       <div className="min-w-0">
         <h1
           className="truncate text-lg font-black tracking-tight sm:text-xl"
-          style={{ color: 'var(--text-1)', fontFamily: 'var(--font-display)' }}
+          style={{ color: 'var(--text-1)', fontFamily: 'var(--font-main)' }}
         >
-          Dashboard / {headerLabel}
+          {headerLabel}
         </h1>
         <p
           className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em]"

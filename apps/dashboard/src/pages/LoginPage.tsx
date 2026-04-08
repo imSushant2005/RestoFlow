@@ -196,17 +196,21 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     >
       {authError ? (
         <div
-          className="mb-5 rounded-2xl border px-4 py-3 text-sm font-medium"
+          className="mb-6 rounded-2xl border-2 px-5 py-4 text-sm font-semibold shadow-2xl animate-in fade-in slide-in-from-top-2 duration-300"
           style={
             isSuccessMessage
-              ? { borderColor: 'rgba(16,185,129,0.25)', background: 'rgba(16,185,129,0.12)', color: '#047857' }
-              : { borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)', color: '#b91c1c' }
+              ? { borderColor: 'rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.08)', color: '#065f46' }
+              : { borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.06)', color: '#991b1b' }
           }
         >
-          {authError}
-          {authError.toLowerCase().includes('create an account') && (
-            <div className="mt-2 pt-2 border-t border-red-500/20">
-              <Link to="/signup" className="font-bold underline hover:no-underline">Go to Sign Up page →</Link>
+          <div className="flex items-start gap-3">
+            <span className="flex-1 leading-relaxed">{authError}</span>
+          </div>
+          {(authError.toLowerCase().includes('create an account') || authError.toLowerCase().includes('user not found')) && !isSuccessMessage && (
+            <div className="mt-3 pt-3 border-t border-red-500/10">
+              <Link to="/signup" className="inline-flex items-center gap-1 font-black text-blue-600 hover:text-blue-500 transition-colors">
+                Create your workspace now →
+              </Link>
             </div>
           )}
         </div>

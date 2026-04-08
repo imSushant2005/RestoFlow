@@ -171,6 +171,7 @@ function PostLoginRedirect({ mustChangePassword }: { mustChangePassword: boolean
 }
 
 function DashboardShell() {
+  const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -406,12 +407,12 @@ function DashboardShell() {
       showProgress: true,
       steps: [
         { popover: { title: 'Welcome to RestoFlow', description: 'Let us take a quick tour of your workspace. Click Next to begin.' }},
-        { element: '#nav-menu', popover: { title: 'Menu Management', description: 'Create categories and menu items here. This is the source of truth for what guests can order.', side: "right", align: 'start' }},
-        { element: '#nav-tables-qr', popover: { title: 'Tables & QR Setup', description: 'Design your floor layout and generate tables linked to QR ordering.', side: "right", align: 'start' }},
-        { element: '#nav-live-orders', popover: { title: 'Live Orders Pipeline', description: 'Monitor incoming orders in real time and move them through kitchen and service stages.', side: "right", align: 'start' }},
-        { element: '#nav-billing', popover: { title: 'Billing & Invoices', description: 'Finalize completed sessions, collect payments, and generate invoices.', side: "right", align: 'start' }},
-        { element: '#nav-analytics', popover: { title: 'Analytics Insights', description: 'Understand revenue trends, peak hours, and top-performing items.', side: "right", align: 'start' }},
-        { element: '#nav-settings', popover: { title: 'Settings & Team Controls', description: 'Manage business profile, team accounts, and operational defaults.', side: "right", align: 'start' }},
+        { element: '#nav-menu', onHighlightStarted: () => navigate('/app/menu'), popover: { title: 'Menu Studio', description: 'Create and organize your digital menu. Add categories, items with photos, and customization options that sync instantly to your shop.', side: "right", align: 'start' }},
+        { element: '#nav-tables-qr', onHighlightStarted: () => navigate('/app/tables'), popover: { title: 'Tables & QR Design', description: 'Map out your physical restaurant layout and generate secure QR codes for દરેક table to enable instant checkout.', side: "right", align: 'start' }},
+        { element: '#nav-live-orders', onHighlightStarted: () => navigate('/app/orders'), popover: { title: 'Real-time Order Track', description: 'Manage the flow of orders from placement to service. Track kitchen status and keep staff updated in real time.', side: "right", align: 'start' }},
+        { element: '#nav-billing', onHighlightStarted: () => navigate('/app/billing'), popover: { title: 'Billing & Checkout', description: 'Manage payments, print invoices, and close dining sessions once customers are ready to pay.', side: "right", align: 'start' }},
+        { element: '#nav-analytics', onHighlightStarted: () => navigate('/app/analytics'), popover: { title: 'Business Insights', description: 'View heatmaps of your best days, track revenue at a glance, and understand which menu items are your top sellers.', side: "right", align: 'start' }},
+        { element: '#nav-settings', onHighlightStarted: () => navigate('/app/settings'), popover: { title: 'Operational Settings', description: 'Configure business hours, printer settings, and manage your team roles and permissions.', side: "right", align: 'start' }},
         { popover: { title: 'You are all set!', description: 'Explore the dashboard on your own. You can update your settings at any time.' }},
       ],
       onDestroyStarted: () => {

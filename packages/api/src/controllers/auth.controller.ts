@@ -288,7 +288,7 @@ export const clerkSync = async (req: Request, res: Response) => {
 
     if (normalizedIntent === 'LOGIN') {
       return res.status(404).json({
-        error: 'No account found for this Google login. Please create a workspace first.',
+        error: 'User not found. Please create an account first from the signup page.',
       });
     }
 
