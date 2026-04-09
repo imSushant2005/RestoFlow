@@ -106,16 +106,27 @@ const createOrder = async (req, res) => {
         }
         let safeTableId = null;
         if (tableId) {
-            const table = await prisma_1.prisma.table.findFirst({
-                where: {
-                    id: tableId,
-                    tenantId: tenant.id
-                },
+            // 1. Try resolving as a direct ID (QR Scan)
+            const tableById = await prisma_1.prisma.table.findUnique({
+                where: { id: tableId },
                 select: { id: true }
             });
-            safeTableId = table?.id || null;
+            if (tableById) {
+                safeTableId = tableById.id;
+            }
+            else {
+                // 2. Try resolving as a table name for this tenant (Manual Entry fallback)
+                const tableByName = await prisma_1.prisma.table.findFirst({
+                    where: {
+                        tenantId: tenant.id,
+                        name: { equals: tableId, mode: 'insensitive' }
+                    },
+                    select: { id: true }
+                });
+                safeTableId = tableByName?.id || null;
+            }
             if (!safeTableId) {
-                console.warn(`[PUBLIC_ORDER] Invalid tableId ${tableId} for tenant ${tenant.id}`);
+                console.warn(`[PUBLIC_ORDER] Could not resolve tableId/Name ${tableId} for tenant ${tenant.id}. Proceeding as unanchored order.`);
             }
         }
         let resolvedSession = incomingSessionToken
@@ -495,12 +506,30 @@ const waiterCall = async (req, res) => {
         const tenant = await prisma_1.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
         if (!tenant)
             return res.status(404).json({ error: 'Restaurant not found' });
-        let tableName = 'Unknown';
+        let tableName = tableId || 'Unknown';
         if (tableId) {
-            const table = await prisma_1.prisma.table.findUnique({ where: { id: tableId } });
-            if (table)
-                tableName = table.name;
+            // 1. Try resolving as a direct ID (QR Scan)
+            const tableById = await prisma_1.prisma.table.findUnique({
+                where: { id: tableId },
+                select: { name: true }
+            });
+            if (tableById) {
+                tableName = tableById.name;
+            }
+            else {
+                // 2. Try resolving as a table name for this tenant (Edge case)
+                const tableByName = await prisma_1.prisma.table.findFirst({
+                    where: {
+                        tenantId: tenant.id,
+                        name: { equals: tableId, mode: 'insensitive' }
+                    },
+                    select: { name: true }
+                });
+                if (tableByName)
+                    tableName = tableByName.name;
+            }
         }
+        console.log(`[WAITER_CALL] Tenant: ${tenantSlug}, Table: ${tableName}, Type: ${type}`);
         // Emit to dashboard and KDS via Socket.io
         (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(tenant.id)).emit('waiter:call', {
             tableId,

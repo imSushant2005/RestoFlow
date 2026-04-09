@@ -41,7 +41,6 @@ export function MenuBuilder() {
       <div className="px-6 py-4 flex justify-between items-center shadow-xs" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)', backdropFilter: 'blur(12px)' }}>
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--text-1)' }}>Menu Management</h1>
             {tenantSlug && (
               <a 
                 href={`${getCustomerAppUrl()}/order/${tenantSlug}`} 

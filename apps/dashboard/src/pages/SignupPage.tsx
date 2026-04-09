@@ -19,6 +19,7 @@ export function SignupPage({ onLogin }: SignupPageProps) {
   const syncInFlight = useRef(false);
 
   const [name, setName] = useState('');
+  const [restaurantName, setRestaurantName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
@@ -91,6 +92,7 @@ export function SignupPage({ onLogin }: SignupPageProps) {
             clerkUserId: attempt.createdUserId,
             email: email.trim(),
             name: name.trim(),
+            tenantName: restaurantName.trim(),
             password,
             authProvider: 'EMAIL',
             intent: 'SIGNUP',
@@ -108,6 +110,7 @@ export function SignupPage({ onLogin }: SignupPageProps) {
         email: email.trim(),
         password,
         name: name.trim(),
+        tenantName: restaurantName.trim(),
       });
       persistSession(res.data, onLogin);
     } catch (err: any) {
@@ -141,6 +144,7 @@ export function SignupPage({ onLogin }: SignupPageProps) {
         clerkUserId: complete.createdUserId,
         email: email.trim(),
         name: name.trim(),
+        tenantName: restaurantName.trim(),
         password,
         authProvider: 'EMAIL',
         intent: 'SIGNUP',
@@ -200,7 +204,7 @@ export function SignupPage({ onLogin }: SignupPageProps) {
     <AuthFrame
       badge="Signup"
       title="Create the owner account first"
-      subtitle="Start with the essentials only. Restaurant name, GSTIN, and business phone are collected in the guided workspace setup after account creation."
+      subtitle="Complete account creation and start your own workspace in seconds."
       alternateLabel="Already have an account?"
       alternateHref="/login"
       alternateCta="Login instead"
@@ -216,14 +220,23 @@ export function SignupPage({ onLogin }: SignupPageProps) {
 
       {signupStep === 'details' && (
         <form onSubmit={signupSubmit} className="space-y-4">
-          <FormField
-            label="Full name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            placeholder="Sushant Rana"
-            autoComplete="name"
-          />
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              label="Full name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              placeholder="Sushant Rana"
+              autoComplete="name"
+            />
+            <FormField
+              label="Restaurant name"
+              value={restaurantName}
+              onChange={(e) => setRestaurantName(e.target.value)}
+              required
+              placeholder="Aura Cafe"
+            />
+          </div>
 
           <FormField
             label="Email"
@@ -243,12 +256,8 @@ export function SignupPage({ onLogin }: SignupPageProps) {
             required
             placeholder="Use a unique password"
             autoComplete="new-password"
-            hint="After account creation, you will complete workspace identity in the next step."
+            hint="Min 6 characters required."
           />
-
-          <div className="rounded-2xl border px-4 py-4 text-sm leading-6" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-2)' }}>
-            What happens next: we create the account first, then guide you through restaurant name, GSTIN, and business phone so billing identity stays clear.
-          </div>
 
           <button
             type="submit"
@@ -258,6 +267,7 @@ export function SignupPage({ onLogin }: SignupPageProps) {
             {authLoading ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
             {authLoading ? 'Creating account...' : 'Create account'}
           </button>
+
 
           <div className="relative py-1">
             <div className="h-px" style={{ background: 'var(--border)' }} />

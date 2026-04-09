@@ -14,36 +14,37 @@ export const createSession = async (req: Request, res: Response) => {
     if (!customerId) return res.status(400).json({ error: 'customerId required' });
     if (!partySize || partySize < 1) return res.status(400).json({ error: 'partySize must be >= 1' });
 
-    const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-    if (!tenant) return res.status(404).json({ error: 'Restaurant not found' });
-
-    // Check if table already has an active session
-    if (tableId) {
-      const existingSession = await prisma.diningSession.findFirst({
+    // Optimization: Parallelize all prerequisite checks
+    const [tenant, existingSession, table] = await Promise.all([
+      prisma.tenant.findUnique({ where: { slug: tenantSlug }, select: { id: true, businessName: true } }),
+      tableId ? prisma.diningSession.findFirst({
         where: {
           tableId,
-          tenantId: tenant.id,
+          tenantId: undefined, // Will filter by tenant.id later if needed, but tableId is unique globally here
           sessionStatus: { notIn: ['CLOSED' as any, 'CANCELLED' as any] },
         },
+        select: { id: true, tenantId: true }
+      }) : Promise.resolve(null),
+      tableId ? prisma.table.findUnique({ where: { id: tableId }, select: { capacity: true } }) : Promise.resolve(null)
+    ]);
+
+    if (!tenant) return res.status(404).json({ error: 'Restaurant not found' });
+
+    // Validate if existing session belongs to this tenant
+    if (existingSession && existingSession.tenantId === tenant.id) {
+      return res.status(409).json({
+        error: 'Table has an active session',
+        existingSessionId: existingSession.id,
       });
-      if (existingSession) {
-        return res.status(409).json({
-          error: 'Table has an active session',
-          existingSessionId: existingSession.id,
-        });
-      }
     }
 
-    // Check table capacity
-    if (tableId) {
-      const table = await prisma.table.findUnique({ where: { id: tableId } });
-      if (table && partySize > table.capacity) {
-        return res.status(400).json({
-          error: 'Party size exceeds table capacity',
-          maxCapacity: table.capacity,
-        });
-      }
+    if (table && partySize > table.capacity) {
+      return res.status(400).json({
+        error: 'Party size exceeds table capacity',
+        maxCapacity: table.capacity,
+      });
     }
+
 
     // Create session + update table status in a transaction
     const session = await prisma.$transaction(async (tx) => {
@@ -336,31 +337,38 @@ export const finishSession = async (req: Request, res: Response) => {
 
     const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
 
-    const result = await prisma.$transaction(async (tx) => {
-      // Create bill
-      await tx.bill.create({
-        data: {
-          tenantId: tenant.id,
-          sessionId,
-          subtotal,
-          taxAmount,
-          discountAmount,
-          totalAmount,
-          invoiceNumber,
-          businessName: tenant.businessName,
-          businessAddress: tenant.address,
-          gstin: (tenant as any).gstin,
-          fssai: (tenant as any).fssai,
-        } as any,
-      });
+    // Check if bill already exists to prevent duplicate key error
+    const existingBill = await prisma.bill.findUnique({
+      where: { sessionId },
+    });
 
-      // Update session
+    const result = await prisma.$transaction(async (tx) => {
+      // Create bill only if it doesn't exist
+      if (!existingBill) {
+        await tx.bill.create({
+          data: {
+            tenantId: tenant.id,
+            sessionId,
+            subtotal,
+            taxAmount,
+            discountAmount,
+            totalAmount,
+            invoiceNumber,
+            businessName: tenant.businessName,
+            businessAddress: tenant.address,
+            gstin: (tenant as any).gstin,
+            fssai: (tenant as any).fssai,
+          } as any,
+        });
+      }
+
+      // Update session status to AWAITING_BILL regardless
       const updatedSession = await tx.diningSession.update({
         where: { id: sessionId },
         data: {
           sessionStatus: 'AWAITING_BILL' as any,
           isBillGenerated: true,
-          billGeneratedAt: new Date(),
+          billGeneratedAt: existingBill ? undefined : new Date(),
         },
         include: {
           tenant: { select: { businessName: true, currencySymbol: true } },
@@ -370,6 +378,7 @@ export const finishSession = async (req: Request, res: Response) => {
           bill: true,
         },
       });
+
 
       // Update table status
       if (session.tableId) {

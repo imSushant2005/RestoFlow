@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Clock, ChevronRight, Star, MapPin, Users } from 'lucide-react';
 import { api } from '../lib/api';
 import { getCustomerTokenForTenant } from '../lib/tenantStorage';
+import { CustomerNav } from '../components/CustomerNav';
 
 export function HistoryPage() {
   const { tenantSlug } = useParams();
@@ -53,7 +54,7 @@ export function HistoryPage() {
     );
 
   return (
-    <div className="min-h-[100dvh] bg-[color:var(--bg-primary)]">
+    <div className="min-h-[100dvh] bg-[color:var(--bg-primary)] pb-24">
       <div className="bg-gradient-to-br from-indigo-500 to-purple-600 px-6 pt-14 pb-8 text-white">
         <button onClick={() => navigate(-1)} className="text-white/70 text-sm font-bold mb-4">
           Back
@@ -130,6 +131,7 @@ export function HistoryPage() {
           );
         })}
       </div>
+      <CustomerNav />
     </div>
   );
 }

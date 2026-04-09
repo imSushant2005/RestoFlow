@@ -4,6 +4,7 @@ import { publicApi } from '../lib/api';
 import { MenuSection } from '../components/MenuSection';
 import { CartDrawer } from '../components/CartDrawer';
 import { WaiterCall } from '../components/WaiterCall';
+import { CustomerNav } from '../components/CustomerNav';
 import { LoyaltyBanner } from '../components/LoyaltyBanner';
 import { formatINR } from '../lib/currency';
 import { Utensils, UtensilsCrossed, Package, ArrowLeft, Search, Menu as MenuIcon, X, Sparkles, Star, ChevronRight } from 'lucide-react';
@@ -464,7 +465,7 @@ export function Storefront() {
       </div>
 
       {/* Floating Menu & Cart Nav (Zomato style) */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
+      <div className="fixed bottom-20 left-0 right-0 z-50 pointer-events-none">
         <div className="max-w-screen-sm mx-auto p-4 flex flex-col items-center gap-3">
           
           {/* Menu Button */}
@@ -526,6 +527,7 @@ export function Storefront() {
 
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} tenantSlug={tenantSlug!} tableId={tableId} />
       <WaiterCall tenantSlug={tenantSlug || ''} tableId={tableId} />
+      <CustomerNav />
     </div>
   );
 }

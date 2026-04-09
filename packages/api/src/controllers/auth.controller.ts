@@ -9,8 +9,10 @@ import { generateTokens, verifyRefreshToken } from '../utils/jwt';
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
-  name: z.string().trim().min(1).max(80).optional(),
+  name: z.string().trim().min(2).max(80).optional(),
+  tenantName: z.string().trim().min(2).max(120).optional(),
 });
+
 
 const loginSchema = z.object({
   identifier: z.string().trim().min(1).optional(),
@@ -166,13 +168,14 @@ export const register = async (req: Request, res: Response) => {
     }
 
     const hashedPassword = await hashPassword(validatedData.password);
-    const provisionalName = buildProvisionalWorkspaceName(validatedData.name);
-    const slug = await buildUniqueTenantSlug('workspace');
+    const resolvedName = validatedData.name || 'Owner';
+    const finalTenantName = validatedData.tenantName?.trim() || buildProvisionalWorkspaceName(resolvedName);
+    const slug = await buildUniqueTenantSlug(validatedData.tenantName || 'workspace');
 
     const result = await prisma.$transaction(async (tx: any) => {
       const tenant = await tx.tenant.create({
         data: {
-          businessName: provisionalName,
+          businessName: finalTenantName,
           slug,
           email: normalizedEmail,
         },
@@ -182,12 +185,13 @@ export const register = async (req: Request, res: Response) => {
         data: {
           email: normalizedEmail,
           passwordHash: hashedPassword,
-          name: validatedData.name || 'Owner',
+          name: resolvedName,
           role: UserRole.OWNER,
           tenantId: tenant.id,
           mustChangePassword: false,
         },
       });
+
 
       return { user, tenant };
     });
@@ -295,21 +299,23 @@ export const clerkSync = async (req: Request, res: Response) => {
     const baseName = payload.name?.trim();
     const fallbackName = normalizedEmail.split('@')[0] || 'Owner';
     const resolvedName = baseName && baseName.length > 0 ? baseName : fallbackName;
+    const finalTenantName = payload.tenantName?.trim() || buildProvisionalWorkspaceName(resolvedName);
+    const tenantSlug = await buildUniqueTenantSlug(payload.tenantName || 'workspace');
+    
     const localPassword =
       payload.password ||
       `${normalizedProvider.toLowerCase()}_${randomBytes(24).toString('base64url')}`;
     const hashedPassword = await hashPassword(localPassword);
-    const tenantSlug = await buildUniqueTenantSlug('workspace');
-    const provisionalBusinessName = buildProvisionalWorkspaceName(resolvedName);
 
     const created = await prisma.$transaction(async (tx: any) => {
       const tenant = await tx.tenant.create({
         data: {
-          businessName: provisionalBusinessName,
+          businessName: finalTenantName,
           slug: tenantSlug,
           email: normalizedEmail,
         },
       });
+
 
       const user = await tx.user.create({
         data: {
@@ -414,23 +420,26 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
-
-    const session = await issueSessionForUser(res, {
-      id: user.id,
-      tenantId: user.tenantId,
-      role: user.role,
-      email: user.email,
-      name: user.name,
-      employeeCode: user.employeeCode,
-      mustChangePassword: user.mustChangePassword,
-      securityQuestion: user.securityQuestion,
-    });
+    // Optimization: Run non-critical update in background and parallelize session creation
+    const [session] = await Promise.all([
+      issueSessionForUser(res, {
+        id: user.id,
+        tenantId: user.tenantId,
+        role: user.role,
+        email: user.email,
+        name: user.name,
+        employeeCode: user.employeeCode,
+        mustChangePassword: user.mustChangePassword,
+        securityQuestion: user.securityQuestion,
+      }),
+      prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      }).catch(err => console.error('[NON_CRITICAL_UPDATE_FAILED]:', err))
+    ]);
 
     return res.json(session);
+
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({

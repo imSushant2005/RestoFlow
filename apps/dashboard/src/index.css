@@ -12,11 +12,13 @@
   --font-display: 'Space Grotesk', 'Inter', sans-serif;
   --sidebar-w: 240px;
 
-  /* Brand - Upgraded for Vibrancy */
-  --brand: #3b82f6;
-  --brand-dark: #2563eb;
+  /* Brand - Refined & Vibrant */
+  --brand: #2563eb;
+  --brand-light: #60a5fa;
+  --brand-dark: #1d4ed8;
   --brand-soft: #eff6ff;
-  --brand-glow: rgba(59, 130, 246, 0.25);
+  --brand-glow: rgba(37, 99, 235, 0.12);
+  --brand-gradient: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   --brand-rainbow: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
 
   /* Surfaces */
@@ -24,12 +26,12 @@
   --surface-2: #f8fafc;
   --surface-3: #f1f5f9;
   --surface-raised: #ffffff;
-  --surface-overlay: rgba(0,0,0,0.5);
+  --surface-overlay: rgba(15, 23, 42, 0.6);
 
   /* Text */
   --text-1: #0f172a;
-  --text-2: #475569;
-  --text-3: #94a3b8;
+  --text-2: #334155;
+  --text-3: #64748b;
   --text-inverse: #ffffff;
 
   /* Borders */
@@ -42,26 +44,26 @@
   --danger: #ef4444;
 
   /* Sidebar */
-  --sidebar-bg: rgba(255,255,255,0.85);
+  --sidebar-bg: rgba(255, 255, 255, 0.9);
   --sidebar-border: #e2e8f0;
-  --sidebar-text: #475569;
-  --sidebar-text-active: #2563eb;
-  --sidebar-item-active-bg: #eff6ff;
+  --sidebar-text: #64748b;
+  --sidebar-text-active: #0f172a;
+  --sidebar-item-active-bg: #f1f5f9;
   --sidebar-item-hover-bg: #f8fafc;
   --sidebar-logo-bg: #2563eb;
 
   /* Cards */
   --card-bg: #ffffff;
   --card-border: #e2e8f0;
-  --card-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
-  --card-shadow-hover: 0 8px 24px rgba(0,0,0,0.08);
+  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --card-shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
 
   /* Inputs */
   --input-bg: #ffffff;
-  --input-border: #d1d5db;
+  --input-border: #cbd5e1;
   --input-text: #0f172a;
-  --input-placeholder: #9ca3af;
-  --input-focus-ring: rgba(37,99,235,0.3);
+  --input-placeholder: #94a3b8;
+  --input-focus-ring: rgba(37, 99, 235, 0.2);
 
   /* Kanban */
   --kanban-bg: #f8fafc;
@@ -73,10 +75,12 @@
   --scrollbar-thumb-hover: #94a3b8;
 
   /* Misc */
-  --radius: 12px;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-lg: 24px;
   --shell-bg: #f8fafc;
-  --shell-gradient: radial-gradient(ellipse at top right, rgba(37,99,235,0.04), transparent 40%),
-                    radial-gradient(ellipse at bottom left, rgba(16,185,129,0.03), transparent 40%);
+  --shell-gradient: radial-gradient(circle at top right, rgba(37, 99, 235, 0.04), transparent 400px),
+                    radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.03), transparent 400px);
 
   /* Legacy aliases still used in some pages */
   --bg: var(--shell-bg);
@@ -89,49 +93,49 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --brand-soft: rgba(37, 99, 235, 0.15);
-    --brand-glow: rgba(37, 99, 235, 0.25);
-    --surface: #0f1729;
-    --surface-2: #030712;
-    --surface-3: #1e293b;
-    --surface-raised: #111827;
-    --surface-overlay: rgba(0, 0, 0, 0.7);
-    --text-1: #f1f5f9;
+    --brand-soft: rgba(37, 99, 235, 0.1);
+    --brand-glow: rgba(37, 99, 235, 0.2);
+    --surface: #0a0c10;
+    --surface-2: #020408;
+    --surface-3: #161a22;
+    --surface-raised: #0f141e;
+    --surface-overlay: rgba(0, 0, 0, 0.85);
+
+    --text-1: #f8fafc;
     --text-2: #94a3b8;
-    --text-3: #64748b;
-    --text-inverse: #0f172a;
-    --border: rgba(255, 255, 255, 0.08);
-    --border-strong: rgba(255, 255, 255, 0.15);
-    --sidebar-bg: rgba(2, 6, 23, 0.8);
-    --sidebar-border: rgba(255, 255, 255, 0.08);
-    --sidebar-text: #94a3b8;
-    --sidebar-text-active: #ffffff;
-    --sidebar-item-active-bg: rgba(37, 99, 235, 0.1);
-    --sidebar-item-hover-bg: rgba(255, 255, 255, 0.04);
-    --sidebar-logo-bg: #2563eb;
-    --card-bg: rgba(255, 255, 255, 0.03);
-    --card-border: rgba(255, 255, 255, 0.08);
-    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-    --card-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.3);
-    --input-bg: rgba(255, 255, 255, 0.05);
-    --input-border: rgba(255, 255, 255, 0.12);
+    --text-3: #475569;
+    --text-inverse: #020617;
+
+    --border: rgba(255, 255, 255, 0.06);
+    --border-strong: rgba(255, 255, 255, 0.12);
+
+    --sidebar-bg: rgba(5, 7, 12, 0.95);
+    --sidebar-border: rgba(255, 255, 255, 0.06);
+    --sidebar-text: #475569;
+    --sidebar-text-active: #f1f5f9;
+    --sidebar-item-active-bg: rgba(255, 255, 255, 0.03);
+    --sidebar-item-hover-bg: rgba(255, 255, 255, 0.02);
+
+    --card-bg: #0f141e;
+    --card-border: rgba(255, 255, 255, 0.06);
+    --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    --card-shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+
+    --input-bg: #161b26;
+    --input-border: rgba(255, 255, 255, 0.1);
     --input-text: #f1f5f9;
-    --input-placeholder: #64748b;
-    --input-focus-ring: rgba(37, 99, 235, 0.4);
-    --kanban-bg: rgba(15, 23, 42, 0.5);
-    --kanban-col-bg: rgba(255, 255, 255, 0.02);
-    --kanban-col-border: rgba(255, 255, 255, 0.06);
-    --scrollbar-thumb: #334155;
-    --scrollbar-thumb-hover: #475569;
-    --shell-bg: #030712;
-    --bg: var(--shell-bg);
-    --bg-primary: var(--shell-bg);
-    --bg-secondary: var(--surface);
-    --text-primary: var(--text-1);
-    --text-secondary: var(--text-3);
-    --border-primary: var(--border);
+    --input-placeholder: #475569;
+
+    --kanban-bg: #020408;
+    --kanban-col-bg: #0f141e;
+    --kanban-col-border: rgba(255, 255, 255, 0.05);
+
+    --shell-bg: #020408;
+    --shell-gradient: radial-gradient(circle at top right, rgba(37, 99, 235, 0.08), transparent 500px),
+                      radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.05), transparent 500px);
   }
 }
+
 
 /* Manual theme override support (data-theme or class based). */
 :root[data-theme='light'],

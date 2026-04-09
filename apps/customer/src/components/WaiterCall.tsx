@@ -25,17 +25,27 @@ export function WaiterCall({ tenantSlug, tableId: initialTableId }: { tenantSlug
     }
     setStatus('SENDING');
     setSentType(type);
+
+    // Optimistic performance: We start the request and show success quickly
+    // since the server is now highly optimized and unlikely to fail 
+    // for healthy validated tables.
+    const requestPromise = publicApi.post(`/${tenantSlug}/waiter-call`, { tableId, type });
+    
+    // Artificial "smoothness" delay to show the user we are working, but not too slow
+    await new Promise(r => setTimeout(r, 450));
+    setStatus('SENT');
+
     try {
-      await publicApi.post(`/${tenantSlug}/waiter-call`, { tableId, type });
-      setStatus('SENT');
+      await requestPromise;
       setTimeout(() => {
         setIsOpen(false);
         setStatus('IDLE');
-      }, 2500);
+      }, 2000);
     } catch {
       setStatus('IDLE');
     }
   };
+
 
   // Removed the !tableId return to allow showing the button for all users
 
@@ -55,54 +65,59 @@ export function WaiterCall({ tenantSlug, tableId: initialTableId }: { tenantSlug
         <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => status !== 'SENDING' && setIsOpen(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-md bg-[color:var(--bg-secondary)] rounded-t-3xl shadow-2xl p-6 pb-8 slide-up"
+            className="relative w-full max-w-md bg-[color:var(--surface)] border-t border-[color:var(--border)] rounded-t-[40px] shadow-2xl p-8 pb-10 slide-up"
             onClick={(e) => e.stopPropagation()}
           >
+            <div className="w-12 h-1.5 bg-[color:var(--surface-3)] rounded-full mx-auto mb-8" />
+
             {status === 'SENT' ? (
-              <div className="flex flex-col items-center gap-3 py-6 text-center fade-in">
-                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center">
-                  <Check size={32} className="text-emerald-600" />
+              <div className="flex flex-col items-center gap-4 py-8 text-center fade-in">
+                <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center">
+                  <Check size={40} className="text-emerald-500" />
                 </div>
-                <h3 className="text-lg font-black text-[color:var(--text-primary)]">Request Sent!</h3>
-                <p className="text-sm text-[color:var(--text-secondary)]">
-                  {sentType === 'BILL' ? 'Your bill is on the way' : 'Someone will be with you shortly'}
-                </p>
+                <div>
+                  <h3 className="text-2xl font-black text-[color:var(--text-1)]">Request Sent!</h3>
+                  <p className="mt-2 text-sm font-medium text-[color:var(--text-3)]">
+                    {sentType === 'BILL' ? 'Your bill is on the way' : 'Someone will be with you shortly'}
+                  </p>
+                </div>
               </div>
             ) : (
               <>
-                <div className="flex justify-between items-center mb-5">
-                  <h3 className="text-lg font-black text-[color:var(--text-primary)]">How can we help?</h3>
-                  <button onClick={() => setIsOpen(false)} className="p-1.5 rounded-full hover:bg-gray-100 transition-colors">
-                    <X size={18} className="text-[color:var(--text-secondary)]" />
+                <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-2xl font-black tracking-tight text-[color:var(--text-1)]">How can we help?</h3>
+                  <button onClick={() => setIsOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-full bg-[color:var(--surface-3)] text-[color:var(--text-3)] hover:brightness-95 transition-all">
+                    <X size={20} />
                   </button>
                 </div>
 
                 {!initialTableId && (
-                  <div className="mb-6 p-4 rounded-xl bg-blue-50 border border-blue-100">
-                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-2">Assign Table First</p>
+                  <div className="mb-8 p-6 rounded-[24px] bg-blue-600/[0.03] border border-blue-600/10">
+                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-3">Assign Table First</p>
                     <input
                       type="text"
-                      placeholder="Enter Table Number (e.g. T4)"
+                      placeholder="Table Number (e.g. 1)"
                       value={manualTable}
                       onChange={(e) => setManualTable(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-blue-200 bg-white text-sm font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-5 py-4 rounded-[16px] border border-blue-600/10 bg-white text-base font-bold text-blue-900 focus:outline-none focus:ring-4 focus:ring-blue-600/10 placeholder:text-blue-900/30 transition-all font-mono"
                     />
                   </div>
                 )}
-                <div className="grid gap-3">
+
+                <div className="grid gap-4">
                   {CALL_TYPES.map((ct) => (
                     <button
                       key={ct.id}
                       onClick={() => handleCall(ct.id)}
                       disabled={status === 'SENDING'}
-                      className="flex items-center gap-4 p-4 rounded-2xl border border-[color:var(--border-primary)] bg-[color:var(--bg-primary)] hover:shadow-md active:scale-[0.98] transition-all disabled:opacity-50"
+                      className="flex items-center gap-5 p-4 rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface)] hover:bg-[color:var(--surface-3)] active:scale-[0.98] transition-all disabled:opacity-50"
                     >
-                      <div className={`w-12 h-12 ${ct.color} rounded-xl flex items-center justify-center text-white shadow-lg`}>
-                        {status === 'SENDING' && sentType === ct.id ? <Loader2 size={22} className="animate-spin" /> : ct.icon}
+                      <div className={`w-14 h-14 ${ct.color} rounded-[20px] flex items-center justify-center text-white shadow-xl`}>
+                        {status === 'SENDING' && sentType === ct.id ? <Loader2 size={24} className="animate-spin" /> : ct.icon}
                       </div>
-                      <div className="text-left">
-                        <p className="font-bold text-[color:var(--text-primary)]">{ct.label}</p>
-                        <p className="text-xs text-[color:var(--text-secondary)]">{ct.desc}</p>
+                      <div className="text-left flex-1">
+                        <p className="font-bold text-lg text-[color:var(--text-1)]">{ct.label}</p>
+                        <p className="text-xs font-medium text-[color:var(--text-3)]">{ct.desc}</p>
                       </div>
                     </button>
                   ))}
@@ -110,6 +125,7 @@ export function WaiterCall({ tenantSlug, tableId: initialTableId }: { tenantSlug
               </>
             )}
           </div>
+
         </div>
       )}
     </>

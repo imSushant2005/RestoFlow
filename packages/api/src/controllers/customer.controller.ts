@@ -16,46 +16,38 @@ export const login = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Valid phone number is required' });
     }
 
-    let customer = await prisma.customer.findUnique({ where: { phone } });
-
-    if (customer) {
-      // Update lastSeenAt and name if provided
-      customer = await prisma.customer.update({
-        where: { id: customer.id },
-        data: {
-          lastSeenAt: new Date(),
-          ...(name && { name }),
-        },
-      });
-    } else {
-      // Create new customer
-      customer = await prisma.customer.create({
-        data: {
-          phone,
-          name: name || null,
-        },
-      });
-    }
-
-    const normalizedTenantSlug =
-      typeof tenantSlug === 'string' && tenantSlug.trim().length > 0 ? tenantSlug.trim() : null;
-
-    if (normalizedTenantSlug) {
-      const tenant = await prisma.tenant.findUnique({
-        where: { slug: normalizedTenantSlug },
+    // Optimization: Parallelize tenant lookup and customer identification
+    const [customer, tenant] = await Promise.all([
+      (async () => {
+        let c = await prisma.customer.findUnique({ where: { phone } });
+        if (c) {
+          return prisma.customer.update({
+            where: { id: c.id },
+            data: { lastSeenAt: new Date(), ...(name && { name }) },
+          });
+        }
+        return prisma.customer.create({
+          data: { phone, name: name || null },
+        });
+      })(),
+      tenantSlug ? prisma.tenant.findUnique({
+        where: { slug: tenantSlug.trim() },
         select: { id: true },
-      });
-      if (!tenant) {
-        return res.status(404).json({ error: 'Tenant not found' });
-      }
+      }) : Promise.resolve(null)
+    ]);
+
+    if (tenantSlug && !tenant) {
+      return res.status(404).json({ error: 'Tenant not found' });
     }
+
 
     // Generate JWT
     const token = jwt.sign(
-      { customerId: customer.id, phone: customer.phone, tenantSlug: normalizedTenantSlug },
+      { customerId: customer.id, phone: customer.phone, tenantSlug: tenantSlug?.trim() || null },
       env.JWT_SECRET,
       { expiresIn: '30d' }
     );
+
 
     res.json({
       token,

@@ -233,7 +233,7 @@ function DashboardShell() {
   }, [canAccessOrders]);
 
   const pushNotification = useCallback(
-    (entry: Omit<OpsNotification, 'id' | 'read' | 'createdAt'> & { createdAt?: string }) => {
+    (entry: Omit<OpsNotification, 'id' | 'read' | 'createdAt'> & { sound?: string; createdAt?: string }) => {
       const id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       const next: OpsNotification = {
         id,
@@ -246,22 +246,22 @@ function DashboardShell() {
 
       setNotifications((previous) => [next, ...previous].slice(0, 60));
       
-      console.log('Pushing Notification:', next);
-      // TRIGGER TOAST & SOUND
       setToasts((prev) => [...prev, next]);
+      
+      const soundUrl = entry.sound || 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
       try {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        const audio = new Audio(soundUrl);
         audio.volume = 0.5;
         audio.play().catch((err) => console.warn('Notification sound blocked:', err));
       } catch (e) {}
 
-      // AUTO REMOVE TOAST AFTER 6s
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id));
       }, 6000);
     },
     [],
   );
+
 
   const unreadNotificationCount = useMemo(
     () => notifications.reduce((total, notification) => total + (notification.read ? 0 : 1), 0),
@@ -316,6 +316,7 @@ function DashboardShell() {
           title: 'New Order',
           message: `${order?.table?.name ? `Table ${order.table.name}` : 'Takeaway'} placed ${order?.orderNumber || `#${String(order?.id || '').slice(-6)}`}`,
           level: 'warning',
+          sound: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' // Default order sound
         });
       },
       'order:update': (order: any) => {
@@ -356,13 +357,19 @@ function DashboardShell() {
         void refreshLiveOrderCount();
       },
       'waiter:call': (call: any) => {
+        console.log('[DEBUG_DASHBOARD] RECEIVED waiter:call event:', call);
         const callType = String(call?.type || 'WAITER').toUpperCase();
-        const tableName = call?.tableName ? `Table ${call.tableName}` : 'A table';
+        const tableName = call?.tableName ? call.tableName : 'A table';
+        
+        // Use a distinct "Ping" sound for waiter calls
+        const WAITER_SOUND = 'https://assets.mixkit.co/active_storage/sfx/495/495-preview.mp3';
+
         if (callType === 'BILL') {
           pushNotification({
             title: 'Bill Request',
             message: `${tableName} asked for billing.`,
             level: 'warning',
+            sound: WAITER_SOUND
           });
           return;
         }
@@ -371,6 +378,7 @@ function DashboardShell() {
             title: 'Water Request',
             message: `${tableName} needs fresh water.`,
             level: 'info',
+            sound: WAITER_SOUND
           });
           return;
         }
@@ -379,6 +387,7 @@ function DashboardShell() {
             title: 'Service Request',
             message: `${tableName} requested spoons/napkins.`,
             level: 'info',
+            sound: WAITER_SOUND
           });
           return;
         }
@@ -386,6 +395,7 @@ function DashboardShell() {
           title: 'Waiter Call',
           message: `${tableName} requested attention.`,
           level: 'info',
+          sound: WAITER_SOUND
         });
       },
       'table:status_change': () => {

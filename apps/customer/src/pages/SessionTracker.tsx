@@ -19,6 +19,7 @@ import { formatINR } from '../lib/currency';
 import { getSocketUrl } from '../lib/network';
 import { useCartStore } from '../store/cartStore';
 import { getActiveSessionForTenant } from '../lib/tenantStorage';
+import { CustomerNav } from '../components/CustomerNav';
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any; bg: string }> = {
   NEW: { label: 'Received', color: 'text-blue-500', bg: 'bg-blue-500/10', icon: Clock },
@@ -219,13 +220,18 @@ export function SessionTracker() {
     };
   }, [navigate, scheduleRefresh, sessionId, tenantSlug, upsertOrder]);
 
+  const [error, setError] = useState<string | null>(null);
+
   const handleFinish = async () => {
     if (!sessionId || !tenantSlug) return;
-    if (!confirm('Finish dining? No more items can be added after this.')) return;
+    setError(null);
+    
+    // Use a cleaner confirmation
+    if (!window.confirm('Ready for the bill? This will lock your order and notify the staff.')) return;
 
     const orders = (session?.orders || []).filter((order: any) => order.status !== 'CANCELLED');
     if (orders.length === 0) {
-      alert('Cannot finish session with no orders. Add items first.');
+      setError('You need at least one active order to checkout.');
       return;
     }
 
@@ -234,11 +240,14 @@ export function SessionTracker() {
       await publicApi.post(`/${tenantSlug}/sessions/${sessionId}/finish`);
       navigate(`/order/${tenantSlug}/session/${sessionId}/bill`);
     } catch (err: any) {
-      alert(err?.response?.data?.error || 'Failed to finish session');
+      const msg = err?.response?.data?.error || err?.message || 'Failed to finish session';
+      setError(msg);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setFinishing(false);
     }
   };
+
 
   const handleReorder = (order: any) => {
     if (!Array.isArray(order?.items) || order.items.length === 0) return;
@@ -333,7 +342,7 @@ export function SessionTracker() {
         : { label: 'Realtime offline', className: 'bg-red-500/15 text-red-500 border-red-500/20' };
 
   return (
-    <div className="min-h-[100dvh] flex flex-col pb-32" style={{ background: 'var(--bg)', '--brand': brandColor } as any}>
+    <div className="min-h-[100dvh] flex flex-col pb-44" style={{ background: 'var(--bg)', '--brand': brandColor } as any}>
       <div
         className="relative overflow-hidden px-6 pb-20 pt-12 rounded-b-[40px] shadow-2xl"
         style={{ background: 'var(--surface)' }}
@@ -429,7 +438,19 @@ export function SessionTracker() {
       </div>
 
       <div className="px-6 -mt-8 relative z-20 space-y-6">
-        {!isClosed && (
+        {error && (
+          <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex flex-col gap-1 items-center text-center fade-in">
+             <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center mb-1">
+                <X size={20} />
+             </div>
+             <p className="font-black text-sm uppercase">Checkout Blocked</p>
+             <p className="text-xs font-bold opacity-80">{error}</p>
+             <button onClick={() => setError(null)} className="mt-2 text-[10px] font-black uppercase tracking-widest bg-red-500 text-white px-4 py-1.5 rounded-full">Dismiss</button>
+          </div>
+        )}
+
+        {!isClosed && !error && (
+
           <div
             className="rounded-2xl border p-4 shadow-lg fade-in flex items-start gap-3"
             style={{ background: 'var(--glass-bg)', borderColor: 'var(--brand-soft)', backdropFilter: 'blur(20px)' }}
@@ -477,7 +498,10 @@ export function SessionTracker() {
                     </div>
                     <div>
                       <p className="text-sm font-black" style={{ color: 'var(--text-1)' }}>
-                        Order #{index + 1}
+                        {index === 0 ? 'Primary Order' : `Add-on Order #${index}`}
+                        <span className="ml-2 text-[10px] font-bold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-100">
+                          #{order.orderNumber || order.id?.slice(-6).toUpperCase()}
+                        </span>
                       </p>
                       <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>
                         {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -536,7 +560,7 @@ export function SessionTracker() {
       </div>
 
       {!isClosed && (
-        <div className="fixed bottom-0 left-0 right-0 p-6 z-50 pointer-events-none">
+        <div className="fixed bottom-16 left-0 right-0 p-6 z-40 pointer-events-none">
           <div className="mx-auto flex max-w-md gap-3 pointer-events-auto">
             <button
               onClick={() => {
@@ -572,6 +596,7 @@ export function SessionTracker() {
           Powered by RestoFlow
         </p>
       </div>
+      <CustomerNav />
     </div>
   );
 }

@@ -408,7 +408,9 @@ async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void):
 
       socket.data.user = verifiedToken;
       socket.data.connectedAt = Date.now();
-      socket.join(getTenantRoom(verifiedToken.tenantId));
+      const staffRoom = getTenantRoom(verifiedToken.tenantId);
+      socket.join(staffRoom);
+      console.log(`[DEBUG_SOCKET] Staff authenticated & joined room: ${staffRoom} (Socket: ${socket.id}, User: ${verifiedToken.userId})`);
       return next();
     }
 
@@ -562,12 +564,27 @@ function onConnection(socket: TypedSocket): void {
 }
 
 function buildAllowedOrigins(): string[] {
-  return [...new Set(
-    (process.env.WS_ORIGINS ?? process.env.CORS_ORIGIN ?? '')
-      .split(',')
-      .map((v) => v.trim())
-      .filter(Boolean),
-  )];
+  const envOrigins = (process.env.WS_ORIGINS ?? process.env.CORS_ORIGIN ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+  const clientUrl = process.env.CLIENT_URL || '';
+  const origins = [...new Set([...envOrigins, clientUrl])].filter(Boolean);
+
+  // In development, if no origins are set, allow common local dev ports
+  if (origins.length === 0 && process.env.NODE_ENV !== 'production') {
+    return [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001',
+      'http://127.0.0.1:3002',
+    ];
+  }
+
+  return origins;
 }
 
 function registerShutdownHooks(): void {

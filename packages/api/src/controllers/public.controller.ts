@@ -532,48 +532,71 @@ export const submitFeedback = async (req: Request, res: Response) => {
 export const waiterCall = async (req: Request, res: Response) => {
   try {
     const { tenantSlug } = req.params;
-    const { tableId, type } = req.body; // type: WAITER | BILL | HELP
+    const { tableId, type } = req.body; // type: WAITER | BILL | WATER | EXTRA | HELP
 
-    const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-    if (!tenant) return res.status(404).json({ error: 'Restaurant not found' });
+    console.log(`[DEBUG_WAITER_CALL] START: Slug=${tenantSlug}, TableId=${tableId}, Type=${type}`);
 
-    let tableName = tableId || 'Unknown';
+    // 1. Resolve Tenant ID (with cache)
+    const cacheKey = `tenant_id_by_slug_${tenantSlug}`;
+    let tenantId = await getCache(cacheKey);
     
+    if (!tenantId) {
+      const tenant = await prisma.tenant.findUnique({ 
+        where: { slug: tenantSlug },
+        select: { id: true } 
+      });
+      if (!tenant) {
+        console.error(`[DEBUG_WAITER_CALL] ERROR: Tenant not found for slug: ${tenantSlug}`);
+        return res.status(404).json({ error: 'Restaurant not found' });
+      }
+      tenantId = tenant.id;
+      await setCache(cacheKey, tenantId, 86400);
+      console.log(`[DEBUG_WAITER_CALL] Resolved Tenant ID from DB: ${tenantId}`);
+    } else {
+      console.log(`[DEBUG_WAITER_CALL] Resolved Tenant ID from Cache: ${tenantId}`);
+    }
+
+    // 2. Resolve Table Name
+    let tableName = tableId || 'Unknown';
     if (tableId) {
-      // 1. Try resolving as a direct ID (QR Scan)
-      const tableById = await prisma.table.findUnique({ 
-        where: { id: tableId },
+      // Try ID first, then Name
+      const table = await prisma.table.findFirst({
+        where: {
+          OR: [
+            { id: tableId },
+            { name: { equals: tableId, mode: 'insensitive' }, tenantId }
+          ]
+        },
         select: { name: true }
       });
-      
-      if (tableById) {
-        tableName = tableById.name;
-      } else {
-        // 2. Try resolving as a table name for this tenant (Edge case)
-        const tableByName = await prisma.table.findFirst({
-          where: { 
-            tenantId: tenant.id,
-            name: { equals: tableId, mode: 'insensitive' }
-          },
-          select: { name: true }
-        });
-        if (tableByName) tableName = tableByName.name;
+      if (table) {
+        tableName = table.name;
+        console.log(`[DEBUG_WAITER_CALL] Resolved Table Name: ${tableName}`);
       }
     }
 
-    console.log(`[WAITER_CALL] Tenant: ${tenantSlug}, Table: ${tableName}, Type: ${type}`);
-
-    // Emit to dashboard and KDS via Socket.io
-    getIO().to(getTenantRoom(tenant.id)).emit('waiter:call', {
+    // 3. Emit Event
+    const room = getTenantRoom(tenantId);
+    const payload = {
       tableId,
-      tableName,
+      tableName: tableName.startsWith('Table ') ? tableName : `Table ${tableName}`,
       type: type || 'WAITER',
       timestamp: new Date().toISOString(),
-    });
+    };
 
-    res.json({ success: true });
+    console.log(`[DEBUG_WAITER_CALL] EMITTING to Room: ${room}, Payload:`, payload);
+
+    const emitted = getIO().to(room).emit('waiter:call', payload);
+    
+    if (emitted) {
+      console.log(`[DEBUG_WAITER_CALL] SUCCESS: Event emitted via Socket.io`);
+    } else {
+      console.warn(`[DEBUG_WAITER_CALL] WARNING: Event emission call returned false`);
+    }
+
+    res.json({ success: true, table: tableName });
   } catch (error) {
-    console.error('waiterCall error:', error);
-    res.status(500).json({ error: 'Failed to send waiter call' });
+    console.error('[DEBUG_WAITER_CALL] CRITICAL ERROR:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };

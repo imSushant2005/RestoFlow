@@ -221,10 +221,9 @@ export function Orders({ role }: { role?: string }) {
       ? Array.from({ length: Math.min(ticket.session.partySize, 6) })
       : [];
 
-    const handleCloseSession = async (e: React.MouseEvent) => {
-      e.stopPropagation();
+    const handleCloseSession = async (method: 'cash' | 'online') => {
       if (!canCloseSession) return;
-      if (!confirm('Generate bill and auto-checkout this session now?')) return;
+      if (!confirm(`Finalize payment via ${method.toUpperCase()} and checkout?`)) return;
       const slug = await resolveTenantSlug();
       if (!slug) {
         alert('Tenant slug missing. Complete Business Profile setup first.');
@@ -232,7 +231,7 @@ export function Orders({ role }: { role?: string }) {
       }
       try {
         await api.post(`/public/${slug}/sessions/${ticket.sessionId}/finish`);
-        await api.post(`/public/${slug}/sessions/${ticket.sessionId}/complete`, { paymentMethod: 'cash' });
+        await api.post(`/public/${slug}/sessions/${ticket.sessionId}/complete`, { paymentMethod: method });
         queryClient.invalidateQueries({ queryKey: ['live-orders'] });
         queryClient.invalidateQueries({ queryKey: ['order-history'] });
         queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
@@ -334,13 +333,22 @@ export function Orders({ role }: { role?: string }) {
 
           {/* Close session CTA */}
           {ticket.isSession && (
-            <button
-              onClick={handleCloseSession}
-              disabled={!canCloseSession}
-              className="w-full text-sm font-bold bg-gradient-to-r from-orange-500 to-red-500 text-white py-2.5 rounded-xl hover:brightness-110 active:scale-[0.98] transition-all shadow-md shadow-orange-500/20 mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Generate Bill & Auto Checkout
-            </button>
+            <div className="flex gap-2 mt-1">
+              <button
+                onClick={() => handleCloseSession('cash')}
+                disabled={!canCloseSession}
+                className="flex-1 text-[11px] font-black uppercase tracking-wider bg-gradient-to-br from-orange-500 to-amber-600 text-white py-2.5 rounded-xl hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-orange-500/10 disabled:opacity-50"
+              >
+                Paid Cash
+              </button>
+              <button
+                onClick={() => handleCloseSession('online')}
+                disabled={!canCloseSession}
+                className="flex-1 text-[11px] font-black uppercase tracking-wider bg-gradient-to-br from-blue-600 to-indigo-700 text-white py-2.5 rounded-xl hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-blue-500/10 disabled:opacity-50"
+              >
+                Paid Online
+              </button>
+            </div>
           )}
         </div>
       </div>

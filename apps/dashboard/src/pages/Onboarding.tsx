@@ -52,7 +52,8 @@ const onboardingReasons = [
 export function Onboarding({ nextPath }: OnboardingProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<'welcome' | 'identity' | 'done'>('welcome');
+  const [step, setStep] = useState<'welcome' | 'identity' | 'done'>('identity');
+
   const [errorMessage, setErrorMessage] = useState('');
 
   const { data: business, isLoading } = useQuery({

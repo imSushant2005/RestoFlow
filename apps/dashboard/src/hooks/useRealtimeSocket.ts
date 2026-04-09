@@ -32,7 +32,14 @@ export function useRealtimeSocket({
   const [status, setStatus] = useState<SocketStatus>('connecting');
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [lastHeartbeatAt, setLastHeartbeatAt] = useState<string | null>(null);
+  const handlersRef = useRef<RealtimeHandlers>(handlers);
   const onReconnectRef = useRef<typeof onReconnect>(onReconnect);
+  const socketRef = useRef<Socket | null>(null);
+
+
+  useEffect(() => {
+    handlersRef.current = handlers;
+  }, [handlers]);
 
   useEffect(() => {
     onReconnectRef.current = onReconnect;
@@ -40,6 +47,10 @@ export function useRealtimeSocket({
 
   useEffect(() => {
     if (!enabled) {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
       setStatus('disconnected');
       setLatencyMs(null);
       setLastHeartbeatAt(null);
@@ -65,6 +76,8 @@ export function useRealtimeSocket({
       timeout: 12000,
     });
 
+    socketRef.current = socket;
+
     const handleConnect = () => {
       setStatus('connected');
       onReconnectRef.current?.();
@@ -77,8 +90,7 @@ export function useRealtimeSocket({
 
     const handleConnectError = (error: unknown) => {
       if (isAuthSocketError(error)) {
-        // Stop endless reconnect loops when the socket token is no longer valid.
-        (socket as Socket).io.opts.reconnection = false;
+        socket.io.opts.reconnection = false;
         setStatus('disconnected');
         localStorage.removeItem('accessToken');
         localStorage.removeItem('userRole');
@@ -102,10 +114,24 @@ export function useRealtimeSocket({
     socket.io.on('reconnect_attempt', handleReconnectAttempt);
     socket.io.on('reconnect_failed', handleReconnectFailed);
 
-    const offHandlers: Array<() => void> = [];
-    Object.entries(handlers).forEach(([eventName, handler]) => {
-      socket.on(eventName, handler);
-      offHandlers.push(() => socket.off(eventName, handler));
+    // Dynamic event registration via the ref
+    const events = [
+      'order:new',
+      'order:update',
+      'orders:bulk_status',
+      'waiter:call',
+      'table:status_change',
+      'session:new',
+      'session:update',
+      'session:finished',
+      'session:completed'
+    ];
+
+    events.forEach(eventName => {
+      socket.on(eventName, (payload) => {
+        const handler = handlersRef.current[eventName];
+        if (handler) handler(payload);
+      });
     });
 
     const heartbeatId = window.setInterval(() => {
@@ -120,15 +146,11 @@ export function useRealtimeSocket({
 
     return () => {
       window.clearInterval(heartbeatId);
-      offHandlers.forEach((off) => off());
-      socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
-      socket.off('connect_error', handleConnectError);
-      socket.io.off('reconnect_attempt', handleReconnectAttempt);
-      socket.io.off('reconnect_failed', handleReconnectFailed);
       socket.disconnect();
+      socketRef.current = null;
     };
-  }, [enabled, handlers, token]);
+  }, [enabled, token]);
+
 
   return {
     status,

@@ -189,121 +189,156 @@ function InvoiceModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'var(--surface-overlay)' }}>
-      <div className="rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)' }}>
-        <div className="p-6 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
-          <h3 className="font-black text-xl flex items-center gap-2" style={{ color: 'var(--text-1)' }}>
-            <FileText size={20} /> Invoice #{order.orderNumber || order.id.slice(-8).toUpperCase()}
-          </h3>
-          <button onClick={onClose} className="p-2 rounded-lg" style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>
-            <X size={16} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md">
+      <div className="rounded-[32px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] max-w-2xl w-full max-h-[92vh] overflow-hidden flex flex-col bg-[color:var(--surface-raised)] border border-[color:var(--border)] scale-up">
+        {/* Header */}
+        <div className="px-8 py-6 flex items-center justify-between border-b border-[color:var(--border)]">
+          <div>
+            <h3 className="font-black text-2xl tracking-tight text-[color:var(--text-1)] flex items-center gap-3">
+              <div className="p-2 bg-blue-600/10 rounded-xl text-blue-600">
+                <FileText size={24} />
+              </div>
+              Invoice #{order.orderNumber || order.id.slice(-8).toUpperCase()}
+            </h3>
+            <p className="text-xs font-bold text-[color:var(--text-3)] mt-1 uppercase tracking-widest pl-1">Operational ID: {order.id.slice(0, 12)}...</p>
+          </div>
+          <button onClick={onClose} className="w-10 h-10 flex items-center justify-center rounded-full bg-[color:var(--surface-3)] text-[color:var(--text-2)] hover:bg-slate-200 transition-all">
+            <X size={20} />
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase" style={{ color: 'var(--text-3)' }}>Vendor</p>
-              <p className="font-bold" style={{ color: 'var(--text-1)' }}>{businessName}</p>
-              <p className="text-sm" style={{ color: 'var(--text-3)' }}>restoflow.com/order/{businessSlug}</p>
-              <p className="text-sm" style={{ color: 'var(--text-3)' }}>GSTIN: {businessGstin}</p>
-              <p className="text-sm" style={{ color: 'var(--text-3)' }}>Phone: {businessPhone}</p>
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-10">
+          {/* Metadata Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--text-3)]">Merchant Details</p>
+              <p className="text-lg font-black text-[color:var(--text-1)]">{businessName}</p>
+              <div className="pt-2 space-y-1">
+                <p className="text-sm font-medium text-[color:var(--text-2)] flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> GSTIN: {businessGstin}
+                </p>
+                <p className="text-sm font-medium text-[color:var(--text-2)] flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-300" /> Phone: {businessPhone}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-semibold uppercase" style={{ color: 'var(--text-3)' }}>Customer</p>
-              <p className="font-bold" style={{ color: 'var(--text-1)' }}>{order.customerName || 'Walk-in Customer'}</p>
-              <p className="text-sm" style={{ color: 'var(--text-3)' }}>{order.customerPhone || '-'}</p>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--text-3)]">Consumer Information</p>
+              <p className="text-lg font-black text-[color:var(--text-1)]">{order.customerName || 'Walk-in Customer'}</p>
+              <p className="text-sm font-medium text-[color:var(--text-2)] pt-2">{order.customerPhone || 'Verified by OTP'}</p>
             </div>
-            <div>
-              <p className="text-xs font-semibold uppercase" style={{ color: 'var(--text-3)' }}>Date</p>
-              <p className="font-semibold" style={{ color: 'var(--text-1)' }}>{format(new Date(order.createdAt), 'dd MMM yyyy, hh:mm a')}</p>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--text-3)]">Issued on</p>
+              <p className="text-base font-bold text-[color:var(--text-1)]">{format(new Date(order.createdAt), 'MMMM d, yyyy')}</p>
+              <p className="text-sm font-medium text-[color:var(--text-2)]">{format(new Date(order.createdAt), 'hh:mm:ss a')}</p>
             </div>
-            <div>
-              <p className="text-xs font-semibold uppercase" style={{ color: 'var(--text-3)' }}>Service</p>
-              <p className="font-semibold" style={{ color: 'var(--text-1)' }}>{order.table?.name ? `Table ${order.table.name}` : 'Takeaway'}</p>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--text-3)]">Service Point</p>
+              <div className="flex items-center gap-2 pt-1">
+                <span className="px-3 py-1 rounded-full bg-blue-600/10 text-blue-600 text-sm font-black uppercase tracking-tight">
+                  {order.table?.name ? `Table ${order.table.name}` : 'Takeaway'}
+                </span>
+              </div>
             </div>
           </div>
 
-          <section className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
-            <div className="px-4 py-2 text-xs font-black uppercase tracking-wide" style={{ background: 'var(--surface-3)', color: 'var(--text-3)', borderBottom: '1px solid var(--border)' }}>Items</div>
-            <div className="grid grid-cols-12 px-4 py-2 text-xs font-semibold uppercase" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>
-              <span className="col-span-6">Item</span>
-              <span className="col-span-2 text-right">Qty</span>
-              <span className="col-span-2 text-right">Price</span>
-              <span className="col-span-2 text-right">Amount</span>
+          {/* Items Table */}
+          <section className="rounded-2xl border border-[color:var(--border)] overflow-hidden">
+            <div className="px-5 py-3 bg-[color:var(--surface-3)] border-b border-[color:var(--border)] flex justify-between items-center">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--text-3)]">Line Items</span>
+              <span className="text-[10px] font-bold text-[color:var(--text-3)]">{items.length} positions</span>
             </div>
-            {items.length === 0 ? (
-              <div className="px-4 py-4 text-sm" style={{ color: 'var(--text-3)' }}>No line items found for this order.</div>
-            ) : (
-              items.map((line) => {
-                const qty = Number(line.quantity || 0);
-                const price = Number(line.unitPrice || line.menuItem?.price || 0);
-                const amount = Number(line.totalPrice || qty * price);
-                return (
-                  <div key={line.id} className="grid grid-cols-12 px-4 py-3 text-sm" style={{ borderTop: '1px solid var(--border)' }}>
-                    <span className="col-span-6 font-medium" style={{ color: 'var(--text-1)' }}>{line.name || line.menuItem?.name || 'Menu Item'}</span>
-                    <span className="col-span-2 text-right" style={{ color: 'var(--text-2)' }}>{qty}</span>
-                    <span className="col-span-2 text-right" style={{ color: 'var(--text-2)' }}>{formatINR(price)}</span>
-                    <span className="col-span-2 text-right font-semibold" style={{ color: 'var(--text-1)' }}>{formatINR(amount)}</span>
-                  </div>
-                );
-              })
-            )}
-          </section>
-
-          <section className="rounded-xl p-4" style={{ border: '1px solid var(--border)' }}>
-            <div className="text-xs font-black uppercase tracking-wide mb-2" style={{ color: 'var(--text-3)' }}>Totals</div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm" style={{ color: 'var(--text-2)' }}>
-                <span>Subtotal</span>
-                <span>{formatINR(inferredSubtotal)}</span>
-              </div>
-              <div className="flex justify-between text-sm" style={{ color: 'var(--text-2)' }}>
-                <span>Tax</span>
-                <span>{formatINR(inferredTax)}</span>
-              </div>
-              {inferredDiscount > 0 && (
-                <div className="flex justify-between text-sm text-green-500">
-                  <span>Discount</span>
-                  <span>-{formatINR(inferredDiscount)}</span>
-                </div>
+            <div className="divide-y divide-[color:var(--border)]">
+              {items.length === 0 ? (
+                <div className="p-8 text-center text-sm font-medium text-[color:var(--text-3)]">No line items recorded</div>
+              ) : (
+                items.map((line) => {
+                  const qty = Number(line.quantity || 0);
+                  const price = Number(line.unitPrice || line.menuItem?.price || 0);
+                  const amount = Number(line.totalPrice || qty * price);
+                  return (
+                    <div key={line.id} className="p-5 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                      <div className="flex-1">
+                        <p className="font-bold text-[color:var(--text-1)]">{line.name || line.menuItem?.name || 'Menu Item'}</p>
+                        <p className="text-xs font-medium text-[color:var(--text-3)] mt-0.5">{formatINR(price)} per unit</p>
+                      </div>
+                      <div className="flex items-center gap-8">
+                        <span className="text-sm font-black text-[color:var(--text-2)]">×{qty}</span>
+                        <span className="font-black text-[color:var(--text-1)] w-24 text-right">{formatINR(amount)}</span>
+                      </div>
+                    </div>
+                  );
+                })
               )}
-              <div className="flex justify-between items-end pt-2 mt-2" style={{ borderTop: '1px solid var(--border)' }}>
-                <span className="font-black text-lg" style={{ color: 'var(--text-1)' }}>Total</span>
-                <span className="font-black text-3xl text-blue-600">{formatINR(total)}</span>
-              </div>
             </div>
           </section>
 
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => setShowSplit(true)} className="px-3 py-2 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5" style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>
-              <Users size={14} /> Split Bill
-            </button>
-            <button
-              onClick={() => payNowMutation.mutate()}
-              disabled={payNowMutation.isPending}
-              className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm flex items-center justify-center gap-1.5 disabled:opacity-60"
-            >
-              <CreditCard size={14} /> {payNowMutation.isPending ? 'Processing...' : 'Pay Now'}
-            </button>
-            <button onClick={downloadInvoice} className="px-3 py-2 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5" style={{ background: 'rgba(37,99,235,0.1)', color: '#60a5fa' }}>
-              <Download size={14} /> Download Invoice
-            </button>
-            <button onClick={shareInvoice} className="px-3 py-2 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5" style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399' }}>
-              <Share2 size={14} /> Share Bill
-            </button>
+          {/* Financials */}
+          <div className="flex flex-col md:flex-row justify-end gap-12 pt-4">
+             <div className="w-full md:w-80 space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-[color:var(--text-3)] uppercase tracking-wide">Subtotal</span>
+                  <span className="text-sm font-black text-[color:var(--text-1)]">{formatINR(inferredSubtotal)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-[color:var(--text-3)] uppercase tracking-wide">Taxes ({taxRate}%)</span>
+                  <span className="text-sm font-black text-[color:var(--text-1)]">{formatINR(inferredTax)}</span>
+                </div>
+                {inferredDiscount > 0 && (
+                  <div className="flex justify-between items-center text-emerald-600">
+                    <span className="text-sm font-bold uppercase tracking-wide">Discounts</span>
+                    <span className="text-sm font-black">-{formatINR(inferredDiscount)}</span>
+                  </div>
+                )}
+                <div className="pt-4 mt-2 border-t-2 border-[color:var(--border)] flex justify-between items-end">
+                   <div>
+                      <p className="text-[10px] font-black text-[color:var(--text-3)] uppercase tracking-[0.2em]">Net Recievable</p>
+                      <p className="text-3xl font-black text-[color:var(--text-1)] tracking-tighter mt-1">{formatINR(total)}</p>
+                   </div>
+                   <div className="pb-1">
+                      <span className="px-2 py-1 rounded bg-blue-600 text-white text-[10px] font-black uppercase">PAID</span>
+                   </div>
+                </div>
+             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
-            <button onClick={printInvoice} className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm flex items-center gap-1">
-              <Printer size={14} /> Print
-            </button>
-            <button onClick={onClose} className="px-3 py-2 rounded-lg font-semibold text-sm" style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>
-              Close
-            </button>
+          {/* Action Group */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 border-t border-[color:var(--border)]">
+             <button onClick={() => setShowSplit(true)} className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-[color:var(--surface-3)] hover:brightness-95 transition-all text-[color:var(--text-2)]">
+                <Users size={20} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Split</span>
+             </button>
+             <button
+               onClick={() => payNowMutation.mutate()}
+               disabled={payNowMutation.isPending}
+               className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-95 transition-all"
+             >
+                <CreditCard size={20} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Pay</span>
+             </button>
+             <button onClick={downloadInvoice} className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-blue-600/20 bg-blue-50/50 hover:bg-blue-50 transition-all text-blue-600">
+                <Download size={20} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Save</span>
+             </button>
+             <button onClick={shareInvoice} className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-slate-900 text-white hover:brightness-110 transition-all">
+                <Share2 size={20} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Share</span>
+             </button>
           </div>
         </div>
+
+        {/* Footer actions */}
+        <div className="px-8 py-5 bg-[color:var(--surface-3)] flex items-center justify-between border-t border-[color:var(--border)]">
+          <button onClick={printInvoice} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-blue-500/20">
+            <Printer size={16} /> Print Full Invoice
+          </button>
+          <button onClick={onClose} className="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest text-[color:var(--text-2)] bg-white border border-[color:var(--border)] hover:bg-slate-50 transition-all">
+            Close
+          </button>
+        </div>
       </div>
+
 
       {showSplit && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'var(--surface-overlay)' }}>
