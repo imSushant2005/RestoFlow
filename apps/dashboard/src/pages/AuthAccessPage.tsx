@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -143,7 +143,7 @@ export function AuthAccessPage({ mode, setMode, onBackHome, onLogin }: AuthAcces
   const clerkSignupReady = useMemo(() => isSignUpLoaded && !!signUp && clerkEnabled, [isSignUpLoaded, signUp, clerkEnabled]);
   const clerkSigninReady = useMemo(() => isSignInLoaded && !!signIn && clerkEnabled, [isSignInLoaded, signIn, clerkEnabled]);
 
-  const syncGoogleSessionToApi = async (params: { clerkUserId: string; email: string; name: string }) => {
+  const syncGoogleSessionToApi = useCallback(async (params: { clerkUserId: string; email: string; name: string }) => {
     const res = await api.post('/auth/clerk-sync', {
       clerkUserId: params.clerkUserId,
       email: params.email,
@@ -151,7 +151,7 @@ export function AuthAccessPage({ mode, setMode, onBackHome, onLogin }: AuthAcces
       authProvider: 'GOOGLE',
     });
     setSession(res.data, onLogin);
-  };
+  }, [onLogin]);
 
   useEffect(() => {
     const pendingOAuth = readPendingOAuth();
@@ -262,7 +262,7 @@ export function AuthAccessPage({ mode, setMode, onBackHome, onLogin }: AuthAcces
         oauthSyncInFlight.current = false;
         setAuthLoading(false);
       });
-  }, [clerkEnabled, isUserLoaded, setMode, user]);
+  }, [clerkEnabled, isUserLoaded, setMode, syncGoogleSessionToApi, user]);
 
   const startGoogleOAuth = async (flow: 'login' | 'signup') => {
     if (!clerkEnabled) return setAuthError('Clerk signup is not configured.');

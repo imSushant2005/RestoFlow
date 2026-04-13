@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { prisma } from '../db/prisma';
+import { prisma, withPrismaRetry } from '../db/prisma';
 import { getIO, getSessionRoom, getTenantRoom } from '../socket';
 import { getCache, setCache, deleteCache, withCache } from '../services/cache.service';
 
@@ -90,7 +90,9 @@ function normalizeStarRating(value: unknown) {
 async function resolveTenantIdBySlug(tenantSlug: string) {
   return withCache(
     `tenant_id_by_slug_${tenantSlug}`,
-    async () => {
+    async () =>
+      withPrismaRetry(
+        async () => {
       const tenant = await prisma.tenant.findUnique({
         where: { slug: tenantSlug },
         select: { id: true },
@@ -101,9 +103,43 @@ async function resolveTenantIdBySlug(tenantSlug: string) {
       }
 
       return tenant.id;
-    },
+        },
+        `resolve-tenant-id:${tenantSlug}`,
+      ),
     86400,
   );
+}
+
+async function resolveTenantBySlug(tenantSlug: string) {
+  return withCache(
+    `tenant_by_slug_${tenantSlug}`,
+    async () =>
+      withPrismaRetry(
+        async () => {
+      const tenant = await prisma.tenant.findUnique({
+        where: { slug: tenantSlug },
+        select: { id: true, taxRate: true },
+      });
+
+      if (!tenant) {
+        throw new Error('Vendor not found');
+      }
+
+      return tenant;
+        },
+        `resolve-tenant:${tenantSlug}`,
+      ),
+    300,
+  );
+}
+
+async function invalidateOperationalCaches(tenantId: string, sessionId?: string | null) {
+  await Promise.all([
+    deleteCache(`dashboard_live_orders_${tenantId}`),
+    deleteCache(`dashboard_order_history_${tenantId}_*`),
+    sessionId ? deleteCache(`public_session_${tenantId}_${sessionId}`) : Promise.resolve(),
+    sessionId ? deleteCache(`session_orders_${tenantId}_${sessionId}`) : Promise.resolve(),
+  ]);
 }
 
 async function resolveWaiterTableName(tenantId: string, tableId?: string) {
@@ -152,7 +188,7 @@ export const getPublicMenu = async (req: Request, res: Response) => {
     
     const cacheKey = `public_menu_${tenantSlug}`;
     
-    const publicData = await withCache(cacheKey, async () => {
+    const publicData = await withCache(cacheKey, async () => withPrismaRetry(async () => {
       const tenant = await prisma.tenant.findUnique({
         where: { slug: tenantSlug },
         include: {
@@ -179,7 +215,7 @@ export const getPublicMenu = async (req: Request, res: Response) => {
       });
 
       if (!tenant) throw new Error('Vendor not found');
-      
+
       return {
         tenantId: tenant.id,
         name: tenant.businessName,          // alias used by customer frontend
@@ -192,8 +228,9 @@ export const getPublicMenu = async (req: Request, res: Response) => {
         primaryColor: tenant.primaryColor,
         accentColor: tenant.accentColor,
         taxRate: tenant.taxRate,
+        businessHours: tenant.businessHours,
       };
-    }, 1800); // 30-minute cache
+    }, `public-menu:${tenantSlug}`), 1800); // 30-minute cache
 
     res.json(publicData);
   } catch (error) {
@@ -233,13 +270,7 @@ export const createOrder = async (req: Request, res: Response) => {
       readOptionalString(req.header('x-idempotency-key')) ||
       readOptionalString(req.body?.idempotencyKey);
 
-    const tenant = await prisma.tenant.findUnique({
-      where: { slug: tenantSlug },
-      select: { id: true, taxRate: true },
-    });
-    if (!tenant) {
-      return res.status(404).json({ error: 'Vendor not found' });
-    }
+    const tenant = await resolveTenantBySlug(tenantSlug);
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Order must include at least one item' });
@@ -475,8 +506,10 @@ export const createOrder = async (req: Request, res: Response) => {
       exists = !!check;
     }
 
-    const order = await prisma.$transaction(async (tx) => {
-      const createdOrder = await tx.order.create({
+    let order;
+    try {
+      order = await prisma.$transaction(async (tx) => {
+        const createdOrder = await tx.order.create({
         data: {
           diningSessionId: resolvedSession.id,
           tenantId: tenant.id,
@@ -513,8 +546,19 @@ export const createOrder = async (req: Request, res: Response) => {
         });
       }
 
-      return createdOrder;
-    });
+        return createdOrder;
+      });
+    } catch (err) {
+      console.error('createOrder prisma.$transaction failed', {
+        tenantSlug,
+        resolvedSessionId: resolvedSession?.id,
+        safeTableId,
+        itemsSummary: Array.isArray(items) ? `${items.length} items` : typeof items,
+        idempotencyKey: requestIdempotencyKey || null,
+        error: err && (err instanceof Error ? err.stack || err.message : String(err)),
+      });
+      throw err;
+    }
 
     const tableIdToUpdate = safeTableId || resolvedSession.tableId || null;
 
@@ -539,7 +583,7 @@ export const createOrder = async (req: Request, res: Response) => {
     }
 
     await Promise.all([
-      deleteCache(`session_orders_${resolvedSession.id}`),
+      invalidateOperationalCaches(tenant.id, resolvedSession.id),
       requestIdempotencyKey
         ? setCache(`public_order_idempotency_${tenant.id}_${requestIdempotencyKey}`, {
             ...order,
@@ -565,18 +609,23 @@ export const createOrder = async (req: Request, res: Response) => {
 
 export const getOrderInfo = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { tenantSlug, id } = req.params;
+    const tenant = await resolveTenantBySlug(tenantSlug);
     
     // Cache for 2 minutes since orders don't change status *that* frequently 
     // and live updates are handled by Socket.io anyway.
-    const cacheKey = `order_info_${id}`;
+    const cacheKey = `order_info_${tenant.id}_${id}`;
     const cachedOrder = await getCache(cacheKey);
     if (cachedOrder) return res.json(cachedOrder);
 
-    const order = await prisma.order.findUnique({
-      where: { id },
+    const order = await withPrismaRetry(
+      () =>
+        prisma.order.findFirst({
+      where: { id, tenantId: tenant.id },
       include: { table: true, items: { include: { menuItem: true } } }
-    });
+        }),
+      `public-order-info:${tenant.id}:${id}`,
+    );
     if (!order) return res.status(404).json({ error: 'Order not found' });
     
     await setCache(cacheKey, order, 120);
@@ -589,24 +638,24 @@ export const getOrderInfo = async (req: Request, res: Response) => {
 export const getSessionOrders = async (req: Request, res: Response) => {
   try {
     const { tenantSlug, sessionToken } = req.params;
-    const tenant = await prisma.tenant.findUnique({
-      where: { slug: tenantSlug },
-      select: { id: true }
-    });
-    if (!tenant) return res.status(404).json({ error: 'Vendor not found' });
+    const tenant = await resolveTenantBySlug(tenantSlug);
 
-    const cacheKey = `session_orders_${sessionToken}`;
+    const cacheKey = `session_orders_${tenant.id}_${sessionToken}`;
     const cachedOrders = await getCache(cacheKey);
     if (cachedOrders) return res.json(cachedOrders);
 
-    const orders = await prisma.order.findMany({
-      where: {
-        tenantId: tenant.id,
-        diningSessionId: sessionToken,
-      },
-      include: { table: true, items: { include: { menuItem: true } } },
-      orderBy: { createdAt: 'desc' }
-    });
+    const orders = await withPrismaRetry(
+      () =>
+        prisma.order.findMany({
+          where: {
+            tenantId: tenant.id,
+            diningSessionId: sessionToken,
+          },
+          include: { table: true, items: { include: { menuItem: true } } },
+          orderBy: { createdAt: 'desc' }
+        }),
+      `session-orders:${tenant.id}:${sessionToken}`,
+    );
     
     // Parse JSON modifiers before sending
     const parsedOrders = orders.map(o => ({

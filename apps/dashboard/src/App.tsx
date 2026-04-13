@@ -27,12 +27,17 @@ import { InvoicesPage as Billing } from './pages/InvoicesPage';
 import { PlansHub as SubscriptionPage } from './pages/PlansHub';
 import { Admin } from './pages/Admin';
 import { WaiterPage } from './pages/WaiterPage';
+import { AssistedOrderingPage } from './pages/AssistedOrderingPage';
 import { FirstLoginPasswordGate } from './components/FirstLoginPasswordGate';
-import { AuthIndexPage } from './pages/AuthIndexPage';
 import { AuthContactPage } from './pages/AuthContactPage';
+import { DemoPage } from './pages/DemoPage';
+import { HomePage } from './pages/HomePage';
 import { PrivacyPolicyPage, TermsPage } from './pages/LegalPages';
 import { LoginPage } from './pages/LoginPage';
+import { MarketingBillingPage } from './pages/MarketingBillingPage';
+import { ProductPage } from './pages/ProductPage';
 import { SignupPage } from './pages/SignupPage';
+import { SetupFlowPage } from './pages/SetupFlowPage';
 import { DashboardErrorBoundary } from './components/DashboardErrorBoundary';
 import { VendorTopNav, type OpsNotification } from './components/VendorTopNav';
 import { useRealtimeSocket } from './hooks/useRealtimeSocket';
@@ -47,6 +52,7 @@ const FULL_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER']);
 const ORDERS_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'KITCHEN', 'WAITER']);
 const BILLING_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER']);
 const BUSINESS_READ_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'KITCHEN', 'WAITER']);
+const ASSISTED_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'WAITER']);
 
 // REMOVED STATIC DASHBOARD_DEMO_STEPS
 
@@ -106,7 +112,51 @@ function ScreenLoader({ message }: { message: string }) {
 function MarketingHomeRoute() {
   const navigate = useNavigate();
   return (
-    <AuthIndexPage
+    <HomePage
+      onLoginClick={() => navigate('/login')}
+      onSignupClick={() => navigate('/signup')}
+      onContactClick={() => navigate('/contact')}
+    />
+  );
+}
+
+function MarketingProductRoute() {
+  const navigate = useNavigate();
+  return (
+    <ProductPage
+      onLoginClick={() => navigate('/login')}
+      onSignupClick={() => navigate('/signup')}
+      onContactClick={() => navigate('/contact')}
+    />
+  );
+}
+
+function MarketingSetupFlowRoute() {
+  const navigate = useNavigate();
+  return (
+    <SetupFlowPage
+      onLoginClick={() => navigate('/login')}
+      onSignupClick={() => navigate('/signup')}
+      onContactClick={() => navigate('/contact')}
+    />
+  );
+}
+
+function MarketingBillingRoute() {
+  const navigate = useNavigate();
+  return (
+    <MarketingBillingPage
+      onLoginClick={() => navigate('/login')}
+      onSignupClick={() => navigate('/signup')}
+      onContactClick={() => navigate('/contact')}
+    />
+  );
+}
+
+function MarketingDemoRoute() {
+  const navigate = useNavigate();
+  return (
+    <DemoPage
       onLoginClick={() => navigate('/login')}
       onSignupClick={() => navigate('/signup')}
       onContactClick={() => navigate('/contact')}
@@ -203,6 +253,7 @@ function DashboardShell() {
   const canAccessBilling = BILLING_ACCESS_ROLES.has(role);
   const canAccessAnalytics = FULL_ACCESS_ROLES.has(role);
   const canAccessSettings = FULL_ACCESS_ROLES.has(role);
+  const canAccessAssistedOrdering = ASSISTED_ACCESS_ROLES.has(role);
   const canShowFirstTimeDemo = FULL_ACCESS_ROLES.has(role);
   const canShowAdminShellData = BUSINESS_READ_ROLES.has(role);
   const shouldFetchBusinessShellData = canShowAdminShellData;
@@ -451,7 +502,7 @@ function DashboardShell() {
 
     driverObj.drive();
 
-  }, [business, canShowFirstTimeDemo, demoStorageKey, isLoading, showFirstTimeDemo]);
+  }, [business, canShowFirstTimeDemo, demoStorageKey, isLoading, navigate, showFirstTimeDemo]);
 
   if (isLoading) {
     return <ScreenLoader message="Syncing profile..." />;
@@ -494,6 +545,7 @@ function DashboardShell() {
     ...(canAccessMenu ? ['/app/menu'] : []),
     ...(canAccessTables ? ['/app/tables'] : []),
     ...(canAccessOrders ? ['/app/orders'] : []),
+    ...(canAccessAssistedOrdering ? ['/app/assisted-ordering'] : []),
     ...(role === 'WAITER' ? ['/app/waiter'] : []),
     ...(canAccessBilling ? ['/app/billing', '/app/subscription'] : []),
     ...(canAccessAnalytics ? ['/app/analytics'] : []),
@@ -520,6 +572,7 @@ function DashboardShell() {
     ...(canAccessMenu ? [{ to: '/app/menu', label: 'Menu', icon: <UtensilsCrossed size={18} /> }] : []),
     ...(canAccessTables ? [{ to: '/app/tables', label: 'Tables & QR', icon: <Store size={18} /> }] : []),
     ...(canAccessOrders && role !== 'WAITER' ? [{ to: '/app/orders', label: 'Live Orders', icon: <Receipt size={18} />, badge: liveOrderCount }] : []),
+    ...(canAccessAssistedOrdering ? [{ to: '/app/assisted-ordering', label: 'Assisted Ordering', icon: <Receipt size={18} /> }] : []),
     ...(canAccessBilling ? [{ to: '/app/billing', label: 'Billing', icon: <CreditCard size={18} /> }] : []),
     ...(canAccessAnalytics ? [{ to: '/app/analytics', label: 'Analytics', icon: <BarChart3 size={18} /> }] : []),
     ...(canAccessSettings ? [{ to: '/app/settings', label: 'Settings', icon: <Settings2 size={18} /> }] : []),
@@ -668,6 +721,7 @@ function DashboardShell() {
               {canAccessMenu && <Route path="menu" element={<MenuBuilder />} />}
               {canAccessTables && <Route path="tables" element={<FloorPlan />} />}
               {canAccessOrders && <Route path="orders" element={<Orders role={role} />} />}
+              {canAccessAssistedOrdering && <Route path="assisted-ordering" element={<AssistedOrderingPage />} />}
               {canAccessAnalytics && <Route path="analytics" element={<Analytics />} />}
               {canAccessSettings && <Route path="settings" element={<Settings />} />}
               {canAccessBilling && <Route path="billing" element={<Billing />} />}
@@ -800,6 +854,10 @@ function App() {
       <Route path="/sso-callback" element={clerkConfigured ? <AuthenticateWithRedirectCallback /> : <Navigate to="/login" replace />} />
 
       <Route path="/" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingHomeRoute />} />
+      <Route path="/product" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingProductRoute />} />
+      <Route path="/setup-flow" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingSetupFlowRoute />} />
+      <Route path="/billing" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingBillingRoute />} />
+      <Route path="/demo" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingDemoRoute />} />
       <Route path="/contact" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingContactRoute />} />
       <Route path="/privacy" element={<MarketingPrivacyRoute />} />
       <Route path="/terms" element={<MarketingTermsRoute />} />

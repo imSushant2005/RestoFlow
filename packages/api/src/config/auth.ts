@@ -1,22 +1,8 @@
-import dotenv from 'dotenv';
-import fs from 'fs';
-import path from 'path';
-
-const envCandidates = [
-  path.resolve(process.cwd(), '.env'),
-  path.resolve(process.cwd(), '../../.env'),
-];
-
-for (const envPath of envCandidates) {
-  if (fs.existsSync(envPath)) {
-    dotenv.config({ path: envPath });
-    break;
-  }
-}
+import { env } from './env';
 
 export const jwtConfig = {
-  secret: process.env.JWT_SECRET || 'super-secret-key-change-me',
-  refreshSecret: process.env.JWT_REFRESH_SECRET || 'super-secret-refresh-key-change-me',
+  secret: env.JWT_SECRET,
+  refreshSecret: env.JWT_REFRESH_SECRET || env.JWT_SECRET,
   expiresIn: '15m',
   refreshExpiresIn: '7d',
 };

@@ -174,6 +174,7 @@ export function WaiterPage() {
   const [readyAlerts, setReadyAlerts] = useState<ReadyPickupCard[]>([]);
   const [dismissedReadyOrderIds, setDismissedReadyOrderIds] = useState<string[]>([]);
   const [resolvingCallId, setResolvingCallId] = useState<number | null>(null);
+  const [connectionState, setConnectionState] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
 
   const { data: businessSettings } = useQuery<{ slug?: string }>({
     queryKey: ['settings-business'],
@@ -201,7 +202,8 @@ export function WaiterPage() {
         .map((order) => normalizeReadyOrder(order))
         .filter((order): order is ReadyPickupCard => Boolean(order));
     },
-    refetchInterval: 10000,
+    staleTime: 1000 * 20,
+    refetchOnWindowFocus: false,
   });
 
   const resolveTenantSlug = useCallback(() => {
@@ -260,40 +262,59 @@ export function WaiterPage() {
       reconnectionDelayMax: 3000,
     });
 
+    socket.on('connect', () => {
+      setConnectionState('live');
+      socket.timeout(2000).emit('sync:request', { surface: 'waiter_desk' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['waiter-ready-orders'] });
+      });
+    });
+
     const handleOrderUpdate = (updated: any) => {
       const normalizedStatus = String(updated?.status || '').toUpperCase();
       if (normalizedStatus === 'READY') {
         pushReadyAlert(updated);
-        queryClient.invalidateQueries({ queryKey: ['waiter-ready-orders'] });
         return;
       }
       if (['SERVED', 'RECEIVED', 'CANCELLED'].includes(normalizedStatus)) {
         const updatedId = String(updated?.id || updated?.orderId || '');
         setReadyAlerts((prev) => prev.filter((alert) => alert.orderId !== updatedId));
         setDismissedReadyOrderIds((prev) => prev.filter((id) => id !== updatedId));
-        queryClient.invalidateQueries({ queryKey: ['waiter-ready-orders'] });
       }
     };
 
     socket.on('order:update', handleOrderUpdate);
     socket.on('waiter:pickup_ready', pushReadyAlert);
     socket.on('waiter:call', (call: any) => setWaiterCalls((prev) => [{ ...call, id: Date.now() + prev.length }, ...prev].slice(0, 10)));
-    socket.on('connect_error', () => queryClient.invalidateQueries({ queryKey: ['waiter-ready-orders'] }));
+    socket.on('connect_error', () => setConnectionState('reconnecting'));
+    socket.on('disconnect', () => setConnectionState('reconnecting'));
     return () => {
       socket.disconnect();
     };
   }, [pushReadyAlert, queryClient]);
 
   useEffect(() => {
-    readyOrders.forEach((order) => pushReadyAlert(order));
-  }, [pushReadyAlert, readyOrders]);
+    setReadyAlerts((previous) => {
+      const merged = new Map<string, ReadyPickupCard>();
+
+      readyOrders.forEach((order) => {
+        if (!dismissedReadyOrderIds.includes(order.orderId)) {
+          merged.set(order.orderId, order);
+        }
+      });
+
+      previous.forEach((order) => {
+        if (!dismissedReadyOrderIds.includes(order.orderId)) {
+          merged.set(order.orderId, order);
+        }
+      });
+
+      return Array.from(merged.values()).slice(0, 8);
+    });
+  }, [dismissedReadyOrderIds, readyOrders]);
 
   const readyQueue = useMemo(
-    () =>
-      [...readyAlerts, ...readyOrders]
-        .filter((entry, index, arr) => arr.findIndex((candidate) => candidate.orderId === entry.orderId) === index)
-        .filter((entry) => !dismissedReadyOrderIds.includes(entry.orderId)),
-    [dismissedReadyOrderIds, readyAlerts, readyOrders],
+    () => readyAlerts.filter((entry) => !dismissedReadyOrderIds.includes(entry.orderId)),
+    [dismissedReadyOrderIds, readyAlerts],
   );
 
   const billCount = waiterCalls.filter((call) => String(call.type || '').toUpperCase() === 'BILL').length;
@@ -320,8 +341,26 @@ export function WaiterPage() {
             <h1 className="text-3xl font-black tracking-tight text-white">{t.title}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-300">{t.subtitle}</p>
           </div>
-          <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-200">
-            {authMe?.user?.name || 'Waiter'}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-200">
+              {authMe?.user?.name || 'Waiter'}
+            </div>
+            <div
+              className="inline-flex rounded-full border px-4 py-2 text-[11px] font-black uppercase tracking-[0.14em]"
+              style={{
+                borderColor:
+                  connectionState === 'live'
+                    ? 'rgba(16, 185, 129, 0.28)'
+                    : 'rgba(245, 158, 11, 0.28)',
+                background:
+                  connectionState === 'live'
+                    ? 'rgba(16, 185, 129, 0.14)'
+                    : 'rgba(245, 158, 11, 0.12)',
+                color: connectionState === 'live' ? '#6ee7b7' : '#fcd34d',
+              }}
+            >
+              {connectionState === 'live' ? 'Realtime Live' : 'Reconnecting'}
+            </div>
           </div>
         </div>
       </section>

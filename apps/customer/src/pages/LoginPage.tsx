@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, ArrowRight, ChefHat, Phone, User } from 'lucide-react';
-import { api, publicApi } from '../lib/api';
+import { publicApi } from '../lib/api';
 import { setCustomerAuthForTenant } from '../lib/tenantStorage';
 
 export function LoginPage() {
@@ -49,7 +49,7 @@ export function LoginPage() {
     setError('');
 
     try {
-      const response = await api.post('/customer/login', {
+      const response = await publicApi.post('/customer/login', {
         phone,
         name: name || undefined,
         tenantSlug: tenantSlug || undefined,

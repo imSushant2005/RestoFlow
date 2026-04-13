@@ -16,6 +16,7 @@ export function PartySizePage() {
   const [error, setError] = useState('');
 
   const customerName = getTenantStorageItem(tenantSlug, 'customer_name') || '';
+  const customerPhone = getTenantStorageItem(tenantSlug, 'customer_phone') || '';
   const customerId = getTenantStorageItem(tenantSlug, 'customer_id');
 
   const handleContinue = async () => {
@@ -32,6 +33,8 @@ export function PartySizePage() {
     try {
       const response = await publicApi.post(`/${tenantSlug}/sessions`, {
         customerId,
+        customerName: customerName || undefined,
+        customerPhone: customerPhone || undefined,
         tableId,
         partySize: finalSize,
       });

@@ -3,6 +3,20 @@ import { prisma } from '../db/prisma';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 
+function resolveScopedTenantSlug(req: Request) {
+  const queryTenantSlug =
+    typeof req.query.tenantSlug === 'string' && req.query.tenantSlug.trim().length > 0
+      ? req.query.tenantSlug.trim()
+      : null;
+  const tokenTenantSlug = ((req as any).customerTenantSlug as string | null) || null;
+
+  if (queryTenantSlug && tokenTenantSlug && queryTenantSlug !== tokenTenantSlug) {
+    throw new Error('CUSTOMER_TENANT_SCOPE_MISMATCH');
+  }
+
+  return queryTenantSlug || tokenTenantSlug || null;
+}
+
 /**
  * POST /customer/login
  * Login with phone + name (no OTP for MVP)
@@ -153,12 +167,7 @@ export const deactivateAccount = async (req: Request, res: Response) => {
 export const getHistory = async (req: Request, res: Response) => {
   try {
     const customerId = (req as any).customerId;
-    const scopedTenantSlug =
-      (typeof req.query.tenantSlug === 'string' && req.query.tenantSlug.trim().length > 0
-        ? req.query.tenantSlug.trim()
-        : null) ||
-      ((req as any).customerTenantSlug as string | null) ||
-      null;
+    const scopedTenantSlug = resolveScopedTenantSlug(req);
 
     if (!customerId) return res.status(401).json({ error: 'Not authenticated' });
 
@@ -210,6 +219,9 @@ export const getHistory = async (req: Request, res: Response) => {
     res.json(sessions);
   } catch (error) {
     console.error('getHistory error:', error);
+    if (error instanceof Error && error.message === 'CUSTOMER_TENANT_SCOPE_MISMATCH') {
+      return res.status(403).json({ error: 'Customer token is not valid for this restaurant scope' });
+    }
     res.status(500).json({ error: 'Failed to fetch history' });
   }
 };
@@ -222,12 +234,7 @@ export const getSessionDetail = async (req: Request, res: Response) => {
   try {
     const customerId = (req as any).customerId;
     const { sessionId } = req.params;
-    const scopedTenantSlug =
-      (typeof req.query.tenantSlug === 'string' && req.query.tenantSlug.trim().length > 0
-        ? req.query.tenantSlug.trim()
-        : null) ||
-      ((req as any).customerTenantSlug as string | null) ||
-      null;
+    const scopedTenantSlug = resolveScopedTenantSlug(req);
 
     if (!customerId) return res.status(401).json({ error: 'Not authenticated' });
 
@@ -264,6 +271,9 @@ export const getSessionDetail = async (req: Request, res: Response) => {
     res.json(session);
   } catch (error) {
     console.error('getSessionDetail error:', error);
+    if (error instanceof Error && error.message === 'CUSTOMER_TENANT_SCOPE_MISMATCH') {
+      return res.status(403).json({ error: 'Customer token is not valid for this restaurant scope' });
+    }
     res.status(500).json({ error: 'Failed to fetch session' });
   }
 };

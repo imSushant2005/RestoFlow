@@ -1,5 +1,5 @@
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Utensils, History, LayoutDashboard, UserCircle2 } from 'lucide-react';
+import { Utensils, LayoutDashboard, History } from 'lucide-react';
 import { getActiveSessionForTenant } from '../lib/tenantStorage';
 
 export function CustomerNav() {
@@ -27,20 +27,14 @@ export function CustomerNav() {
       path: `/order/${tenantSlug}/history`,
       active: location.pathname.includes('/history'),
     },
-    {
-      label: 'Profile',
-      icon: UserCircle2,
-      path: `/order/${tenantSlug}/profile`,
-      active: location.pathname.includes('/profile'),
-    },
   ];
 
   return (
     <nav
-      className="customer-bottom-nav fixed bottom-0 left-0 right-0 z-[40] flex items-center justify-around px-6 pt-2 backdrop-blur-xl border-t shadow-[0_-10px_20px_rgba(0,0,0,0.05)]"
+      className="customer-bottom-nav fixed bottom-0 left-0 right-0 z-[40] flex items-center justify-around px-6 pt-2 backdrop-blur-xl border-t shadow-[0_-10px_30px_rgba(0,0,0,0.18)]"
       style={{
-        background: 'rgba(255, 255, 255, 0.85)', 
-        borderColor: 'rgba(0, 0, 0, 0.05)',
+        background: 'rgba(10, 11, 15, 0.92)',
+        borderColor: 'rgba(148, 163, 184, 0.2)',
       }}
     >
       {navItems.map((item) => {
@@ -50,23 +44,23 @@ export function CustomerNav() {
             key={item.label}
             onClick={() => navigate(item.path)}
             className={`flex flex-col items-center gap-1 py-1.5 transition-all active:scale-90 ${
-              item.active ? 'opacity-100' : 'opacity-40 grayscale'
+              item.active ? 'opacity-100' : 'opacity-70'
             }`}
           >
             <div 
               className={`p-1.5 rounded-xl transition-all ${
-                item.active ? 'scale-110 shadow-lg' : ''
+                item.active ? 'scale-110 shadow-lg shadow-blue-500/20' : ''
               }`}
               style={{ 
-                background: item.active ? 'var(--brand)' : 'transparent',
-                color: item.active ? '#fff' : 'var(--text-3)'
+                background: item.active ? 'var(--brand)' : 'rgba(148, 163, 184, 0.12)',
+                color: item.active ? '#fff' : '#e2e8f0'
               }}
             >
               <Icon size={20} />
             </div>
             <span 
               className="text-[10px] font-black uppercase tracking-widest"
-              style={{ color: item.active ? 'var(--brand)' : 'var(--text-3)' }}
+              style={{ color: item.active ? '#fff' : '#cbd5f5' }}
             >
               {item.label}
             </span>

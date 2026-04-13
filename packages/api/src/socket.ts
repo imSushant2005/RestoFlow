@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
+import { UserRole } from '@dineflow/prisma';
 import { prisma } from './db/prisma';
 import { env } from './config/env';
 import { verifyAccessToken } from './utils/jwt';
@@ -24,12 +25,14 @@ const TENANT_SLUG_CACHE_MAX = 2000;
 type VerifiedAccessToken = {
   userId: string;
   tenantId: string;
+  role?: UserRole;
 };
 
 function isVerifiedAccessToken(value: unknown): value is VerifiedAccessToken {
   if (!value || typeof value !== 'object') return false;
   const v = value as any;
-  return typeof v.id === 'string' && v.id.length > 0 && typeof v.tenantId === 'string' && v.tenantId.length > 0;
+  const userId = typeof v.userId === 'string' ? v.userId : typeof v.id === 'string' ? v.id : '';
+  return userId.length > 0 && typeof v.tenantId === 'string' && v.tenantId.length > 0;
 }
 
 type SocketData = {
@@ -173,8 +176,25 @@ type TypedSocket = Socket<
 export let io: SocketServer;
 
 export const getTenantRoom = (tenantId: string) => `tenant_${tenantId}`;
+export const getRoleRoom = (tenantId: string, role: string) =>
+  `tenant_${tenantId}_role_${String(role || 'unknown').toUpperCase()}`;
 export const getSessionRoom = (tenantId: string, sessionToken: string) =>
   `session_${tenantId}_${sessionToken}`;
+
+const socketMetrics = {
+  activeConnections: 0,
+  totalConnections: 0,
+  rejectedAuthCount: 0,
+  handledEventCount: 0,
+  rateLimitedEventCount: 0,
+  redisAdapterEnabled: false,
+  lastConnectionAt: null as string | null,
+  lastDisconnectAt: null as string | null,
+};
+
+export function getSocketMetrics() {
+  return { ...socketMetrics };
+}
 
 const logger = {
   info(message: string, meta?: Record<string, unknown>) {
@@ -391,6 +411,7 @@ async function resolveTenantIdFromSlug(slug: string): Promise<string | null> {
 }
 
 function rejectAuth(socket: TypedSocket, next: (err?: Error) => void, reason: string): void {
+  socketMetrics.rejectedAuthCount += 1;
   logger.warn('Socket auth rejected', {
     socketId: socket.id,
     reason,
@@ -405,7 +426,17 @@ async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void):
 
     const rawToken = auth.token;
     if (typeof rawToken === 'string' && rawToken.length > 0 && rawToken.length <= MAX_TOKEN_LENGTH) {
-      const decoded = verifyAccessToken(rawToken);
+      let decoded;
+      try {
+        decoded = verifyAccessToken(rawToken);
+      } catch (err: any) {
+        const name = err && err.name ? String(err.name) : 'UnknownError';
+        // Distinguish expired tokens from other JWT errors so clients can refresh tokens.
+        if (name === 'TokenExpiredError') {
+          return rejectAuth(socket, next, 'jwt_expired');
+        }
+        return rejectAuth(socket, next, 'invalid_jwt');
+      }
 
       if (!isVerifiedAccessToken(decoded)) {
         return rejectAuth(socket, next, 'invalid_jwt_claims');
@@ -414,6 +445,7 @@ async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void):
       const verifiedToken: VerifiedAccessToken = {
         userId: decoded.id,
         tenantId: decoded.tenantId,
+        role: decoded.role,
       };
 
       const user = await prisma.user.findUnique({
@@ -427,9 +459,10 @@ async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void):
 
       socket.data.user = verifiedToken;
       socket.data.connectedAt = Date.now();
-      const staffRoom = getTenantRoom(verifiedToken.tenantId);
-      socket.join(staffRoom);
-      console.log(`[DEBUG_SOCKET] Staff authenticated & joined room: ${staffRoom} (Socket: ${socket.id}, User: ${verifiedToken.userId})`);
+      socket.join(getTenantRoom(verifiedToken.tenantId));
+      if (verifiedToken.role) {
+        socket.join(getRoleRoom(verifiedToken.tenantId, verifiedToken.role));
+      }
       return next();
     }
 
@@ -482,6 +515,7 @@ function registerHandler(
 ): void {
   socket.on(event as any, (payload: any, ack?: any) => {
     if (!rateLimiter.consume(socket.id)) {
+      socketMetrics.rateLimitedEventCount += 1;
       socket.emit('error', {
         code: 'RATE_LIMITED',
         event: String(event),
@@ -491,6 +525,7 @@ function registerHandler(
     }
 
     try {
+      socketMetrics.handledEventCount += 1;
       handler(payload, ack);
     } catch (error) {
       logger.error('Socket handler crashed', {
@@ -522,6 +557,10 @@ function onConnection(socket: TypedSocket): void {
     presenceTracker.add(tenantId, socket.id);
     emitTenantPresence(tenantId);
   }
+
+  socketMetrics.activeConnections += 1;
+  socketMetrics.totalConnections += 1;
+  socketMetrics.lastConnectionAt = nowIso();
 
   socket.use(([event], next) => {
     if (!['client:ping', 'sync:request'].includes(String(event))) {
@@ -573,6 +612,8 @@ function onConnection(socket: TypedSocket): void {
     }
 
     rateLimiter.remove(socket.id);
+    socketMetrics.activeConnections = Math.max(0, socketMetrics.activeConnections - 1);
+    socketMetrics.lastDisconnectAt = nowIso();
 
     logger.info('Socket disconnected', {
       socketId: socket.id,
@@ -583,16 +624,10 @@ function onConnection(socket: TypedSocket): void {
 }
 
 function buildAllowedOrigins(): string[] {
-  const envOrigins = (process.env.WS_ORIGINS ?? process.env.CORS_ORIGIN ?? '')
-    .split(',')
-    .map((v) => v.trim())
-    .filter(Boolean);
-
-  const clientUrl = process.env.CLIENT_URL || '';
-  const origins = [...new Set([...envOrigins, clientUrl])].filter(Boolean);
+  const origins = [...env.ALLOWED_ORIGINS];
 
   // In development, if no origins are set, allow common local dev ports
-  if (origins.length === 0 && process.env.NODE_ENV !== 'production') {
+  if (origins.length === 0 && env.NODE_ENV !== 'production') {
     return [
       'http://localhost:3000',
       'http://localhost:3001',
@@ -639,7 +674,7 @@ function registerShutdownHooks(): void {
 
 export async function initSocket(server: HttpServer): Promise<SocketServer> {
   const allowedOrigins = buildAllowedOrigins();
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction = env.NODE_ENV === 'production';
 
   io = new Server(server, {
     cors: {
@@ -672,17 +707,33 @@ export async function initSocket(server: HttpServer): Promise<SocketServer> {
     transports: ['websocket', 'polling'],
     allowEIO3: false,
     serveClient: false,
+    connectionStateRecovery: {
+      maxDisconnectionDuration: 2 * 60 * 1000,
+      skipMiddlewares: true,
+    },
   });
 
   await setupRedisAdapter();
+  socketMetrics.redisAdapterEnabled = Boolean(redisPubClient && redisSubClient);
+
+  if (isProduction && env.REQUIRE_REDIS_FOR_PROD && !socketMetrics.redisAdapterEnabled) {
+    logger.error('Redis adapter required for production but not available');
+    throw new Error('Redis adapter required for production');
+  }
 
   io.use(authMiddleware);
   io.on('connection', onConnection);
+  io.engine.on('connection_error', (err) => {
+    logger.warn('Socket engine connection error', {
+      code: err.code,
+      message: err.message,
+    });
+  });
 
   registerShutdownHooks();
 
   logger.info('Socket.IO initialized', {
-    redisEnabled: Boolean(process.env.REDIS_URL),
+    redisEnabled: Boolean(env.REDIS_URL),
     origins: allowedOrigins,
     maxHttpBufferSize: WS_MAX_HTTP_BUFFER_SIZE,
   });

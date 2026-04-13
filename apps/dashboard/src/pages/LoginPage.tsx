@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, Lock, LogIn, ShieldCheck } from 'lucide-react';
 import { useSignIn, useUser } from '@clerk/clerk-react';
@@ -52,7 +52,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     return parseApiError(err, fallback);
   };
 
-  const syncGoogleLogin = async (clerkUser: any) => {
+  const syncGoogleLogin = useCallback(async (clerkUser: any) => {
     const email = getClerkPrimaryEmail(clerkUser);
     if (!email) throw new Error('Google profile is still loading. Please try again.');
     const name = getClerkDisplayName(clerkUser, email);
@@ -64,7 +64,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       intent: 'LOGIN',
     });
     persistSession(res.data, onLogin);
-  };
+  }, [onLogin]);
 
   useEffect(() => {
     if (!clerkEnabled || !isUserLoaded || !user) return;
@@ -84,7 +84,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         syncInFlight.current = false;
         setAuthLoading(false);
       });
-  }, [clerkEnabled, isUserLoaded, onLogin, user]);
+  }, [clerkEnabled, isUserLoaded, syncGoogleLogin, user]);
 
   const loginSubmit = async (e: FormEvent) => {
     e.preventDefault();

@@ -29,7 +29,11 @@ function App() {
       for (let i = 0; i < queue.length; i += 1) {
         const order = queue[i];
         try {
-          await publicApi.post(`/${order.tenantSlug}/orders`, order.payload);
+          await publicApi.post(`/${order.tenantSlug}/orders`, order.payload, {
+            headers: order?.payload?.idempotencyKey
+              ? { 'x-idempotency-key': order.payload.idempotencyKey }
+              : undefined,
+          });
           newQueue = newQueue.filter((queuedOrder) => queuedOrder !== order);
         } catch (error) {
           console.error('Failed to sync order', error);

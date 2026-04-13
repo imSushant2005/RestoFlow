@@ -3,6 +3,7 @@ import { matchPath, Outlet, useLocation, useParams } from 'react-router-dom';
 import {
   ensureGuestHandshakeTokenForTenant,
   getActiveSessionForTenant,
+  getCustomerTokenForTenant,
   getGuestHandshakeTokenForTenant,
   getLastTableIdForTenant,
   setLastTableIdForTenant,
@@ -21,12 +22,15 @@ export function CustomerShell() {
   const { tenantSlug, tableId } = useParams();
   const location = useLocation();
   const cartItems = useCartStore((state) => state.items);
+  const customerName = useCartStore((state) => state.customerName);
+  const customerPhone = useCartStore((state) => state.customerPhone);
   const cartItemCount = Array.isArray(cartItems)
     ? cartItems.reduce((sum, item) => sum + Number(item?.quantity || 0), 0)
     : 0;
 
   const [storageState, setStorageState] = useState(() => ({
     activeSessionId: getActiveSessionForTenant(tenantSlug),
+    customerToken: getCustomerTokenForTenant(tenantSlug),
     guestToken: getGuestHandshakeTokenForTenant(tenantSlug),
     lastTableId: getLastTableIdForTenant(tenantSlug),
   }));
@@ -34,6 +38,7 @@ export function CustomerShell() {
   useEffect(() => {
     setStorageState({
       activeSessionId: getActiveSessionForTenant(tenantSlug),
+      customerToken: getCustomerTokenForTenant(tenantSlug),
       guestToken: getGuestHandshakeTokenForTenant(tenantSlug),
       lastTableId: getLastTableIdForTenant(tenantSlug),
     });
@@ -43,10 +48,15 @@ export function CustomerShell() {
     return subscribeTenantStorage((event) => {
       const scope = tenantSlug?.trim() || 'global';
       if (event.detail?.tenantSlug !== scope) return;
-      if (!['active_session', 'guest_handshake_token', 'last_table_id'].includes(event.detail?.key || '')) return;
+      if (
+        !['active_session', 'customer_token', 'guest_handshake_token', 'last_table_id'].includes(event.detail?.key || '')
+      ) {
+        return;
+      }
 
       setStorageState({
         activeSessionId: getActiveSessionForTenant(tenantSlug),
+        customerToken: getCustomerTokenForTenant(tenantSlug),
         guestToken: getGuestHandshakeTokenForTenant(tenantSlug),
         lastTableId: getLastTableIdForTenant(tenantSlug),
       });
@@ -67,8 +77,14 @@ export function CustomerShell() {
   const isHistoryRoute = matches(location.pathname, '/order/:tenantSlug/history');
   const isProfileRoute = matches(location.pathname, '/order/:tenantSlug/profile');
 
-  const showBottomNav = isMenuRoute || isSessionRoute || isStatusRoute || isHistoryRoute || isProfileRoute;
-  const showWaiterCall = isMenuRoute || isSessionRoute || isStatusRoute;
+  const hasOrderingIdentity = Boolean(
+    storageState.activeSessionId || storageState.customerToken || customerName || customerPhone,
+  );
+  const hasTableOrderingContext = Boolean(tableId && hasOrderingIdentity);
+
+  const showBottomNav =
+    (isMenuRoute && hasOrderingIdentity) || isSessionRoute || isStatusRoute || isHistoryRoute || isProfileRoute;
+  const showWaiterCall = (isMenuRoute && hasTableOrderingContext) || isSessionRoute || isStatusRoute;
 
   useEffect(() => {
     if (!tenantSlug || !showWaiterCall || storageState.activeSessionId || storageState.guestToken) return;

@@ -50,7 +50,10 @@ export function DashboardOverview() {
     retry: false,
   });
 
-  const historyOrders = historyResponse?.data || [];
+  const historyOrders = useMemo(
+    () => (Array.isArray(historyResponse?.data) ? historyResponse.data : []),
+    [historyResponse?.data],
+  );
   const tables = useMemo(
     () => (zonesResponse?.zones || []).flatMap((zone: any) => (Array.isArray(zone.tables) ? zone.tables : [])),
     [zonesResponse?.zones],

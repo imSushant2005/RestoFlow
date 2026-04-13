@@ -91,6 +91,7 @@ const ROUTE_LABELS: Record<string, string> = {
   '/app/menu': 'Menu',
   '/app/tables': 'Tables & QR',
   '/app/orders': 'Live Orders',
+  '/app/assisted-ordering': 'Assisted Ordering',
   '/app/waiter': 'Waiter Ops',
   '/app/billing': 'Billing',
   '/app/analytics': 'Analytics',
@@ -257,6 +258,7 @@ export function VendorTopNav({
     if (!slug) return '';
     return `${getCustomerAppUrl()}/order/${slug}`;
   }, [authMe?.tenant?.slug, business?.slug]);
+  const assistedLink = '/app/assisted-ordering';
 
   const visibleNotifications = useMemo(() => notifications.slice(0, 20), [notifications]);
   const currencySymbol = authMe?.tenant?.currencySymbol || '₹';
@@ -415,10 +417,10 @@ export function VendorTopNav({
 
           {profileOpen && (
             <div
-              className="absolute right-0 top-12 z-50 w-[min(360px,calc(100vw-1rem))] overflow-hidden rounded-2xl border shadow-xl"
+              className="absolute right-0 top-12 z-50 w-[min(380px,calc(100vw-1rem))] overflow-hidden rounded-2xl border shadow-xl"
               style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
             >
-              <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+              <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-base font-black" style={{ color: 'var(--text-1)' }}>
@@ -439,8 +441,8 @@ export function VendorTopNav({
                 </div>
               </div>
 
-              <div className="space-y-3 px-4 py-3">
-                <div className="rounded-2xl border p-3" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+              <div className="space-y-4 px-5 py-4">
+                <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
                   <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
                     Staff Name
                   </label>
@@ -489,7 +491,7 @@ export function VendorTopNav({
                   )}
                 </div>
 
-                <div className="space-y-2 rounded-2xl border p-3" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+                <div className="space-y-2 rounded-2xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
                   <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-2)' }}>
                     <Mail size={14} />
                     <span className="truncate font-semibold">{workspaceEmail}</span>
@@ -501,7 +503,7 @@ export function VendorTopNav({
                 </div>
 
                 {role === 'WAITER' && (
-                  <div className="rounded-2xl border p-3" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+                  <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
                     <div className="mb-3 flex items-center gap-2">
                       <IndianRupee size={15} className="text-emerald-600" />
                       <p className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
@@ -541,7 +543,7 @@ export function VendorTopNav({
                   </button>
 
                   {securityOpen && (
-                    <div className="rounded-2xl border p-3" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+                    <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
                       <div className="grid gap-3">
                         <div>
                           <label className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
@@ -617,7 +619,7 @@ export function VendorTopNav({
                 </div>
               </div>
 
-              <div className="space-y-2 px-4 pb-4">
+              <div className="space-y-2 px-5 pb-5">
                 <button
                   onClick={copyOrderLink}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition"
@@ -627,13 +629,21 @@ export function VendorTopNav({
                   Copy Ordering Link
                 </button>
                 <button
-                  onClick={() => orderLink && window.open(orderLink, '_blank', 'noopener,noreferrer')}
-                  disabled={!orderLink}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => navigate(assistedLink)}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition"
                   style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-2)' }}
                 >
                   <ExternalLink size={14} />
-                  Open Customer View
+                  Open Assisted Ordering
+                </button>
+                <button
+                  onClick={() => orderLink && window.open(orderLink, '_blank', 'noopener,noreferrer')}
+                  disabled={!orderLink}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-black uppercase tracking-[0.12em] transition disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-2)' }}
+                >
+                  <ExternalLink size={14} />
+                  Open Public Ordering
                 </button>
                 <div className="grid grid-cols-2 gap-2">
                   <button

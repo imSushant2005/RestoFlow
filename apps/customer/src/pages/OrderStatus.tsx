@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import {
   ArrowLeft,
@@ -84,8 +84,11 @@ export function OrderStatus() {
   const [feedback, setFeedback] = useState('');
   const [tab, setTab] = useState<'TRACKING' | 'HISTORY'>('TRACKING');
   const sessionToken = getActiveSessionForTenant(tenantSlug);
-
-  const queryKey = ['session-orders', sessionToken, tenantSlug];
+  const shouldRedirectToTracker = Boolean(tenantSlug && sessionToken);
+  const queryKey = useMemo(
+    () => ['session-orders', sessionToken || 'no-session', tenantSlug || 'no-tenant'],
+    [sessionToken, tenantSlug],
+  );
 
   const { data, isLoading } = useQuery({
     queryKey,
@@ -94,12 +97,12 @@ export function OrderStatus() {
       const res = await publicApi.get(`/${tenantSlug}/sessions/${sessionToken}/orders`);
       return res.data;
     },
-    enabled: Boolean(sessionToken && tenantSlug),
+    enabled: Boolean(sessionToken && tenantSlug && !shouldRedirectToTracker),
     staleTime: 1000 * 10,
     refetchInterval: 1000 * 15,
   });
 
-  const orders = Array.isArray(data) ? data : [];
+  const orders = useMemo(() => (Array.isArray(data) ? data : []), [data]);
   const activeOrders = useMemo(() => orders.filter((order: any) => isActiveOrder(order.status)), [orders]);
   const historyOrders = useMemo(() => orders.filter((order: any) => !isActiveOrder(order.status)), [orders]);
 
@@ -126,7 +129,7 @@ export function OrderStatus() {
   });
 
   useEffect(() => {
-    if (!tenantSlug || !sessionToken) return;
+    if (!tenantSlug || !sessionToken || shouldRedirectToTracker) return;
 
     const socket = io(getSocketUrl(), {
       auth: { tenantSlug, sessionToken, client: 'customer-status' },
@@ -201,7 +204,7 @@ export function OrderStatus() {
       socket.off('session:completed', handleSessionCompleted);
       socket.disconnect();
     };
-  }, [navigate, queryClient, queryKey, sessionToken, tenantSlug]);
+  }, [navigate, notify, queryClient, queryKey, sessionToken, shouldRedirectToTracker, tenantSlug]);
 
   useEffect(() => {
     if (activeOrders.length === 0 && historyOrders.length > 0) {
@@ -257,6 +260,10 @@ export function OrderStatus() {
       setLastTableIdForTenant(tenantSlug, firstTableId);
     }
   }, [firstTableId, tenantSlug]);
+
+  if (shouldRedirectToTracker && tenantSlug && sessionToken) {
+    return <Navigate to={`/order/${tenantSlug}/session/${sessionToken}`} replace />;
+  }
 
   if (isLoading) {
     return (

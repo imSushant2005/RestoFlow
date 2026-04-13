@@ -2,10 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import {
-  Bell,
-  CheckCircle2,
-  ChefHat,
-  Clock,
   LayoutDashboard,
   Plus,
   Receipt,
@@ -17,45 +13,19 @@ import {
 import { publicApi } from '../lib/api';
 import { formatINR } from '../lib/currency';
 import { getSocketUrl } from '../lib/network';
+import {
+  CUSTOMER_PROGRESS_STEPS,
+  getCustomerProcessSummary,
+  getCustomerStageRank,
+  getCustomerStatusMeta,
+} from '../lib/orderPresentation';
 import { useCartStore } from '../store/cartStore';
 import { getActiveSessionForTenant, setLastTableIdForTenant } from '../lib/tenantStorage';
-
-const STATUS_MAP: Record<string, { label: string; color: string; icon: any; bg: string }> = {
-  NEW: { label: 'Received', color: 'text-blue-500', bg: 'bg-blue-500/10', icon: Clock },
-  ACCEPTED: { label: 'Accepted', color: 'text-indigo-500', bg: 'bg-indigo-500/10', icon: CheckCircle2 },
-  PREPARING: { label: 'Preparing', color: 'text-amber-500', bg: 'bg-amber-500/10', icon: ChefHat },
-  READY: { label: 'Ready', color: 'text-green-500', bg: 'bg-green-500/10', icon: UtensilsCrossed },
-  SERVED: { label: 'Served', color: 'text-emerald-500', bg: 'bg-emerald-500/10', icon: CheckCircle2 },
-  RECEIVED: { label: 'Done', color: 'text-gray-400', bg: 'bg-gray-400/10', icon: CheckCircle2 },
-  CANCELLED: { label: 'Cancelled', color: 'text-red-500', bg: 'bg-red-500/10', icon: X },
-};
-
-const PROCESS_STEPS = [
-  { label: 'Accepted', rank: 1, icon: CheckCircle2, tone: 'from-blue-500/30 to-indigo-500/10' },
-  { label: 'Preparing', rank: 2, icon: ChefHat, tone: 'from-amber-500/30 to-orange-500/10' },
-  { label: 'Ready', rank: 3, icon: UtensilsCrossed, tone: 'from-emerald-500/30 to-green-500/10' },
-  { label: 'Waiter Pickup', rank: 4, icon: Bell, tone: 'from-cyan-500/30 to-sky-500/10' },
-  { label: 'Served', rank: 5, icon: Clock, tone: 'from-violet-500/30 to-fuchsia-500/10' },
-  { label: 'Complete', rank: 6, icon: Star, tone: 'from-rose-500/30 to-red-500/10' },
-] as const;
 
 type SocketStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline';
 
 function getOrderRank(status?: string) {
-  switch (status) {
-    case 'ACCEPTED':
-      return 1;
-    case 'PREPARING':
-      return 2;
-    case 'READY':
-      return 3;
-    case 'SERVED':
-      return 5;
-    case 'RECEIVED':
-      return 6;
-    default:
-      return 0;
-  }
+  return getCustomerStageRank(status);
 }
 
 function withSessionMetrics(next: any) {
@@ -325,22 +295,17 @@ export function SessionTracker() {
     (max: number, order: any) => Math.max(max, getOrderRank(order?.status)),
     0,
   );
-  const processRank = session.sessionStatus === 'CLOSED' ? 6 : maxOrderRank;
-  const nextPendingRank = PROCESS_STEPS.find((step) => processRank < step.rank)?.rank || PROCESS_STEPS[PROCESS_STEPS.length - 1].rank;
-  const processSummary =
-    processRank >= 6
-      ? 'Payment confirmed and session closed'
-      : isAwaitingBill
-        ? 'Final bill shared, awaiting payment confirmation'
-      : processRank >= 5
-        ? 'Served, wrapping up the table'
-        : processRank >= 3
-          ? 'Ready, waiter pickup in progress'
-          : processRank >= 2
-            ? 'Kitchen is preparing now'
-            : processRank >= 1
-              ? 'Order accepted by restaurant'
-              : 'Waiting for acceptance';
+  const processRank = session.sessionStatus === 'CLOSED' ? 4 : maxOrderRank;
+  const nextPendingRank =
+    CUSTOMER_PROGRESS_STEPS.find((step) => processRank < step.rank)?.rank ||
+    CUSTOMER_PROGRESS_STEPS[CUSTOMER_PROGRESS_STEPS.length - 1].rank;
+  const orderType = session.orders?.[0]?.orderType;
+  const processSummary = getCustomerProcessSummary({
+    orderType,
+    stageRank: processRank,
+    isAwaitingBill,
+    isClosed,
+  });
   const socketTone =
     socketStatus === 'connected'
       ? { label: 'Realtime live', className: 'bg-emerald-500/15 text-emerald-500 border-emerald-500/20' }
@@ -406,13 +371,13 @@ export function SessionTracker() {
 
           <div className="space-y-3">
             <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-              Live Process
+              Order Progress
             </p>
             <p className="text-sm font-black" style={{ color: 'var(--text-1)' }}>
               {processSummary}
             </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {PROCESS_STEPS.map((step) => {
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {CUSTOMER_PROGRESS_STEPS.map((step) => {
                 const completed = processRank >= step.rank;
                 const active = !completed && step.rank === nextPendingRank;
                 const Icon = step.icon;
@@ -495,7 +460,7 @@ export function SessionTracker() {
           )}
 
           {session.orders?.map((order: any, index: number) => {
-            const status = STATUS_MAP[order.status] || STATUS_MAP.NEW;
+            const status = getCustomerStatusMeta(order.status, order.orderType);
             const StatusIcon = status.icon;
 
             return (
@@ -524,7 +489,7 @@ export function SessionTracker() {
                       </p>
                     </div>
                   </div>
-                  <div className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-widest ${status.bg} ${status.color}`}>
+                  <div className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest ${status.toneClass}`}>
                     <StatusIcon size={12} strokeWidth={3} />
                     {status.label}
                   </div>
@@ -560,16 +525,19 @@ export function SessionTracker() {
                     <RotateCcw size={12} />
                     Reorder Again
                   </button>
-                  <div className="text-right">
-                    <p className="mb-0.5 text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>
-                      Order Total
-                    </p>
-                    <p className="font-black" style={{ color: 'var(--text-1)' }}>
-                      {formatINR(order.totalAmount)}
-                    </p>
+                    <div className="text-right">
+                      <p className="mb-0.5 text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>
+                        Order Total
+                      </p>
+                      <p className="font-black" style={{ color: 'var(--text-1)' }}>
+                        {formatINR(order.totalAmount)}
+                      </p>
+                      <p className="mt-1 text-[11px] font-medium" style={{ color: 'var(--text-3)' }}>
+                        {status.detail}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
             );
           })}
         </div>
