@@ -4,7 +4,23 @@ const LEGACY_KEYS = {
   customerName: 'rf_customer_name',
   customerPhone: 'rf_customer_phone',
   activeSession: 'rf_active_session',
+  guestHandshakeToken: 'rf_handshake_token',
 };
+
+const TENANT_STORAGE_EVENT = 'rf:tenant-storage-updated';
+
+function emitTenantStorageUpdate(tenantSlug: string | null | undefined, key: string, value: string | null) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent(TENANT_STORAGE_EVENT, {
+      detail: {
+        tenantSlug: tenantSlug?.trim() || 'global',
+        key,
+        value,
+      },
+    }),
+  );
+}
 
 function scopedKey(tenantSlug: string | null | undefined, key: string) {
   const scope = tenantSlug && tenantSlug.trim().length > 0 ? tenantSlug.trim() : 'global';
@@ -22,16 +38,21 @@ export function getTenantStorageItem(tenantSlug: string | null | undefined, key:
   if (key === 'active_session') {
     return localStorage.getItem(LEGACY_KEYS.activeSession) || localStorage.getItem('restoflow_session');
   }
+  if (key === 'guest_handshake_token') {
+    return localStorage.getItem(LEGACY_KEYS.guestHandshakeToken);
+  }
 
   return null;
 }
 
 export function setTenantStorageItem(tenantSlug: string | null | undefined, key: string, value: string) {
   localStorage.setItem(scopedKey(tenantSlug, key), value);
+  emitTenantStorageUpdate(tenantSlug, key, value);
 }
 
 export function removeTenantStorageItem(tenantSlug: string | null | undefined, key: string) {
   localStorage.removeItem(scopedKey(tenantSlug, key));
+  emitTenantStorageUpdate(tenantSlug, key, null);
 }
 
 export function getActiveSessionForTenant(tenantSlug: string | null | undefined) {
@@ -46,6 +67,41 @@ export function setActiveSessionForTenant(tenantSlug: string | null | undefined,
 
 export function getCustomerTokenForTenant(tenantSlug: string | null | undefined) {
   return getTenantStorageItem(tenantSlug, 'customer_token');
+}
+
+export function getGuestHandshakeTokenForTenant(tenantSlug: string | null | undefined) {
+  return getTenantStorageItem(tenantSlug, 'guest_handshake_token');
+}
+
+export function ensureGuestHandshakeTokenForTenant(tenantSlug: string | null | undefined) {
+  const existing = getGuestHandshakeTokenForTenant(tenantSlug);
+  if (existing) return existing;
+
+  const nextToken = `guest_${Math.random().toString(36).slice(2, 11)}`;
+  setTenantStorageItem(tenantSlug, 'guest_handshake_token', nextToken);
+  localStorage.setItem(LEGACY_KEYS.guestHandshakeToken, nextToken);
+  return nextToken;
+}
+
+export function getLastTableIdForTenant(tenantSlug: string | null | undefined) {
+  return getTenantStorageItem(tenantSlug, 'last_table_id');
+}
+
+export function setLastTableIdForTenant(tenantSlug: string | null | undefined, tableId: string) {
+  setTenantStorageItem(tenantSlug, 'last_table_id', tableId);
+}
+
+export function subscribeTenantStorage(listener: (event: CustomEvent<{ tenantSlug: string; key: string; value: string | null }>) => void) {
+  if (typeof window === 'undefined') return () => undefined;
+
+  const handler = (event: Event) => {
+    if (event instanceof CustomEvent) {
+      listener(event as CustomEvent<{ tenantSlug: string; key: string; value: string | null }>);
+    }
+  };
+
+  window.addEventListener(TENANT_STORAGE_EVENT, handler);
+  return () => window.removeEventListener(TENANT_STORAGE_EVENT, handler);
 }
 
 export function setCustomerAuthForTenant(
@@ -69,3 +125,19 @@ export function setCustomerAuthForTenant(
   if (payload.customerPhone != null) localStorage.setItem(LEGACY_KEYS.customerPhone, payload.customerPhone);
 }
 
+export function clearCustomerContextForTenant(tenantSlug: string | null | undefined) {
+  removeTenantStorageItem(tenantSlug, 'customer_token');
+  removeTenantStorageItem(tenantSlug, 'customer_id');
+  removeTenantStorageItem(tenantSlug, 'customer_name');
+  removeTenantStorageItem(tenantSlug, 'customer_phone');
+  removeTenantStorageItem(tenantSlug, 'active_session');
+  removeTenantStorageItem(tenantSlug, 'guest_handshake_token');
+
+  localStorage.removeItem(LEGACY_KEYS.customerToken);
+  localStorage.removeItem(LEGACY_KEYS.customerId);
+  localStorage.removeItem(LEGACY_KEYS.customerName);
+  localStorage.removeItem(LEGACY_KEYS.customerPhone);
+  localStorage.removeItem(LEGACY_KEYS.activeSession);
+  localStorage.removeItem(LEGACY_KEYS.guestHandshakeToken);
+  localStorage.removeItem('restoflow_session');
+}

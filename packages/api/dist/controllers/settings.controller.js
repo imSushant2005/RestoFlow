@@ -6,6 +6,7 @@ const plans_1 = require("../config/plans");
 const prisma_2 = require("@dineflow/prisma");
 const hash_1 = require("../utils/hash");
 const zod_1 = require("zod");
+const cache_service_1 = require("../services/cache.service");
 const createStaffSchema = zod_1.z
     .object({
     email: zod_1.z.string().trim().optional(),
@@ -103,7 +104,7 @@ async function ensureUniqueEmployeeCode(base, excludeUserId) {
 }
 const getBusinessSettings = async (req, res) => {
     try {
-        const tenant = await prisma_1.prisma.tenant.findUnique({
+        const tenant = await (0, cache_service_1.withCache)(`tenant:${req.tenantId}:business-settings`, () => prisma_1.prisma.tenant.findUnique({
             where: { id: req.tenantId },
             select: {
                 id: true,
@@ -119,8 +120,8 @@ const getBusinessSettings = async (req, res) => {
                 primaryColor: true,
                 accentColor: true,
                 isActive: true,
-            }
-        });
+            },
+        }), 20);
         res.json(tenant);
     }
     catch (error) {
@@ -186,6 +187,10 @@ const updateBusinessSettings = async (req, res) => {
                 isActive: true,
             }
         });
+        await Promise.all([
+            (0, cache_service_1.deleteCache)(`tenant:${req.tenantId}:business-settings`),
+            (0, cache_service_1.deleteCache)(`tenant:${req.tenantId}:billing`),
+        ]);
         res.json(tenant);
     }
     catch (error) {

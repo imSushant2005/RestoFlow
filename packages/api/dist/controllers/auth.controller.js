@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.logout = exports.refresh = exports.resetForgotPassword = exports.getForgotPasswordQuestion = exports.changeFirstPassword = exports.login = exports.clerkSync = exports.register = void 0;
+exports.logout = exports.refresh = exports.resetForgotPassword = exports.getForgotPasswordQuestion = exports.getMe = exports.updateProfile = exports.changePassword = exports.changeFirstPassword = exports.login = exports.clerkSync = exports.register = void 0;
 const prisma_1 = require("@dineflow/prisma");
 const zod_1 = require("zod");
 const crypto_1 = require("crypto");
@@ -10,7 +10,8 @@ const jwt_1 = require("../utils/jwt");
 const registerSchema = zod_1.z.object({
     email: zod_1.z.string().email(),
     password: zod_1.z.string().min(6),
-    name: zod_1.z.string().trim().min(1).max(80).optional(),
+    name: zod_1.z.string().trim().min(2).max(80).optional(),
+    tenantName: zod_1.z.string().trim().min(2).max(120).optional(),
 });
 const loginSchema = zod_1.z.object({
     identifier: zod_1.z.string().trim().min(1).optional(),
@@ -34,6 +35,29 @@ const firstPasswordChangeSchema = zod_1.z.object({
     username: zod_1.z.string().trim().min(3).max(80).optional(),
     securityQuestion: zod_1.z.string().trim().min(6).max(160),
     securityAnswer: zod_1.z.string().trim().min(2).max(120),
+});
+const profileUpdateSchema = zod_1.z.object({
+    name: zod_1.z.string().trim().min(2).max(80).optional(),
+    avatarUrl: zod_1.z.string().trim().url().max(500).nullable().optional(),
+    preferredLanguage: zod_1.z.enum(['en', 'hi', 'hinglish']).optional(),
+});
+const passwordChangeSchema = zod_1.z
+    .object({
+    currentPassword: zod_1.z.string().trim().min(1),
+    newPassword: zod_1.z.string().min(8),
+    securityQuestion: zod_1.z.string().trim().min(6).max(160).optional(),
+    securityAnswer: zod_1.z.string().trim().min(2).max(120).optional(),
+})
+    .superRefine((payload, ctx) => {
+    const hasQuestion = Boolean(payload.securityQuestion?.trim());
+    const hasAnswer = Boolean(payload.securityAnswer?.trim());
+    if (hasQuestion !== hasAnswer) {
+        ctx.addIssue({
+            code: zod_1.z.ZodIssueCode.custom,
+            path: ['securityQuestion'],
+            message: 'Security question and answer must be updated together.',
+        });
+    }
 });
 const forgotQuestionSchema = zod_1.z.object({
     identifier: zod_1.z.string().trim().min(1),
@@ -100,6 +124,53 @@ async function issueSessionForUser(res, user) {
             employeeCode: user.employeeCode,
             mustChangePassword: user.mustChangePassword,
             hasSecurityQuestion: Boolean(user.securityQuestion),
+            preferredLanguage: user.preferredLanguage || 'en',
+        },
+    };
+}
+function getSecuritySetupPending(user) {
+    if (user.role === prisma_1.UserRole.OWNER) {
+        return user.mustChangePassword || !user.securityQuestion;
+    }
+    return !user.securityQuestion;
+}
+async function buildTipSummaryForUser(userId) {
+    const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - 6);
+    startOfWeek.setHours(0, 0, 0, 0);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const [today, week, month] = await Promise.all([
+        prisma_2.prisma.review.aggregate({
+            where: { serviceStaffUserId: userId, createdAt: { gte: startOfToday } },
+            _sum: { tipAmount: true },
+            _count: { id: true },
+        }),
+        prisma_2.prisma.review.aggregate({
+            where: { serviceStaffUserId: userId, createdAt: { gte: startOfWeek } },
+            _sum: { tipAmount: true },
+            _count: { id: true },
+        }),
+        prisma_2.prisma.review.aggregate({
+            where: { serviceStaffUserId: userId, createdAt: { gte: startOfMonth } },
+            _sum: { tipAmount: true },
+            _count: { id: true },
+        }),
+    ]);
+    return {
+        today: {
+            amount: Number(today._sum.tipAmount || 0),
+            sessions: today._count.id,
+        },
+        week: {
+            amount: Number(week._sum.tipAmount || 0),
+            sessions: week._count.id,
+        },
+        month: {
+            amount: Number(month._sum.tipAmount || 0),
+            sessions: month._count.id,
         },
     };
 }
@@ -137,12 +208,13 @@ const register = async (req, res) => {
             return res.status(400).json({ error: 'Email already exists' });
         }
         const hashedPassword = await (0, hash_1.hashPassword)(validatedData.password);
-        const provisionalName = buildProvisionalWorkspaceName(validatedData.name);
-        const slug = await buildUniqueTenantSlug('workspace');
+        const resolvedName = validatedData.name || 'Owner';
+        const finalTenantName = validatedData.tenantName?.trim() || buildProvisionalWorkspaceName(resolvedName);
+        const slug = await buildUniqueTenantSlug(validatedData.tenantName || 'workspace');
         const result = await prisma_2.prisma.$transaction(async (tx) => {
             const tenant = await tx.tenant.create({
                 data: {
-                    businessName: provisionalName,
+                    businessName: finalTenantName,
                     slug,
                     email: normalizedEmail,
                 },
@@ -151,7 +223,7 @@ const register = async (req, res) => {
                 data: {
                     email: normalizedEmail,
                     passwordHash: hashedPassword,
-                    name: validatedData.name || 'Owner',
+                    name: resolvedName,
                     role: prisma_1.UserRole.OWNER,
                     tenantId: tenant.id,
                     mustChangePassword: false,
@@ -200,6 +272,7 @@ const clerkSync = async (req, res) => {
                 employeeCode: true,
                 mustChangePassword: true,
                 securityQuestion: true,
+                preferredLanguage: true,
             },
         });
         if (existingByClerk) {
@@ -217,6 +290,7 @@ const clerkSync = async (req, res) => {
                 employeeCode: true,
                 mustChangePassword: true,
                 securityQuestion: true,
+                preferredLanguage: true,
                 clerkUserId: true,
             },
         });
@@ -240,6 +314,7 @@ const clerkSync = async (req, res) => {
                         employeeCode: true,
                         mustChangePassword: true,
                         securityQuestion: true,
+                        preferredLanguage: true,
                     },
                 });
             const session = await issueSessionForUser(res, linkedUser);
@@ -253,15 +328,15 @@ const clerkSync = async (req, res) => {
         const baseName = payload.name?.trim();
         const fallbackName = normalizedEmail.split('@')[0] || 'Owner';
         const resolvedName = baseName && baseName.length > 0 ? baseName : fallbackName;
+        const finalTenantName = payload.tenantName?.trim() || buildProvisionalWorkspaceName(resolvedName);
+        const tenantSlug = await buildUniqueTenantSlug(payload.tenantName || 'workspace');
         const localPassword = payload.password ||
             `${normalizedProvider.toLowerCase()}_${(0, crypto_1.randomBytes)(24).toString('base64url')}`;
         const hashedPassword = await (0, hash_1.hashPassword)(localPassword);
-        const tenantSlug = await buildUniqueTenantSlug('workspace');
-        const provisionalBusinessName = buildProvisionalWorkspaceName(resolvedName);
         const created = await prisma_2.prisma.$transaction(async (tx) => {
             const tenant = await tx.tenant.create({
                 data: {
-                    businessName: provisionalBusinessName,
+                    businessName: finalTenantName,
                     slug: tenantSlug,
                     email: normalizedEmail,
                 },
@@ -288,6 +363,7 @@ const clerkSync = async (req, res) => {
             employeeCode: created.user.employeeCode,
             mustChangePassword: created.user.mustChangePassword,
             securityQuestion: created.user.securityQuestion,
+            preferredLanguage: created.user.preferredLanguage,
         });
         return res.status(201).json({
             ...session,
@@ -355,20 +431,24 @@ const login = async (req, res) => {
         if (!isPasswordValid) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
-        await prisma_2.prisma.user.update({
-            where: { id: user.id },
-            data: { lastLoginAt: new Date() },
-        });
-        const session = await issueSessionForUser(res, {
-            id: user.id,
-            tenantId: user.tenantId,
-            role: user.role,
-            email: user.email,
-            name: user.name,
-            employeeCode: user.employeeCode,
-            mustChangePassword: user.mustChangePassword,
-            securityQuestion: user.securityQuestion,
-        });
+        // Optimization: Run non-critical update in background and parallelize session creation
+        const [session] = await Promise.all([
+            issueSessionForUser(res, {
+                id: user.id,
+                tenantId: user.tenantId,
+                role: user.role,
+                email: user.email,
+                name: user.name,
+                employeeCode: user.employeeCode,
+                mustChangePassword: user.mustChangePassword,
+                securityQuestion: user.securityQuestion,
+                preferredLanguage: user.preferredLanguage,
+            }),
+            prisma_2.prisma.user.update({
+                where: { id: user.id },
+                data: { lastLoginAt: new Date() },
+            }).catch(err => console.error('[NON_CRITICAL_UPDATE_FAILED]:', err))
+        ]);
         return res.json(session);
     }
     catch (error) {
@@ -388,6 +468,9 @@ const changeFirstPassword = async (req, res) => {
         const body = firstPasswordChangeSchema.parse(req.body);
         if (!req.user?.id) {
             return res.status(401).json({ error: 'Unauthorized' });
+        }
+        if (req.user.role !== prisma_1.UserRole.OWNER) {
+            return res.status(403).json({ error: 'First-login password flow is reserved for owner accounts.' });
         }
         const user = await prisma_2.prisma.user.findUnique({
             where: { id: req.user.id },
@@ -461,6 +544,159 @@ const changeFirstPassword = async (req, res) => {
     }
 };
 exports.changeFirstPassword = changeFirstPassword;
+const changePassword = async (req, res) => {
+    try {
+        const body = passwordChangeSchema.parse(req.body);
+        if (!req.user?.id) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        const user = await prisma_2.prisma.user.findUnique({
+            where: { id: req.user.id },
+            select: {
+                id: true,
+                passwordHash: true,
+            },
+        });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        const validCurrent = await (0, hash_1.verifyPassword)(body.currentPassword, user.passwordHash);
+        if (!validCurrent) {
+            return res.status(400).json({ error: 'Current password is incorrect' });
+        }
+        const isSamePassword = await (0, hash_1.verifyPassword)(body.newPassword, user.passwordHash);
+        if (isSamePassword) {
+            return res.status(400).json({ error: 'New password must be different from current password' });
+        }
+        const updateData = {
+            passwordHash: await (0, hash_1.hashPassword)(body.newPassword),
+            mustChangePassword: false,
+        };
+        if (body.securityQuestion?.trim() && body.securityAnswer?.trim()) {
+            updateData.securityQuestion = body.securityQuestion.trim();
+            updateData.securityAnswerHash = await (0, hash_1.hashPassword)(body.securityAnswer.trim().toLowerCase());
+        }
+        await prisma_2.prisma.user.update({
+            where: { id: req.user.id },
+            data: updateData,
+        });
+        return res.json({ success: true, message: 'Password updated successfully.' });
+    }
+    catch (error) {
+        if (error instanceof zod_1.z.ZodError) {
+            return res.status(400).json({ error: 'Validation failed', details: error.issues });
+        }
+        console.error('Change password error:', error);
+        return res.status(500).json({ error: 'Failed to update password' });
+    }
+};
+exports.changePassword = changePassword;
+const updateProfile = async (req, res) => {
+    try {
+        const payload = profileUpdateSchema.parse(req.body);
+        if (!req.user?.id) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        const updateData = {};
+        if (typeof payload.name === 'string' && payload.name.trim())
+            updateData.name = payload.name.trim();
+        if (payload.avatarUrl !== undefined)
+            updateData.avatarUrl = payload.avatarUrl || null;
+        if (payload.preferredLanguage)
+            updateData.preferredLanguage = payload.preferredLanguage;
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({ error: 'No profile fields provided' });
+        }
+        const user = await prisma_2.prisma.user.update({
+            where: { id: req.user.id },
+            data: updateData,
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                role: true,
+                employeeCode: true,
+                preferredLanguage: true,
+                avatarUrl: true,
+                mustChangePassword: true,
+                securityQuestion: true,
+            },
+        });
+        return res.json({
+            success: true,
+            user: {
+                ...user,
+                hasSecurityQuestion: Boolean(user.securityQuestion),
+                securitySetupPending: getSecuritySetupPending(user),
+            },
+        });
+    }
+    catch (error) {
+        if (error instanceof zod_1.z.ZodError) {
+            return res.status(400).json({ error: 'Validation failed', details: error.issues });
+        }
+        console.error('Update profile error:', error);
+        return res.status(500).json({ error: 'Failed to update profile' });
+    }
+};
+exports.updateProfile = updateProfile;
+const getMe = async (req, res) => {
+    try {
+        if (!req.user?.id || !req.tenantId) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        const user = await prisma_2.prisma.user.findUnique({
+            where: { id: req.user.id },
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                role: true,
+                tenantId: true,
+                employeeCode: true,
+                mustChangePassword: true,
+                securityQuestion: true,
+                preferredLanguage: true,
+                avatarUrl: true,
+                isActive: true,
+                tenant: {
+                    select: {
+                        id: true,
+                        slug: true,
+                        businessName: true,
+                    },
+                },
+            },
+        });
+        if (!user || !user.isActive) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        const tipsSummary = await buildTipSummaryForUser(user.id);
+        return res.json({
+            tenantId: req.tenantId,
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                role: user.role,
+                tenantId: user.tenantId,
+                employeeCode: user.employeeCode,
+                avatarUrl: user.avatarUrl,
+                preferredLanguage: user.preferredLanguage || 'en',
+                mustChangePassword: user.mustChangePassword,
+                hasSecurityQuestion: Boolean(user.securityQuestion),
+                securitySetupPending: getSecuritySetupPending(user),
+                tipsSummary,
+            },
+            tenant: user.tenant,
+        });
+    }
+    catch (error) {
+        console.error('Get me error:', error);
+        return res.status(500).json({ error: 'Failed to fetch profile' });
+    }
+};
+exports.getMe = getMe;
 const getForgotPasswordQuestion = async (req, res) => {
     try {
         const body = forgotQuestionSchema.parse(req.body);

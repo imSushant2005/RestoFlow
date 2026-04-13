@@ -4,7 +4,14 @@ import { useSignUp, useUser } from '@clerk/clerk-react';
 import { AuthFrame } from '../components/AuthFrame';
 import { FormField } from '../components/forms/FormField';
 import { api } from '../lib/api';
-import { getClerkDisplayName, getClerkPrimaryEmail, parseApiError, parseClerkError, persistSession } from '../lib/authSession';
+import {
+  getClerkDisplayName,
+  getClerkPrimaryEmail,
+  hasRecentManualLogout,
+  parseApiError,
+  parseClerkError,
+  persistSession,
+} from '../lib/authSession';
 
 type SignupPageProps = {
   onLogin: (state: { mustChangePassword: boolean }) => void;
@@ -55,6 +62,7 @@ export function SignupPage({ onLogin }: SignupPageProps) {
     if (!clerkEnabled || !isUserLoaded || !user) return;
     if (localStorage.getItem('accessToken')) return;
     if (syncInFlight.current) return;
+    if (hasRecentManualLogout()) return;
     if (!getClerkPrimaryEmail(user)) return;
 
     syncInFlight.current = true;

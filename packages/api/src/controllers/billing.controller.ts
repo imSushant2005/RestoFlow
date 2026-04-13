@@ -1,28 +1,45 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
 import { getAvailablePlans, getPlanLimits, normalizePlan, parsePlan } from '../config/plans';
+import { deleteCache, withCache } from '../services/cache.service';
 
 export const getBillingDetails = async (req: Request, res: Response) => {
   try {
-    const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
-    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
-    
-    const itemsCount = await prisma.menuItem.count({ where: { tenantId: req.tenantId } });
-    const tablesCount = await prisma.table.count({ where: { tenantId: req.tenantId } });
-    const staffCount = await prisma.user.count({ where: { tenantId: req.tenantId } });
-    const normalizedPlan = normalizePlan(tenant.plan);
+    const billing = await withCache(
+      `tenant:${req.tenantId}:billing`,
+      async () => {
+        const [tenant, itemsCount, tablesCount, staffCount] = await Promise.all([
+          prisma.tenant.findUnique({ where: { id: req.tenantId } }),
+          prisma.menuItem.count({ where: { tenantId: req.tenantId } }),
+          prisma.table.count({ where: { tenantId: req.tenantId } }),
+          prisma.user.count({ where: { tenantId: req.tenantId } }),
+        ]);
 
-    res.json({
-      plan: normalizedPlan,
-      limits: getPlanLimits(normalizedPlan),
-      usage: {
-        items: itemsCount,
-        tables: tablesCount,
-        staff: staffCount
+        if (!tenant) {
+          throw new Error('TENANT_NOT_FOUND');
+        }
+
+        const normalizedPlan = normalizePlan(tenant.plan);
+
+        return {
+          plan: normalizedPlan,
+          limits: getPlanLimits(normalizedPlan),
+          usage: {
+            items: itemsCount,
+            tables: tablesCount,
+            staff: staffCount,
+          },
+          availablePlans: getAvailablePlans(),
+        };
       },
-      availablePlans: getAvailablePlans()
-    });
+      20,
+    );
+
+    res.json(billing);
   } catch (error) {
+    if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
     res.status(500).json({ error: 'Failed to fetch billing' });
   }
 };
@@ -41,6 +58,7 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
       where: { id: req.tenantId },
       data: { plan: requestedPlan as any }
     });
+    await deleteCache(`tenant:${req.tenantId}:billing`);
 
     res.json({ url: stubUrl, simulatedSuccess: true, message: `Upgraded to ${requestedPlan} successfully!` });
   } catch (error) {

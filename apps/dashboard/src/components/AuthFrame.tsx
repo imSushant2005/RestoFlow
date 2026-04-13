@@ -103,6 +103,11 @@ export function AuthFrame({
 
             {children}
 
+            <div className="mt-6 flex items-center justify-center gap-4 text-xs font-semibold" style={{ color: 'var(--text-3)' }}>
+              <Link to="/privacy" className="hover:underline">Privacy</Link>
+              <Link to="/terms" className="hover:underline">Terms</Link>
+            </div>
+
             <div className="mt-8 border-t pt-6 text-center text-sm font-medium lg:hidden" style={{ borderColor: 'var(--border)', color: 'var(--text-2)' }}>
               {alternateLabel}{' '}
               <Link to={alternateHref} className="font-bold underline-offset-4 hover:underline" style={{ color: 'var(--brand)' }}>

@@ -7,10 +7,9 @@ type SiteChromeProps = {
   onLoginClick: () => void;
   onSignupClick: () => void;
   onContactClick: () => void;
-  onLaunchClick?: () => void;
 };
 
-export function SiteChrome({ children, onLoginClick, onSignupClick, onContactClick, onLaunchClick }: SiteChromeProps) {
+export function SiteChrome({ children, onLoginClick, onSignupClick, onContactClick }: SiteChromeProps) {
   return (
     <div className="min-h-screen" style={{ background: 'var(--shell-bg)', color: 'var(--text-1)' }}>
       <div className="mx-auto max-w-[1180px] px-6 py-6">
@@ -30,11 +29,6 @@ export function SiteChrome({ children, onLoginClick, onSignupClick, onContactCli
               <a href="/#features" className="transition hover:brightness-110">Product</a>
               <a href="/#setup" className="transition hover:brightness-110">Setup</a>
               <a href="/#compliance" className="transition hover:brightness-110">Billing</a>
-              {onLaunchClick ? (
-                <button type="button" onClick={onLaunchClick} className="transition hover:brightness-110">Launch Plan</button>
-              ) : (
-                <Link to="/launch-plan" className="transition hover:brightness-110">Launch Plan</Link>
-              )}
               <button type="button" onClick={onContactClick} className="transition hover:brightness-110">Contact</button>
             </nav>
 
@@ -84,7 +78,8 @@ export function SiteChrome({ children, onLoginClick, onSignupClick, onContactCli
               <p className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Company</p>
               <div className="mt-3 space-y-2 text-sm" style={{ color: 'var(--text-2)' }}>
                 <button type="button" onClick={onContactClick} className="block transition hover:brightness-110">Contact</button>
-                <Link to="/launch-plan" className="block transition hover:brightness-110">45-day launch plan</Link>
+                <Link to="/privacy" className="block transition hover:brightness-110">Privacy policy</Link>
+                <Link to="/terms" className="block transition hover:brightness-110">Terms & conditions</Link>
               </div>
             </div>
 

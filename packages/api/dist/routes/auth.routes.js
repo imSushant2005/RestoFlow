@@ -12,8 +12,8 @@ router.post('/forgot-password/reset', auth_controller_1.resetForgotPassword);
 router.post('/refresh', auth_controller_1.refresh);
 router.post('/logout', auth_controller_1.logout);
 router.post('/change-password/first-login', auth_middleware_1.requireAuth, auth_controller_1.changeFirstPassword);
-router.get('/me', auth_middleware_1.requireAuth, (req, res) => {
-    res.json({ user: req.user, tenantId: req.tenantId });
-});
+router.post('/change-password', auth_middleware_1.requireAuth, auth_controller_1.changePassword);
+router.patch('/profile', auth_middleware_1.requireAuth, auth_controller_1.updateProfile);
+router.get('/me', auth_middleware_1.requireAuth, auth_controller_1.getMe);
 exports.default = router;
 //# sourceMappingURL=auth.routes.js.map

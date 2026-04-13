@@ -1,13 +1,12 @@
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Utensils, History, LayoutDashboard } from 'lucide-react';
+import { Utensils, History, LayoutDashboard, UserCircle2 } from 'lucide-react';
 import { getActiveSessionForTenant } from '../lib/tenantStorage';
-import { useMemo } from 'react';
 
 export function CustomerNav() {
   const { tenantSlug } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const activeSessionId = useMemo(() => getActiveSessionForTenant(tenantSlug), [tenantSlug]);
+  const activeSessionId = getActiveSessionForTenant(tenantSlug);
 
   const navItems = [
     {
@@ -28,12 +27,18 @@ export function CustomerNav() {
       path: `/order/${tenantSlug}/history`,
       active: location.pathname.includes('/history'),
     },
+    {
+      label: 'Profile',
+      icon: UserCircle2,
+      path: `/order/${tenantSlug}/profile`,
+      active: location.pathname.includes('/profile'),
+    },
   ];
 
   return (
-    <nav 
-      className="fixed bottom-0 left-0 right-0 z-[60] pb-safe pt-2 px-6 flex items-center justify-around backdrop-blur-xl border-t shadow-[0_-10px_20px_rgba(0,0,0,0.05)]"
-      style={{ 
+    <nav
+      className="customer-bottom-nav fixed bottom-0 left-0 right-0 z-[40] flex items-center justify-around px-6 pt-2 backdrop-blur-xl border-t shadow-[0_-10px_20px_rgba(0,0,0,0.05)]"
+      style={{
         background: 'rgba(255, 255, 255, 0.85)', 
         borderColor: 'rgba(0, 0, 0, 0.05)',
       }}

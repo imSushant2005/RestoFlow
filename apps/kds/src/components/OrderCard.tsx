@@ -14,14 +14,12 @@ const NEXT_STATUS: Record<string, string> = {
   NEW: 'PREPARING',
   ACCEPTED: 'PREPARING',
   PREPARING: 'READY',
-  READY: 'SERVED',
 };
 
 const ACTION_LABEL: Record<string, string> = {
   NEW: 'Start Preparing',
   ACCEPTED: 'Start Preparing',
   PREPARING: 'Mark as Ready',
-  READY: 'Mark Served',
 };
 
 export function OrderCard({ order }: { order: any }) {
@@ -101,11 +99,15 @@ export function OrderCard({ order }: { order: any }) {
             </span>
             <div className="flex-1 min-w-0">
               <p className="text-slate-100 font-semibold text-sm leading-tight">{item.menuItem?.name || item.name}</p>
-              {item.modifiers?.length > 0 && (
-                <p className="text-xs text-slate-500 mt-0.5">{item.modifiers.map((m: any) => `+ ${m.modifier?.name}`).join(', ')}</p>
+              {Array.isArray(item.selectedModifiers) && item.selectedModifiers.length > 0 && (
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {item.selectedModifiers
+                    .map((modifier: any) => `+ ${modifier?.name || modifier?.modifierName || 'Modifier'}`)
+                    .join(', ')}
+                </p>
               )}
-              {item.notes && (
-                <p className="text-xs text-amber-400 mt-0.5 font-medium">Note: {item.notes}</p>
+              {item.specialNote && (
+                <p className="text-xs text-amber-400 mt-0.5 font-medium">Note: {item.specialNote}</p>
               )}
             </div>
           </li>
@@ -113,19 +115,23 @@ export function OrderCard({ order }: { order: any }) {
       </ul>
 
       <div className="px-3 pb-3">
-        <button
-          onClick={() => statusMutation.mutate(NEXT_STATUS[order.status] || 'SERVED')}
-          disabled={statusMutation.isPending}
-          className={`w-full py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.97] disabled:opacity-50 ${
-            order.status === 'READY'
-              ? 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/30'
-              : order.status === 'PREPARING'
-              ? 'bg-amber-500 hover:bg-amber-400 text-white shadow-lg shadow-amber-500/30'
-              : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30'
-          }`}
-        >
-          {statusMutation.isPending ? '...' : ACTION_LABEL[order.status] || 'Advance'}
-        </button>
+        {order.status === 'READY' ? (
+          <div className="w-full rounded-xl border border-emerald-500/20 bg-emerald-500/10 py-3 text-center text-sm font-bold text-emerald-300">
+            Waiting for waiter pickup
+          </div>
+        ) : (
+          <button
+            onClick={() => statusMutation.mutate(NEXT_STATUS[order.status] || 'READY')}
+            disabled={statusMutation.isPending}
+            className={`w-full py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.97] disabled:opacity-50 ${
+              order.status === 'PREPARING'
+                ? 'bg-amber-500 hover:bg-amber-400 text-white shadow-lg shadow-amber-500/30'
+                : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30'
+            }`}
+          >
+            {statusMutation.isPending ? '...' : ACTION_LABEL[order.status] || 'Advance'}
+          </button>
+        )}
       </div>
     </div>
   );

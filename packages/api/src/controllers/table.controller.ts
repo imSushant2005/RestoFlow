@@ -5,25 +5,38 @@ import { getIO, getTenantRoom } from '../socket';
 
 export const getZones = async (req: Request, res: Response) => {
   try {
-    const zones = await prisma.zone.findMany({
-      where: { tenantId: req.tenantId },
-      orderBy: { sortOrder: 'asc' },
-      include: { 
-        tables: {
-          orderBy: { name: 'asc' },
-          include: {
-            orders: {
-              where: {
-                status: { in: ['NEW', 'ACCEPTED', 'PREPARING'] }
+    const [zones, tenant] = await Promise.all([
+      prisma.zone.findMany({
+        where: { tenantId: req.tenantId },
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          id: true,
+          tenantId: true,
+          name: true,
+          color: true,
+          sortOrder: true,
+          tables: {
+            orderBy: { name: 'asc' },
+            select: {
+              id: true,
+              name: true,
+              capacity: true,
+              seats: true,
+              occupiedSeats: true,
+              status: true,
+              orders: {
+                where: {
+                  status: { in: ['NEW', 'ACCEPTED', 'PREPARING'] },
+                },
+                select: { id: true, status: true },
               },
-              select: { id: true, status: true },
-            }
-          }
-        } 
-      }
-    });
-    // Send back the tenant slug as well for convenient QR generation on the frontend
-    const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId! }});
+            },
+          },
+        },
+      }),
+      prisma.tenant.findUnique({ where: { id: req.tenantId! }, select: { slug: true } }),
+    ]);
+
     res.json({ zones, tenantSlug: tenant?.slug });
   } catch (error) {
     console.error('getZones error:', error);

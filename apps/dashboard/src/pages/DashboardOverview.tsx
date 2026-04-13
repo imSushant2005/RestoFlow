@@ -332,7 +332,7 @@ export function DashboardOverview() {
               Open Analytics
             </button>
           </div>
-          <div className="grid grid-cols-8 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
             {hourlyRevenue.map((point) => (
               <div key={point.label} className="flex flex-col items-center gap-2">
                 <div

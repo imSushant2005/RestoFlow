@@ -18,8 +18,7 @@ import { publicApi } from '../lib/api';
 import { formatINR } from '../lib/currency';
 import { getSocketUrl } from '../lib/network';
 import { useCartStore } from '../store/cartStore';
-import { getActiveSessionForTenant } from '../lib/tenantStorage';
-import { CustomerNav } from '../components/CustomerNav';
+import { getActiveSessionForTenant, setLastTableIdForTenant } from '../lib/tenantStorage';
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any; bg: string }> = {
   NEW: { label: 'Received', color: 'text-blue-500', bg: 'bg-blue-500/10', icon: Clock },
@@ -148,6 +147,12 @@ export function SessionTracker() {
   }, [fetchSession]);
 
   useEffect(() => {
+    if (tenantSlug && session?.tableId) {
+      setLastTableIdForTenant(tenantSlug, session.tableId);
+    }
+  }, [session?.tableId, tenantSlug]);
+
+  useEffect(() => {
     if (!sessionId || !tenantSlug) return;
 
     const socket = io(getSocketUrl(), {
@@ -226,12 +231,11 @@ export function SessionTracker() {
     if (!sessionId || !tenantSlug) return;
     setError(null);
     
-    // Use a cleaner confirmation
-    if (!window.confirm('Ready for the bill? This will lock your order and notify the staff.')) return;
+    if (!window.confirm('Request the final bill now? This will lock the table for billing and notify the staff.')) return;
 
     const orders = (session?.orders || []).filter((order: any) => order.status !== 'CANCELLED');
     if (orders.length === 0) {
-      setError('You need at least one active order to checkout.');
+      setError('You need at least one active order before requesting the bill.');
       return;
     }
 
@@ -314,7 +318,8 @@ export function SessionTracker() {
     );
   }
 
-  const isClosed = ['CLOSED', 'CANCELLED', 'AWAITING_BILL'].includes(session.sessionStatus);
+  const isAwaitingBill = session.sessionStatus === 'AWAITING_BILL';
+  const isClosed = ['CLOSED', 'CANCELLED'].includes(session.sessionStatus);
   const brandColor = session.tenant?.primaryColor || '#f97316';
   const maxOrderRank = (session?.orders || []).reduce(
     (max: number, order: any) => Math.max(max, getOrderRank(order?.status)),
@@ -324,7 +329,9 @@ export function SessionTracker() {
   const nextPendingRank = PROCESS_STEPS.find((step) => processRank < step.rank)?.rank || PROCESS_STEPS[PROCESS_STEPS.length - 1].rank;
   const processSummary =
     processRank >= 6
-      ? 'Checkout completed'
+      ? 'Payment confirmed and session closed'
+      : isAwaitingBill
+        ? 'Final bill shared, awaiting payment confirmation'
       : processRank >= 5
         ? 'Served, wrapping up the table'
         : processRank >= 3
@@ -342,7 +349,14 @@ export function SessionTracker() {
         : { label: 'Realtime offline', className: 'bg-red-500/15 text-red-500 border-red-500/20' };
 
   return (
-    <div className="min-h-[100dvh] flex flex-col pb-44" style={{ background: 'var(--bg)', '--brand': brandColor } as any}>
+    <div
+      className="min-h-[100dvh] flex flex-col"
+      style={{
+        background: 'var(--bg)',
+        '--brand': brandColor,
+        paddingBottom: 'calc(var(--customer-nav-space) + var(--customer-page-action-height) + 2rem)',
+      } as any}
+    >
       <div
         className="relative overflow-hidden px-6 pb-20 pt-12 rounded-b-[40px] shadow-2xl"
         style={{ background: 'var(--surface)' }}
@@ -443,7 +457,7 @@ export function SessionTracker() {
              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center mb-1">
                 <X size={20} />
              </div>
-             <p className="font-black text-sm uppercase">Checkout Blocked</p>
+             <p className="font-black text-sm uppercase">Bill Request Blocked</p>
              <p className="text-xs font-bold opacity-80">{error}</p>
              <button onClick={() => setError(null)} className="mt-2 text-[10px] font-black uppercase tracking-widest bg-red-500 text-white px-4 py-1.5 rounded-full">Dismiss</button>
           </div>
@@ -459,7 +473,9 @@ export function SessionTracker() {
               <Star size={14} fill="currentColor" />
             </div>
             <p className="text-[11px] font-bold leading-relaxed" style={{ color: 'var(--text-2)' }}>
-              This is a live session. You can keep adding items. We generate the final bill when you press Finish Dining.
+              {isAwaitingBill
+                ? 'Your final bill is ready. The restaurant will confirm payment, then this session will move into history.'
+                : 'This is a live session. You can keep adding items until you tap Bill to request the final settlement.'}
             </p>
           </div>
         )}
@@ -559,8 +575,8 @@ export function SessionTracker() {
         </div>
       </div>
 
-      {!isClosed && (
-        <div className="fixed bottom-16 left-0 right-0 p-6 z-40 pointer-events-none">
+      {!isClosed && !isAwaitingBill && (
+        <div className="fixed left-0 right-0 z-[60] p-6 pointer-events-none" style={{ bottom: 'var(--customer-action-bottom)' }}>
           <div className="mx-auto flex max-w-md gap-3 pointer-events-auto">
             <button
               onClick={() => {
@@ -583,9 +599,23 @@ export function SessionTracker() {
               ) : (
                 <>
                   <Receipt size={18} />
-                  Checkout
+                  Bill
                 </>
               )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(isAwaitingBill || isClosed) && (
+        <div className="fixed left-0 right-0 z-[60] p-6 pointer-events-none" style={{ bottom: 'var(--customer-action-bottom)' }}>
+          <div className="mx-auto max-w-md pointer-events-auto">
+            <button
+              onClick={() => navigate(`/order/${tenantSlug}/session/${sessionId}/bill`)}
+              className="w-full rounded-3xl bg-[#1a1c23] py-4 font-black text-white shadow-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+            >
+              <Receipt size={18} />
+              View Bill
             </button>
           </div>
         </div>
@@ -596,7 +626,6 @@ export function SessionTracker() {
           Powered by RestoFlow
         </p>
       </div>
-      <CustomerNav />
     </div>
   );
 }

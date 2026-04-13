@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { AuthAccessPage, AuthMode } from '../pages/AuthAccessPage';
 import { AuthIndexPage } from '../pages/AuthIndexPage';
 import { AuthContactPage } from '../pages/AuthContactPage';
-import { AuthLaunch45Page } from '../pages/AuthLaunch45Page';
 
 type AuthPortalProps = {
   onLogin: (state: { mustChangePassword: boolean }) => void;
@@ -27,7 +26,7 @@ function getInitialPortalState() {
 }
 
 export function AuthPortal({ onLogin }: AuthPortalProps) {
-  const [screen, setScreen] = useState<'index' | 'auth' | 'contact' | 'launch45'>(() => getInitialPortalState().screen);
+  const [screen, setScreen] = useState<'index' | 'auth' | 'contact'>(() => getInitialPortalState().screen);
   const [mode, setMode] = useState<AuthMode>(() => getInitialPortalState().mode);
 
   useEffect(() => {
@@ -52,7 +51,6 @@ export function AuthPortal({ onLogin }: AuthPortalProps) {
           setScreen('auth');
         }}
         onContactClick={() => setScreen('contact')}
-        onLaunchClick={() => setScreen('launch45')}
       />
     );
   }
@@ -65,23 +63,6 @@ export function AuthPortal({ onLogin }: AuthPortalProps) {
           setMode('login');
           setScreen('auth');
         }}
-        onSignupClick={() => {
-          setMode('signup');
-          setScreen('auth');
-        }}
-      />
-    );
-  }
-
-  if (screen === 'launch45') {
-    return (
-      <AuthLaunch45Page
-        onBackHome={() => setScreen('index')}
-        onLoginClick={() => {
-          setMode('login');
-          setScreen('auth');
-        }}
-        onContactClick={() => setScreen('contact')}
         onSignupClick={() => {
           setMode('signup');
           setScreen('auth');

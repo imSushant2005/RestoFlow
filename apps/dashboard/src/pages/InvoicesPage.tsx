@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { formatINR } from '../lib/currency';
-import { ReceiptText, FileText, Printer, Download, Share2, Users, CreditCard, X } from 'lucide-react';
+import { ReceiptText, FileText, Printer, Download, Share2, Users, X } from 'lucide-react';
 import { format } from 'date-fns';
 
 type OrderRow = {
@@ -20,6 +20,15 @@ type OrderRow = {
   paymentMethod?: string | null;
   diningSessionId?: string | null;
   table?: { name?: string } | null;
+  diningSession?: {
+    bill?: {
+      invoiceNumber?: string | null;
+      paymentStatus?: string | null;
+      paymentMethod?: string | null;
+      paidAt?: string | null;
+      totalAmount?: number | null;
+    } | null;
+  } | null;
   items?: Array<{
     id: string;
     name?: string;
@@ -49,8 +58,92 @@ export function InvoicesPage() {
     return (historyResponse?.data || []) as OrderRow[];
   }, [historyResponse]);
 
-  const grandTotal = completedOrders.reduce((sum, o) => sum + Number(o.totalAmount || o.total || 0), 0);
-  const totalInvoices = completedOrders.length;
+  const invoiceRows: OrderRow[] = useMemo(() => {
+    const grouped = completedOrders.reduce((acc: Record<string, OrderRow>, order) => {
+      if (!order.diningSessionId) {
+        acc[`order_${order.id}`] = order;
+        return acc;
+      }
+
+      const key = `session_${order.diningSessionId}`;
+      const sessionBill = order.diningSession?.bill;
+      if (!acc[key]) {
+        acc[key] = {
+          ...order,
+          id: order.diningSessionId,
+          orderNumber: sessionBill?.invoiceNumber || order.orderNumber || order.diningSessionId.slice(-8).toUpperCase(),
+          createdAt: sessionBill?.paidAt || order.createdAt,
+          status: sessionBill?.paymentStatus || order.status,
+          paymentMethod: sessionBill?.paymentMethod || order.paymentMethod,
+          subtotal: 0,
+          taxAmount: 0,
+          discountAmount: 0,
+          totalAmount: 0,
+          items: [],
+        };
+      }
+
+      acc[key].subtotal = Number(acc[key].subtotal || 0) + Number(order.subtotal || 0);
+      acc[key].taxAmount = Number(acc[key].taxAmount || 0) + Number(order.taxAmount || 0);
+      acc[key].discountAmount = Number(acc[key].discountAmount || 0) + Number(order.discountAmount || 0);
+      acc[key].totalAmount = sessionBill?.totalAmount || Number(acc[key].totalAmount || 0) + Number(order.totalAmount || order.total || 0);
+      acc[key].items = [...(acc[key].items || []), ...(order.items || [])];
+      return acc;
+    }, {});
+
+    return Object.values(grouped).sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+    );
+  }, [completedOrders]);
+
+  const grandTotal = invoiceRows.reduce((sum, o) => sum + Number(o.totalAmount || o.total || 0), 0);
+  const taxableSales = invoiceRows.reduce((sum, o) => sum + Number(o.subtotal || 0), 0);
+  const taxCollected = invoiceRows.reduce((sum, o) => sum + Number(o.taxAmount || 0), 0);
+  const totalInvoices = invoiceRows.length;
+
+  const downloadCaReport = () => {
+    const header = [
+      'Date',
+      'Invoice',
+      'Order ID',
+      'Mode',
+      'Service Point',
+      'Customer',
+      'Phone',
+      'Subtotal',
+      'Tax',
+      'Discount',
+      'Total',
+      'GSTIN',
+    ];
+
+    const rows = invoiceRows.map((order) => [
+      format(new Date(order.createdAt), 'yyyy-MM-dd HH:mm:ss'),
+      order.orderNumber || order.id.slice(-8).toUpperCase(),
+      order.id,
+      order.diningSessionId ? 'DINE_IN_SESSION' : 'DIRECT_ORDER',
+      order.table?.name ? `Table ${order.table.name}` : 'Takeaway',
+      order.customerName || 'Walk-in',
+      order.customerPhone || '',
+      Number(order.subtotal || 0).toFixed(2),
+      Number(order.taxAmount || 0).toFixed(2),
+      Number(order.discountAmount || 0).toFixed(2),
+      Number(order.totalAmount || order.total || 0).toFixed(2),
+      business?.gstin || '',
+    ]);
+
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `restoflow-ca-day-book-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
 
   if (isLoading) return <div className="p-8 font-medium animate-pulse" style={{ color: 'var(--text-3)' }}>Loading bill counter...</div>;
 
@@ -61,33 +154,52 @@ export function InvoicesPage() {
       </h2>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <MetricCard label="Completed Orders" value={totalInvoices.toString()} />
+        <MetricCard label="Today's Invoices" value={totalInvoices.toString()} />
         <MetricCard label="Total Invoice Value" value={formatINR(grandTotal)} />
-        <MetricCard label="Business" value={business?.businessName || 'Your Venue'} />
+        <MetricCard label="Tax Collected" value={formatINR(taxCollected)} />
+      </div>
+
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-5 py-4" style={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)', boxShadow: 'var(--card-shadow)' }}>
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>CA Day Book</p>
+          <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
+            Download today&apos;s GST-ready sales register with invoice, table, customer, and tax totals.
+          </p>
+          <p className="mt-2 text-xs font-bold" style={{ color: 'var(--text-3)' }}>
+            Taxable sales: {formatINR(taxableSales)} | Workspace: {business?.businessName || 'Your Venue'}
+          </p>
+        </div>
+        <button
+          onClick={downloadCaReport}
+          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-blue-500"
+        >
+          <Download size={16} />
+          Download CA Report
+        </button>
       </div>
 
       <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}>
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
           <h3 className="font-bold" style={{ color: 'var(--text-1)' }}>Invoice Register</h3>
-          <span className="text-xs font-semibold" style={{ color: 'var(--text-3)' }}>Auto-filled from completed live orders</span>
+          <span className="text-xs font-semibold" style={{ color: 'var(--text-3)' }}>Auto-filled from today&apos;s completed bills</span>
         </div>
 
-        {completedOrders.length === 0 ? (
+        {invoiceRows.length === 0 ? (
           <div className="p-10 text-center font-medium" style={{ color: 'var(--text-3)' }}>No completed orders yet. Invoices will appear here.</div>
         ) : (
           <div>
-            {completedOrders.map((order) => {
+            {invoiceRows.map((order) => {
               const invoiceTotal = Number(order.totalAmount || order.total || 0);
               return (
                 <div key={order.id} className="p-5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
                   <div>
                     <p className="font-bold" style={{ color: 'var(--text-1)' }}>Invoice #{order.orderNumber || order.id.slice(-8).toUpperCase()}</p>
                     <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>
-                      {format(new Date(order.createdAt), 'dd MMM yyyy, hh:mm a')} • {order.table?.name ? `Table ${order.table.name}` : 'Takeaway'}
+                      {format(new Date(order.createdAt), 'dd MMM yyyy, hh:mm a')} | {order.table?.name ? `Table ${order.table.name}` : 'Takeaway'}
                     </p>
                     <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
                       {order.customerName || 'Walk-in'}
-                      {order.customerPhone ? ` • ${order.customerPhone}` : ''}
+                      {order.customerPhone ? ` | ${order.customerPhone}` : ''}
                     </p>
                   </div>
                   <div className="flex items-center gap-4">
@@ -111,7 +223,6 @@ export function InvoicesPage() {
         <InvoiceModal
           order={selectedInvoice}
           businessName={business?.businessName || 'Your Venue'}
-          businessSlug={business?.slug || ''}
           businessPhone={business?.phone || '-'}
           businessGstin={business?.gstin || '-'}
           taxRate={Number(business?.taxRate || 5)}
@@ -134,7 +245,6 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 function InvoiceModal({
   order,
   businessName,
-  businessSlug,
   businessPhone,
   businessGstin,
   taxRate,
@@ -142,7 +252,6 @@ function InvoiceModal({
 }: {
   order: OrderRow;
   businessName: string;
-  businessSlug: string;
   businessPhone: string;
   businessGstin: string;
   taxRate: number;
@@ -159,15 +268,6 @@ function InvoiceModal({
   const total = Number(order.totalAmount || order.total || inferredSubtotal + inferredTax - inferredDiscount);
   const splitAmount = splitCount > 0 ? total / splitCount : total;
 
-  const payNowMutation = useMutation({
-    mutationFn: async () => {
-      if (!businessSlug || !order.diningSessionId) {
-        throw new Error('No linked dining session found for this invoice');
-      }
-      return api.post(`/public/${businessSlug}/sessions/${order.diningSessionId}/complete`, { paymentMethod: 'cash' });
-    },
-  });
-
   const printInvoice = () => window.print();
   const downloadInvoice = () => {
     const invoiceContent = `Invoice ${order.orderNumber || order.id.slice(-8).toUpperCase()}\n${businessName}\nGSTIN: ${businessGstin}\nPhone: ${businessPhone}\n\nTotal: ${formatINR(total)}`;
@@ -179,7 +279,7 @@ function InvoiceModal({
     a.click();
   };
   const shareInvoice = async () => {
-    const msg = `Invoice ${order.orderNumber || order.id.slice(-8).toUpperCase()} • Total ${formatINR(total)}`;
+    const msg = `Invoice ${order.orderNumber || order.id.slice(-8).toUpperCase()} | Total ${formatINR(total)}`;
     try {
       await navigator.clipboard?.writeText(msg);
       alert('Invoice summary copied to clipboard');
@@ -189,7 +289,7 @@ function InvoiceModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md">
+    <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md">
       <div className="rounded-[32px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] max-w-2xl w-full max-h-[92vh] overflow-hidden flex flex-col bg-[color:var(--surface-raised)] border border-[color:var(--border)] scale-up">
         {/* Header */}
         <div className="px-8 py-6 flex items-center justify-between border-b border-[color:var(--border)]">
@@ -264,7 +364,7 @@ function InvoiceModal({
                         <p className="text-xs font-medium text-[color:var(--text-3)] mt-0.5">{formatINR(price)} per unit</p>
                       </div>
                       <div className="flex items-center gap-8">
-                        <span className="text-sm font-black text-[color:var(--text-2)]">×{qty}</span>
+                        <span className="text-sm font-black text-[color:var(--text-2)]">x{qty}</span>
                         <span className="font-black text-[color:var(--text-1)] w-24 text-right">{formatINR(amount)}</span>
                       </div>
                     </div>
@@ -293,7 +393,7 @@ function InvoiceModal({
                 )}
                 <div className="pt-4 mt-2 border-t-2 border-[color:var(--border)] flex justify-between items-end">
                    <div>
-                      <p className="text-[10px] font-black text-[color:var(--text-3)] uppercase tracking-[0.2em]">Net Recievable</p>
+                      <p className="text-[10px] font-black text-[color:var(--text-3)] uppercase tracking-[0.2em]">Net Receivable</p>
                       <p className="text-3xl font-black text-[color:var(--text-1)] tracking-tighter mt-1">{formatINR(total)}</p>
                    </div>
                    <div className="pb-1">
@@ -309,14 +409,10 @@ function InvoiceModal({
                 <Users size={20} />
                 <span className="text-[10px] font-black uppercase tracking-widest">Split</span>
              </button>
-             <button
-               onClick={() => payNowMutation.mutate()}
-               disabled={payNowMutation.isPending}
-               className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-95 transition-all"
-             >
-                <CreditCard size={20} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Pay</span>
-             </button>
+             <div className="flex flex-col items-center justify-center gap-2 p-3 rounded-2xl bg-emerald-600/10 text-emerald-700 border border-emerald-500/20">
+                <ReceiptText size={20} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Settled</span>
+             </div>
              <button onClick={downloadInvoice} className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-blue-600/20 bg-blue-50/50 hover:bg-blue-50 transition-all text-blue-600">
                 <Download size={20} />
                 <span className="text-[10px] font-black uppercase tracking-widest">Save</span>
@@ -341,7 +437,7 @@ function InvoiceModal({
 
 
       {showSplit && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'var(--surface-overlay)' }}>
+        <div className="fixed inset-0 z-[230] flex items-center justify-center p-4" style={{ background: 'var(--surface-overlay)' }}>
           <div className="rounded-2xl shadow-xl max-w-sm w-full p-5" style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)' }}>
             <div className="flex items-center justify-between mb-3">
               <h4 className="font-black" style={{ color: 'var(--text-1)' }}>Split Bill</h4>
@@ -368,3 +464,4 @@ function InvoiceModal({
     </div>
   );
 }
+

@@ -9,6 +9,7 @@ router.post('/login', CustomerController.login);
 
 // Protected (requires customer JWT)
 router.get('/profile', customerAuth, CustomerController.getProfile);
+router.post('/account/deactivate', customerAuth, CustomerController.deactivateAccount);
 router.get('/history', customerAuth, CustomerController.getHistory);
 router.get('/history/:sessionId', customerAuth, CustomerController.getSessionDetail);
 

@@ -6,8 +6,11 @@ import {
   logout,
   clerkSync,
   changeFirstPassword,
+  changePassword,
+  getMe,
   getForgotPasswordQuestion,
   resetForgotPassword,
+  updateProfile,
 } from '../controllers/auth.controller';
 import { requireAuth } from '../middlewares/auth.middleware';
 
@@ -21,9 +24,9 @@ router.post('/forgot-password/reset', resetForgotPassword);
 router.post('/refresh', refresh);
 router.post('/logout', logout);
 router.post('/change-password/first-login', requireAuth, changeFirstPassword);
+router.post('/change-password', requireAuth, changePassword);
+router.patch('/profile', requireAuth, updateProfile);
 
-router.get('/me', requireAuth, (req, res) => {
-  res.json({ user: req.user, tenantId: req.tenantId });
-});
+router.get('/me', requireAuth, getMe);
 
 export default router;

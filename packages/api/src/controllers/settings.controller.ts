@@ -4,6 +4,7 @@ import { getPlanLimits } from '../config/plans';
 import { UserRole } from '@dineflow/prisma';
 import { hashPassword } from '../utils/hash';
 import { z } from 'zod';
+import { deleteCache, withCache } from '../services/cache.service';
 
 const createStaffSchema = z
   .object({
@@ -109,24 +110,29 @@ async function ensureUniqueEmployeeCode(base: string, excludeUserId?: string) {
 
 export const getBusinessSettings = async (req: Request, res: Response) => {
   try {
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: req.tenantId },
-      select: {
-        id: true,
-        businessName: true,
-        slug: true,
-        email: true,
-        phone: true,
-        gstin: true,
-        taxRate: true,
-        description: true,
-        logoUrl: true,
-        coverImageUrl: true,
-        primaryColor: true,
-        accentColor: true,
-        isActive: true,
-      }
-    });
+    const tenant = await withCache(
+      `tenant:${req.tenantId}:business-settings`,
+      () =>
+        prisma.tenant.findUnique({
+          where: { id: req.tenantId },
+          select: {
+            id: true,
+            businessName: true,
+            slug: true,
+            email: true,
+            phone: true,
+            gstin: true,
+            taxRate: true,
+            description: true,
+            logoUrl: true,
+            coverImageUrl: true,
+            primaryColor: true,
+            accentColor: true,
+            isActive: true,
+          },
+        }),
+      20,
+    );
     res.json(tenant);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch settings' });
@@ -208,6 +214,10 @@ export const updateBusinessSettings = async (req: Request, res: Response) => {
         isActive: true,
       }
     });
+    await Promise.all([
+      deleteCache(`tenant:${req.tenantId}:business-settings`),
+      deleteCache(`tenant:${req.tenantId}:billing`),
+    ]);
     
     res.json(tenant);
   } catch (error) {

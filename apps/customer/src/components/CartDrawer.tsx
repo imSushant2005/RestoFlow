@@ -138,7 +138,7 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex justify-end">
+    <div className="fixed inset-0 z-[90] flex justify-end">
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" 
@@ -172,7 +172,7 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
 
         {/* Success / Error Messages */}
         {showSuccess && (
-          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 text-center animate-in fade-in" style={{ background: 'var(--surface)' }}>
+          <div className="absolute inset-0 z-[95] flex flex-col items-center justify-center p-8 text-center animate-in fade-in" style={{ background: 'var(--surface)' }}>
             <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-emerald-500/20">
               <CheckCircle2 size={40} className="text-white" />
             </div>
@@ -223,9 +223,17 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
                       </button>
                     </div>
                     {item.modifiers?.length > 0 && (
-                      <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-3)' }}>
+                      <>
+                      <p className="hidden text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-3)' }}>
                         {item.modifiers.map(m => m.name).join(' · ')}
                       </p>
+                      <p className="hidden text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-3)' }}>
+                        {item.modifiers.map((modifier: any) => modifier.name).join(' · ')}
+                      </p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-3)' }}>
+                        {item.modifiers.map((modifier: any) => modifier.name).join(' / ')}
+                      </p>
+                      </>
                     )}
                     <div className="flex items-center justify-between mt-2">
                        <span className="font-black text-brand">{formatINR(item.totalPrice)}</span>
@@ -303,7 +311,7 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
             <button
               onClick={handleCheckout}
               disabled={isSubmitting}
-              className="w-full py-4.5 rounded-2xl font-black text-lg transition-all active:scale-[0.98] shadow-xl shadow-brand/20 flex items-center justify-center gap-3 disabled:opacity-70"
+              className="flex w-full items-center justify-center gap-3 rounded-2xl py-[1.125rem] text-lg font-black shadow-xl shadow-brand/20 transition-all active:scale-[0.98] disabled:opacity-70"
               style={{ background: 'var(--brand)', color: 'white' }}
             >
               {isSubmitting ? (

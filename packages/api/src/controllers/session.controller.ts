@@ -328,6 +328,16 @@ export const finishSession = async (req: Request, res: Response) => {
       });
     }
 
+    const hasUnservedOrders = session.orders.some(
+      (order: any) => !['SERVED', 'RECEIVED'].includes(String(order.status || '').toUpperCase()),
+    );
+    if (hasUnservedOrders) {
+      return res.status(409).json({
+        error: 'Serve every active batch before generating the final bill.',
+        sessionId,
+      });
+    }
+
     // Calculate bill from all non-cancelled orders
     const subtotal = session.orders.reduce((sum: number, o: any) => sum + o.subtotal, 0);
     const taxAmount = session.orders.reduce((sum: number, o: any) => sum + o.taxAmount, 0);
@@ -430,10 +440,47 @@ export const finishSession = async (req: Request, res: Response) => {
  */
 export const completeSession = async (req: Request, res: Response) => {
   try {
-    const { sessionId } = req.params;
-    const { paymentMethod } = req.body;
+    const { tenantSlug, sessionId } = req.params;
+    const requestedPaymentMethod = typeof req.body?.paymentMethod === 'string' ? req.body.paymentMethod.toLowerCase() : 'cash';
+    const allowedPaymentMethods = new Set(['cash', 'online', 'upi', 'card']);
+
+    if (!allowedPaymentMethods.has(requestedPaymentMethod)) {
+      return res.status(400).json({ error: 'Unsupported payment method' });
+    }
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { slug: tenantSlug },
+      select: { id: true },
+    });
+
+    if (!tenant) {
+      return res.status(404).json({ error: 'Restaurant not found' });
+    }
 
     const result = await prisma.$transaction(async (tx) => {
+      const existingSession = await tx.diningSession.findUnique({
+        where: { id: sessionId },
+        select: {
+          id: true,
+          tenantId: true,
+          tableId: true,
+          isBillGenerated: true,
+          sessionStatus: true,
+        },
+      });
+
+      if (!existingSession) {
+        throw new Error('SESSION_NOT_FOUND');
+      }
+
+      if (existingSession.tenantId !== tenant.id) {
+        throw new Error('SESSION_TENANT_MISMATCH');
+      }
+
+      if (existingSession.sessionStatus !== 'AWAITING_BILL') {
+        throw new Error('SESSION_NOT_READY_FOR_PAYMENT');
+      }
+
       const session = await tx.diningSession.update({
         where: { id: sessionId },
         data: {
@@ -448,7 +495,7 @@ export const completeSession = async (req: Request, res: Response) => {
           where: { sessionId },
           data: {
             paymentStatus: 'PAID',
-            paymentMethod: paymentMethod || 'cash',
+            paymentMethod: requestedPaymentMethod,
             paidAt: new Date(),
           },
         });
@@ -476,7 +523,7 @@ export const completeSession = async (req: Request, res: Response) => {
 
     const completedPayload = {
       sessionId: result.id,
-      paymentMethod: paymentMethod || 'cash',
+      paymentMethod: requestedPaymentMethod,
       closedAt: result.closedAt || new Date().toISOString(),
     };
     const sessionUpdatePayload = {
@@ -506,6 +553,15 @@ export const completeSession = async (req: Request, res: Response) => {
     res.json(result);
   } catch (error) {
     console.error('completeSession error:', error);
+    if (error instanceof Error && error.message === 'SESSION_NOT_FOUND') {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    if (error instanceof Error && error.message === 'SESSION_TENANT_MISMATCH') {
+      return res.status(403).json({ error: 'Session does not belong to this restaurant' });
+    }
+    if (error instanceof Error && error.message === 'SESSION_NOT_READY_FOR_PAYMENT') {
+      return res.status(409).json({ error: 'Generate the final bill before marking payment complete.' });
+    }
     res.status(500).json({ error: 'Failed to complete session' });
   }
 };

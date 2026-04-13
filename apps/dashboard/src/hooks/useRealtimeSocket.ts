@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { clearDashboardAuthStorage, hasRecentManualLogout } from '../lib/authSession';
 import { getSocketUrl } from '../lib/network';
 
 type SocketStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
@@ -92,9 +93,10 @@ export function useRealtimeSocket({
       if (isAuthSocketError(error)) {
         socket.io.opts.reconnection = false;
         setStatus('disconnected');
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('userRole');
-        window.location.reload();
+        clearDashboardAuthStorage();
+        if (!hasRecentManualLogout() && window.location.pathname !== '/login') {
+          window.location.assign('/login');
+        }
         return;
       }
       setStatus('reconnecting');

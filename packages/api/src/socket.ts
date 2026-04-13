@@ -3,6 +3,7 @@ import { Server as HttpServer } from 'http';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { prisma } from './db/prisma';
+import { env } from './config/env';
 import { verifyAccessToken } from './utils/jwt';
 
 const WS_PING_INTERVAL_MS = 25_000;
@@ -125,7 +126,25 @@ type ServerToClientEvents = {
     tableId?: string;
     tableName: string;
     type: string;
+    sessionId?: string | null;
     timestamp: string;
+  }) => void;
+
+  'waiter:acknowledged': (payload: {
+    tableId?: string;
+    status: 'ACCEPTED';
+    timestamp: string;
+  }) => void;
+
+  'waiter:pickup_ready': (payload: {
+    orderId: string;
+    orderNumber: string;
+    tableName: string | null;
+    zoneName: string | null;
+    destinationLabel: string;
+    orderType: string;
+    itemCount: number;
+    readyAt: string | Date;
   }) => void;
 
   error: (payload: {
@@ -299,7 +318,7 @@ let redisSubClient: Redis | null = null;
 let shutdownHooksRegistered = false;
 
 async function setupRedisAdapter(): Promise<void> {
-  if (!process.env.REDIS_URL) {
+  if (!env.REDIS_URL) {
     logger.warn('REDIS_URL not configured; using in-memory Socket.IO adapter');
     return;
   }
@@ -308,11 +327,11 @@ async function setupRedisAdapter(): Promise<void> {
     lazyConnect: true,
     maxRetriesPerRequest: null,
     enableOfflineQueue: false,
-    connectTimeout: 5000,
+    connectTimeout: 3000,
     retryStrategy: (attempt: number) => Math.min(500 * 2 ** Math.min(attempt, 4), 10_000),
   } as const;
 
-  const pub = new Redis(process.env.REDIS_URL, redisOptions);
+  const pub = new Redis(env.REDIS_URL, redisOptions);
   const sub = pub.duplicate(redisOptions);
 
   const noop = () => {};

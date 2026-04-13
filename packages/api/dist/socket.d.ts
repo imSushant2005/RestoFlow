@@ -79,7 +79,23 @@ type ServerToClientEvents = {
         tableId?: string;
         tableName: string;
         type: string;
+        sessionId?: string | null;
         timestamp: string;
+    }) => void;
+    'waiter:acknowledged': (payload: {
+        tableId?: string;
+        status: 'ACCEPTED';
+        timestamp: string;
+    }) => void;
+    'waiter:pickup_ready': (payload: {
+        orderId: string;
+        orderNumber: string;
+        tableName: string | null;
+        zoneName: string | null;
+        destinationLabel: string;
+        orderType: string;
+        itemCount: number;
+        readyAt: string | Date;
     }) => void;
     error: (payload: {
         code: string;

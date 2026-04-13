@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
+import { prisma } from '../db/prisma';
 
 /**
  * Middleware to authenticate customer JWT tokens.
  * Sets req.customerId if valid.
  */
-export const customerAuth = (req: Request, res: Response, next: NextFunction) => {
+export const customerAuth = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
@@ -19,6 +20,15 @@ export const customerAuth = (req: Request, res: Response, next: NextFunction) =>
       phone: string;
       tenantSlug?: string | null;
     };
+
+    const customer = await prisma.customer.findUnique({
+      where: { id: decoded.customerId },
+      select: { id: true, isActive: true },
+    });
+
+    if (!customer || !customer.isActive) {
+      return res.status(403).json({ error: 'Customer account is inactive' });
+    }
 
     (req as any).customerId = decoded.customerId;
     (req as any).customerPhone = decoded.phone;

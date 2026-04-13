@@ -164,7 +164,7 @@ export function KitchenBoard({ onLogout }: { onLogout?: () => void }) {
     const isUnauthorized = (error as any)?.response?.status === 401 || (error as any)?.response?.status === 403;
 
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex items-center justify-center p-6">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-slate-950 p-6 font-sans text-slate-100">
         <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-900 p-6">
           <h2 className="text-xl font-black text-white tracking-tight">Kitchen board unavailable</h2>
           <p className="mt-2 text-sm text-slate-400">{apiError}</p>
@@ -195,15 +195,17 @@ export function KitchenBoard({ onLogout }: { onLogout?: () => void }) {
   }
 
   if (isLoading) return (
-    <div className="flex flex-col h-screen overflow-hidden bg-slate-950">
+    <div className="flex min-h-[100dvh] flex-col overflow-hidden bg-slate-950">
       <div className="h-20 bg-slate-900 border-b border-slate-800 animate-pulse" />
-      <div className="flex-1 p-6 flex gap-6">
-        {[1, 2, 3, 4].map(col => (
-          <div key={col} className="w-72 flex flex-col gap-3">
-            <div className="h-12 bg-slate-800 rounded-xl animate-pulse" />
-            {[1, 2].map(c => <div key={c} className="h-40 bg-slate-800 rounded-2xl animate-pulse" />)}
-          </div>
-        ))}
+      <div className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6">
+        <div className="flex flex-col gap-3 md:flex-row md:gap-4">
+          {[1, 2, 3, 4].map(col => (
+            <div key={col} className="w-full md:w-72 flex flex-col gap-3">
+              <div className="h-12 bg-slate-800 rounded-xl animate-pulse" />
+              {[1, 2].map(c => <div key={c} className="h-40 bg-slate-800 rounded-2xl animate-pulse" />)}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -211,10 +213,10 @@ export function KitchenBoard({ onLogout }: { onLogout?: () => void }) {
   const total = (orders as any[]).length;
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-slate-950">
+    <div className="flex min-h-[100dvh] flex-col overflow-hidden bg-slate-950">
       {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-4">
+      <header className="flex flex-shrink-0 flex-col gap-3 border-b border-slate-800 bg-slate-900 px-3 py-3 sm:px-4 lg:flex-row lg:items-center lg:justify-between lg:px-6 lg:py-4">
+        <div className="flex items-center justify-between gap-3 lg:justify-start lg:gap-4">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <UtensilsCrossed size={16} className="text-white" />
@@ -233,8 +235,8 @@ export function KitchenBoard({ onLogout }: { onLogout?: () => void }) {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
-          <div className="flex gap-4">
+        <div className="flex w-full flex-wrap items-center gap-2 text-xs font-medium text-slate-500 lg:w-auto lg:justify-end">
+          <div className="flex flex-wrap gap-3">
             {COLS.map(col => {
               const count = (orders as any[]).filter(o => col.filter(o.status)).length;
               return (
@@ -249,7 +251,7 @@ export function KitchenBoard({ onLogout }: { onLogout?: () => void }) {
           {onLogout && (
             <button
               onClick={onLogout}
-              className="ml-2 flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-[11px] font-bold text-slate-300 hover:bg-slate-700"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-[11px] font-bold text-slate-300 hover:bg-slate-700"
             >
               <LogOut size={12} />
               Logout
@@ -259,13 +261,13 @@ export function KitchenBoard({ onLogout }: { onLogout?: () => void }) {
       </header>
 
       {/* Kanban columns */}
-      <main className="flex-1 overflow-x-auto p-6 bg-slate-950 custom-scrollbar">
-        <div className="flex gap-4 h-full min-w-max">
+      <main className="flex-1 overflow-auto p-3 bg-slate-950 custom-scrollbar sm:p-4 lg:p-6">
+        <div className="flex h-full flex-col gap-3 md:min-w-max md:flex-row md:gap-4">
           {COLS.map((col) => {
             const colOrders = (orders as any[]).filter(o => col.filter(o.status));
             const hasItems = colOrders.length > 0;
             return (
-              <div key={col.id} className="w-[300px] flex-shrink-0 flex flex-col bg-slate-900 rounded-2xl border border-slate-800 h-full overflow-hidden">
+              <div key={col.id} className="flex min-h-[260px] w-full flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 md:h-full md:w-[300px] md:flex-shrink-0">
                 {/* Column header */}
                 <div className={`px-4 py-3 flex items-center justify-between border-b border-slate-800 ${hasItems && col.pulse ? 'incoming-active' : ''}`}>
                   <div className="flex items-center gap-2">

@@ -1,3 +1,6 @@
+const MANUAL_LOGOUT_KEY = 'rf_manual_logout_at';
+const MANUAL_LOGOUT_GRACE_MS = 60 * 1000;
+
 export function parseApiError(err: any, fallback: string) {
   const responseData = err?.response?.data;
   
@@ -23,6 +26,38 @@ export function parseApiError(err: any, fallback: string) {
   return fallback;
 }
 
+export function clearDashboardAuthStorage() {
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('userRole');
+  localStorage.removeItem('mustChangePassword');
+}
+
+export function markManualLogout() {
+  localStorage.setItem(MANUAL_LOGOUT_KEY, String(Date.now()));
+}
+
+export function clearManualLogout() {
+  localStorage.removeItem(MANUAL_LOGOUT_KEY);
+}
+
+export function hasRecentManualLogout() {
+  const raw = localStorage.getItem(MANUAL_LOGOUT_KEY);
+  if (!raw) return false;
+
+  const timestamp = Number(raw);
+  if (!Number.isFinite(timestamp)) {
+    localStorage.removeItem(MANUAL_LOGOUT_KEY);
+    return false;
+  }
+
+  if (Date.now() - timestamp > MANUAL_LOGOUT_GRACE_MS) {
+    localStorage.removeItem(MANUAL_LOGOUT_KEY);
+    return false;
+  }
+
+  return true;
+}
+
 export function parseClerkError(err: any, fallback: string) {
   const first = Array.isArray(err?.errors) ? err.errors[0] : undefined;
   const longMessage = typeof first?.longMessage === 'string' ? first.longMessage : '';
@@ -45,13 +80,19 @@ export function getClerkDisplayName(user: any, email: string) {
 }
 
 export function persistSession(data: any, onLogin: (state: { mustChangePassword: boolean }) => void) {
+  const mustChangePassword = applySessionSnapshot(data);
+  onLogin({ mustChangePassword });
+}
+
+export function applySessionSnapshot(data: any) {
+  clearManualLogout();
   const role = String(data?.user?.role || 'UNKNOWN').toUpperCase();
   localStorage.setItem('accessToken', data.accessToken);
   localStorage.setItem('userRole', role);
 
-  const mustChangePassword = Boolean(data?.user?.mustChangePassword);
+  const mustChangePassword = role === 'OWNER' && Boolean(data?.user?.mustChangePassword);
   if (mustChangePassword) localStorage.setItem('mustChangePassword', '1');
   else localStorage.removeItem('mustChangePassword');
 
-  onLogin({ mustChangePassword });
+  return mustChangePassword;
 }

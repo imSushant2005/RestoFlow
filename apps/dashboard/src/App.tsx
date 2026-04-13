@@ -13,6 +13,8 @@ import {
   ChevronRight,
   Store,
   Loader2,
+  Menu,
+  X,
 } from 'lucide-react';
 import { MenuBuilder } from './pages/MenuBuilder';
 import { FloorPlan } from './pages/FloorPlan';
@@ -28,13 +30,14 @@ import { WaiterPage } from './pages/WaiterPage';
 import { FirstLoginPasswordGate } from './components/FirstLoginPasswordGate';
 import { AuthIndexPage } from './pages/AuthIndexPage';
 import { AuthContactPage } from './pages/AuthContactPage';
-import { AuthLaunch45Page } from './pages/AuthLaunch45Page';
+import { PrivacyPolicyPage, TermsPage } from './pages/LegalPages';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { DashboardErrorBoundary } from './components/DashboardErrorBoundary';
 import { VendorTopNav, type OpsNotification } from './components/VendorTopNav';
 import { useRealtimeSocket } from './hooks/useRealtimeSocket';
 import { api } from './lib/api';
+import { clearDashboardAuthStorage, markManualLogout } from './lib/authSession';
 import { driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
 
@@ -77,20 +80,16 @@ function getDemoStorageKey(business?: { id?: string; slug?: string }) {
   return `rf_dashboard_demo_seen_${scope}`;
 }
 
-function clearLocalAuthStorage() {
-  localStorage.removeItem('accessToken');
-  localStorage.removeItem('userRole');
-  localStorage.removeItem('mustChangePassword');
-}
-
 function logoutAndReload() {
-  clearLocalAuthStorage();
+  markManualLogout();
+  void api.post('/auth/logout').catch(() => undefined);
+  clearDashboardAuthStorage();
   const clerk = (globalThis as any).Clerk;
   if (clerk?.signOut) {
-    void Promise.resolve(clerk.signOut()).finally(() => window.location.reload());
+    void Promise.resolve(clerk.signOut()).finally(() => window.location.assign('/login'));
     return;
   }
-  window.location.reload();
+  window.location.assign('/login');
 }
 
 function ScreenLoader({ message }: { message: string }) {
@@ -111,7 +110,6 @@ function MarketingHomeRoute() {
       onLoginClick={() => navigate('/login')}
       onSignupClick={() => navigate('/signup')}
       onContactClick={() => navigate('/contact')}
-      onLaunchClick={() => navigate('/launch-plan')}
     />
   );
 }
@@ -127,14 +125,26 @@ function MarketingContactRoute() {
   );
 }
 
-function MarketingLaunchRoute() {
+function MarketingPrivacyRoute() {
   const navigate = useNavigate();
   return (
-    <AuthLaunch45Page
+    <PrivacyPolicyPage
       onBackHome={() => navigate('/')}
       onLoginClick={() => navigate('/login')}
-      onContactClick={() => navigate('/contact')}
       onSignupClick={() => navigate('/signup')}
+      onContactClick={() => navigate('/contact')}
+    />
+  );
+}
+
+function MarketingTermsRoute() {
+  const navigate = useNavigate();
+  return (
+    <TermsPage
+      onBackHome={() => navigate('/')}
+      onLoginClick={() => navigate('/login')}
+      onSignupClick={() => navigate('/signup')}
+      onContactClick={() => navigate('/contact')}
     />
   );
 }
@@ -142,6 +152,7 @@ function MarketingLaunchRoute() {
 function PostLoginRedirect({ mustChangePassword }: { mustChangePassword: boolean }) {
   const role = normalizeDashboardRole(localStorage.getItem('userRole'));
   const shouldCheckWorkspace = FULL_ACCESS_ROLES.has(role);
+  const shouldForceSecuritySetup = role === 'OWNER' && mustChangePassword;
 
   const { data: business, isLoading } = useQuery({
     queryKey: ['post-login-business'],
@@ -152,7 +163,7 @@ function PostLoginRedirect({ mustChangePassword }: { mustChangePassword: boolean
   });
 
   if (role === 'UNKNOWN') {
-    clearLocalAuthStorage();
+    clearDashboardAuthStorage();
     return <Navigate to="/login" replace />;
   }
 
@@ -164,7 +175,7 @@ function PostLoginRedirect({ mustChangePassword }: { mustChangePassword: boolean
     return <Navigate to="/setup" replace />;
   }
 
-  if (mustChangePassword) {
+  if (shouldForceSecuritySetup) {
     return <Navigate to="/security-setup" replace />;
   }
 
@@ -176,10 +187,12 @@ function DashboardShell() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [liveOrderCount, setLiveOrderCount] = useState(0);
   const [showFirstTimeDemo, setShowFirstTimeDemo] = useState(false);
   const [notifications, setNotifications] = useState<OpsNotification[]>([]);
   const [toasts, setToasts] = useState<OpsNotification[]>([]);
+  const [activeWaiterCall, setActiveWaiterCall] = useState<OpsNotification | null>(null);
   const [notificationsHydrated, setNotificationsHydrated] = useState(false);
   const role = normalizeDashboardRole(localStorage.getItem('userRole'));
   const defaultRoute = getDefaultRouteForRole(role);
@@ -192,6 +205,9 @@ function DashboardShell() {
   const canAccessSettings = FULL_ACCESS_ROLES.has(role);
   const canShowFirstTimeDemo = FULL_ACCESS_ROLES.has(role);
   const canShowAdminShellData = BUSINESS_READ_ROLES.has(role);
+  const shouldFetchBusinessShellData = canShowAdminShellData;
+  const shouldFetchBillingShellData = canAccessBilling && role !== 'WAITER';
+  const shouldEnableShellRealtime = canAccessOrders && role !== 'WAITER';
 
   const [businessQuery, billingQuery] = useQueries({
     queries: [
@@ -200,22 +216,22 @@ function DashboardShell() {
         queryFn: async () => (await api.get('/settings/business')).data,
         retry: false,
         staleTime: 1000 * 30,
-        enabled: canShowAdminShellData,
+        enabled: shouldFetchBusinessShellData,
       },
       {
         queryKey: ['billing-summary'],
         queryFn: async () => (await api.get('/billing')).data,
         retry: false,
         staleTime: 1000 * 30,
-        enabled: canShowAdminShellData,
+        enabled: shouldFetchBillingShellData,
       },
     ],
   });
 
   const business = businessQuery.data;
   const billing = billingQuery.data;
-  const isLoading = canShowAdminShellData && (businessQuery.isLoading || billingQuery.isLoading);
-  const isError = canShowAdminShellData && (businessQuery.isError || billingQuery.isError);
+  const isLoading = shouldFetchBusinessShellData && (businessQuery.isLoading || (shouldFetchBillingShellData && billingQuery.isLoading));
+  const isError = shouldFetchBusinessShellData && businessQuery.isError;
   const demoStorageKey = getDemoStorageKey(business);
   const notificationStorageKey = useMemo(() => getDemoStorageKey(business).replace('demo_seen', 'notifications'), [business]);
 
@@ -242,10 +258,10 @@ function DashboardShell() {
         level: entry.level,
         createdAt: entry.createdAt || new Date().toISOString(),
         read: false,
+        metadata: entry.metadata, // Carry over tableId, sessionId, etc.
       };
 
       setNotifications((previous) => [next, ...previous].slice(0, 60));
-      
       setToasts((prev) => [...prev, next]);
       
       const soundUrl = entry.sound || 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
@@ -253,6 +269,12 @@ function DashboardShell() {
         const audio = new Audio(soundUrl);
         audio.volume = 0.5;
         audio.play().catch((err) => console.warn('Notification sound blocked:', err));
+        
+        // LIMIT SOUND TO 1 SECOND MAX
+        setTimeout(() => {
+          audio.pause();
+          audio.currentTime = 0;
+        }, 1000);
       } catch (e) {}
 
       setTimeout(() => {
@@ -309,46 +331,15 @@ function DashboardShell() {
 
   const realtimeHandlers = useMemo(
     () => ({
-      'order:new': (order: any) => {
+      'order:new': () => {
         queryClient.invalidateQueries({ queryKey: ['live-orders'] });
         void refreshLiveOrderCount();
-        pushNotification({
-          title: 'New Order',
-          message: `${order?.table?.name ? `Table ${order.table.name}` : 'Takeaway'} placed ${order?.orderNumber || `#${String(order?.id || '').slice(-6)}`}`,
-          level: 'warning',
-          sound: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' // Default order sound
-        });
       },
-      'order:update': (order: any) => {
-        const status = String(order?.status || '').toUpperCase();
+      'order:update': () => {
         queryClient.invalidateQueries({ queryKey: ['live-orders'] });
         queryClient.invalidateQueries({ queryKey: ['order-history'] });
         queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
         void refreshLiveOrderCount();
-
-        if (status === 'READY') {
-          pushNotification({
-            title: 'Food Ready',
-            message: `${order?.orderNumber || `#${String(order?.id || '').slice(-6)}`} is ready for service.`,
-            level: 'success',
-          });
-          return;
-        }
-        if (status === 'SERVED') {
-          pushNotification({
-            title: 'Food Served',
-            message: `${order?.orderNumber || `#${String(order?.id || '').slice(-6)}`} has been served.`,
-            level: 'info',
-          });
-          return;
-        }
-        if (status === 'CANCELLED') {
-          pushNotification({
-            title: 'Order Cancelled',
-            message: `${order?.orderNumber || `#${String(order?.id || '').slice(-6)}`} was cancelled.`,
-            level: 'warning',
-          });
-        }
       },
       'orders:bulk_status': () => {
         queryClient.invalidateQueries({ queryKey: ['live-orders'] });
@@ -364,38 +355,29 @@ function DashboardShell() {
         // Use a distinct "Ping" sound for waiter calls
         const WAITER_SOUND = 'https://assets.mixkit.co/active_storage/sfx/495/495-preview.mp3';
 
+        const metadata = {
+          tableId: call.tableId,
+          tableName: call.tableName,
+          sessionId: call.sessionId,
+          type: callType
+        };
+
         if (callType === 'BILL') {
           pushNotification({
             title: 'Bill Request',
             message: `${tableName} asked for billing.`,
             level: 'warning',
-            sound: WAITER_SOUND
-          });
-          return;
-        }
-        if (callType === 'WATER') {
-          pushNotification({
-            title: 'Water Request',
-            message: `${tableName} needs fresh water.`,
-            level: 'info',
-            sound: WAITER_SOUND
-          });
-          return;
-        }
-        if (callType === 'EXTRA') {
-          pushNotification({
-            title: 'Service Request',
-            message: `${tableName} requested spoons/napkins.`,
-            level: 'info',
-            sound: WAITER_SOUND
+            sound: WAITER_SOUND,
+            metadata
           });
           return;
         }
         pushNotification({
-          title: 'Waiter Call',
+          title: callType === 'WAITER' ? 'Waiter Call' : `${callType} Request`,
           message: `${tableName} requested attention.`,
           level: 'info',
-          sound: WAITER_SOUND
+          sound: WAITER_SOUND,
+          metadata
         });
       },
       'table:status_change': () => {
@@ -417,7 +399,7 @@ function DashboardShell() {
   );
 
   useRealtimeSocket({
-    enabled: canAccessOrders,
+    enabled: shouldEnableShellRealtime,
     handlers: realtimeHandlers,
     onReconnect: () => {
       queryClient.invalidateQueries({ queryKey: ['live-orders'] });
@@ -432,6 +414,10 @@ function DashboardShell() {
   }, [location.pathname, refreshLiveOrderCount]);
 
   useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
     if (isLoading || showFirstTimeDemo) return;
     if (!canShowFirstTimeDemo || !business || needsWorkspaceSetup(business)) return;
     const hasSeenDemo = localStorage.getItem(demoStorageKey) === '1';
@@ -441,16 +427,19 @@ function DashboardShell() {
     const driverObj = driver({
       showProgress: true,
       steps: [
-        { popover: { title: 'Welcome to Restoflow 🚀', description: 'Your all-in-one restaurant operating system. Let us show you how to dominate your operations in 60 seconds.', side: "bottom", align: 'center' }},
-        { element: '#dashboard-stats-grid', onHighlightStarted: () => navigate('/app'), popover: { title: 'Real-time Pulse', description: 'Monitor your revenue, occupancy, and live order flow at a glance. Everything syncs instantly from your customer app.', side: "bottom", align: 'start' }},
-        { element: '#nav-menu', onHighlightStarted: () => navigate('/app/menu'), popover: { title: 'Menu Studio', description: 'Design your digital menu with zero configuration. Add items, modifiers, and high-res photos that update live for every guest.', side: "right", align: 'start' }},
-        { element: '#item-list-container', onHighlightStarted: () => navigate('/app/menu'), popover: { title: 'Instant Preview', description: 'Click "Live Preview" at any time to see exactly what your customers see. No more guessing how your menu looks.', side: "left", align: 'start' }},
-        { element: '#nav-tables-qr', onHighlightStarted: () => navigate('/app/tables'), popover: { title: 'Design & QR', description: 'Map your floor zones and generate table-specific QR codes. Our perceptual engine ensures perfect scanner readability.', side: "right", align: 'start' }},
-        { element: '#floor-builder-canvas', onHighlightStarted: () => navigate('/app/tables'), popover: { title: 'Interactive Layout', description: 'Drag and drop tables to match your physical space. Each table becomes a live point-of-sale for your guests.', side: "left", align: 'start' }},
-        { element: '#nav-live-orders', onHighlightStarted: () => navigate('/app/orders'), popover: { title: 'Kitchen Pipeline', description: 'Move orders through preparation and service stages. Track speed-of-service and keep your staff synchronized.', side: "right", align: 'start' }},
-        { element: '#nav-notifications-btn', popover: { title: 'Staff Alerts', description: 'Real-time notifications for new orders, payment requests, and table assistance. Never miss a customer need.', side: "bottom", align: 'end' }},
-        { element: '#nav-profile-btn', popover: { title: 'Global Settings', description: 'Manage your profile, team permissions, and workspace identifiers. Copy your ordering link to social media here!', side: "bottom", align: 'end' }},
-        { popover: { title: 'Legendary Start! 🎉', description: 'You are ready to transform your restaurant. Start by adding your first menu category or designing your tables.' }},
+        { popover: { title: 'Welcome to RestoFlow', description: 'This walkthrough shows how menu, tables, kitchen, service, billing, and staff controls connect inside one operating system.', side: 'bottom', align: 'center' }},
+        { element: '#dashboard-stats-grid', onHighlightStarted: () => navigate('/app'), popover: { title: 'Start with the live pulse', description: 'Revenue, active tables, and live order movement are visible here so managers can understand service pressure quickly.', side: 'bottom', align: 'start' }},
+        { element: '#nav-menu', onHighlightStarted: () => navigate('/app/menu'), popover: { title: 'Build the menu once', description: 'Categories, modifiers, photos, and availability updates all flow from this shared source of truth.', side: 'right', align: 'start' }},
+        { element: '#item-list-container', onHighlightStarted: () => navigate('/app/menu'), popover: { title: 'Preview the guest experience', description: 'Check the live preview before publishing so your team knows exactly what diners will see on mobile.', side: 'left', align: 'start' }},
+        { element: '#nav-tables-qr', onHighlightStarted: () => navigate('/app/tables'), popover: { title: 'Map tables and QR access', description: 'Set up zones, tables, and QR entry points so dine-in sessions always attach to the right service location.', side: 'right', align: 'start' }},
+        { element: '#floor-builder-canvas', onHighlightStarted: () => navigate('/app/tables'), popover: { title: 'Match the real restaurant', description: 'Arrange the floor visually so staff can understand occupancy and routing without guessing.', side: 'left', align: 'start' }},
+        { element: '#nav-live-orders', onHighlightStarted: () => navigate('/app/orders'), popover: { title: 'Control the live pipeline', description: 'Orders move from kitchen to service to billing here. This is the core rush-hour workspace for operators.', side: 'right', align: 'start' }},
+        { element: '#nav-billing', onHighlightStarted: () => navigate('/app/billing'), popover: { title: 'Close bills with confidence', description: 'Invoices, payment states, and export-ready records stay together for end-of-day accuracy.', side: 'right', align: 'start' }},
+        { element: '#nav-analytics', onHighlightStarted: () => navigate('/app/analytics'), popover: { title: 'Track performance trends', description: 'Use analytics to review demand, menu movement, and operational patterns instead of relying on memory.', side: 'right', align: 'start' }},
+        { element: '#nav-settings', onHighlightStarted: () => navigate('/app/settings'), popover: { title: 'Keep business identity complete', description: 'Business details, staff access, and invoice identity should stay accurate here so setup never blocks operations.', side: 'right', align: 'start' }},
+        { element: '#nav-notifications-btn', popover: { title: 'Focus on the right alerts', description: 'Notifications surface live assistance and billing needs so the correct role can respond quickly.', side: 'bottom', align: 'end' }},
+        { element: '#nav-profile-btn', popover: { title: 'Manage staff preferences', description: 'Open the profile menu for password changes, language selection, ordering links, and waiter tip summaries.', side: 'bottom', align: 'end' }},
+        { popover: { title: 'Next best step', description: 'Finish your menu, verify tables, and then place one full test order from customer to kitchen to billing.' }},
       ],
       onDestroyStarted: () => {
         if (!driverObj.hasNextStep() || confirm("Are you sure you want to skip the tour?")) {
@@ -489,24 +478,12 @@ function DashboardShell() {
     );
   }
 
-  if (canShowAdminShellData && isError && role !== 'WAITER' && role !== 'KITCHEN') {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen space-y-4">
-        <div className="text-red-500 font-bold">Error loading workspace data</div>
-        <button onClick={() => window.location.reload()} className="px-4 py-2 bg-blue-600 text-white rounded-lg">Retry</button>
-      </div>
-    );
-  }
-
   if (canShowAdminShellData && business && needsWorkspaceSetup(business) && FULL_ACCESS_ROLES.has(role)) {
     return <Navigate to="/setup" replace />;
   }
 
   if (role === 'WAITER' && location.pathname !== '/app/waiter') {
     return <Navigate to="/app/waiter" replace />;
-  }
-  if (role === 'WAITER' && location.pathname === '/app/waiter') {
-    return <WaiterPage />;
   }
   if (role !== 'WAITER' && location.pathname === '/app/waiter') {
     return <Navigate to={defaultRoute} replace />;
@@ -517,6 +494,7 @@ function DashboardShell() {
     ...(canAccessMenu ? ['/app/menu'] : []),
     ...(canAccessTables ? ['/app/tables'] : []),
     ...(canAccessOrders ? ['/app/orders'] : []),
+    ...(role === 'WAITER' ? ['/app/waiter'] : []),
     ...(canAccessBilling ? ['/app/billing', '/app/subscription'] : []),
     ...(canAccessAnalytics ? ['/app/analytics'] : []),
     ...(canAccessSettings ? ['/app/settings'] : []),
@@ -526,7 +504,7 @@ function DashboardShell() {
     // Exact match for the dashboard home or specific tools
     if (allowedPaths.has(location.pathname)) return true;
     // Special case for sub-paths or trailing slashes
-    if (allowedPaths.has(location.pathname.replace(/\/\$/, ''))) return true;
+    if (allowedPaths.has(location.pathname.replace(/\/$/, ''))) return true;
     return false;
   })();
 
@@ -535,19 +513,30 @@ function DashboardShell() {
   }
 
   const navItems = [
+    ...(role === 'WAITER'
+      ? [{ to: '/app/waiter', label: 'Waiter Ops', icon: <Receipt size={18} />, badge: liveOrderCount }]
+      : []),
     ...(canAccessDashboard ? [{ to: '/app', label: 'Dashboard', icon: <LayoutDashboard size={18} /> }] : []),
     ...(canAccessMenu ? [{ to: '/app/menu', label: 'Menu', icon: <UtensilsCrossed size={18} /> }] : []),
     ...(canAccessTables ? [{ to: '/app/tables', label: 'Tables & QR', icon: <Store size={18} /> }] : []),
-    ...(canAccessOrders ? [{ to: '/app/orders', label: 'Live Orders', icon: <Receipt size={18} />, badge: liveOrderCount }] : []),
+    ...(canAccessOrders && role !== 'WAITER' ? [{ to: '/app/orders', label: 'Live Orders', icon: <Receipt size={18} />, badge: liveOrderCount }] : []),
     ...(canAccessBilling ? [{ to: '/app/billing', label: 'Billing', icon: <CreditCard size={18} /> }] : []),
     ...(canAccessAnalytics ? [{ to: '/app/analytics', label: 'Analytics', icon: <BarChart3 size={18} /> }] : []),
     ...(canAccessSettings ? [{ to: '/app/settings', label: 'Settings', icon: <Settings2 size={18} /> }] : []),
   ];
 
   return (
-    <div className="h-screen overflow-hidden flex font-sans selection:bg-blue-500/30" style={{ background: 'var(--shell-bg)', color: 'var(--text-1)' }}>
+    <div className="relative flex min-h-[100dvh] font-sans selection:bg-blue-500/30 lg:h-screen lg:overflow-hidden" style={{ background: 'var(--shell-bg)', color: 'var(--text-1)' }}>
       <div className="fixed inset-0 z-0 pointer-events-none" style={{ background: 'var(--shell-gradient)' }} />
-      <aside className={`relative z-10 flex-shrink-0 h-screen sticky top-0 backdrop-blur-xl flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-[68px]' : 'w-[240px]'}`} style={{ background: 'var(--sidebar-bg)', borderRight: '1px solid var(--sidebar-border)' }}>
+      {mobileNavOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setMobileNavOpen(false)}
+          className="fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm lg:hidden"
+        />
+      )}
+      <aside className={`fixed inset-y-0 left-0 z-40 flex h-[100dvh] w-[min(280px,84vw)] flex-col backdrop-blur-xl transition-transform duration-300 lg:sticky lg:top-0 lg:z-10 lg:h-screen lg:flex-shrink-0 ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 ${sidebarCollapsed ? 'lg:w-[68px]' : 'lg:w-[240px]'}`} style={{ background: 'var(--sidebar-bg)', borderRight: '1px solid var(--sidebar-border)' }}>
         <div className="px-4 py-6 flex items-center gap-3" style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 shadow-[0_0_15px_rgba(37,99,235,0.4)]" style={{ background: 'var(--sidebar-logo-bg)' }}>
             <UtensilsCrossed size={16} className="text-white" />
@@ -557,6 +546,14 @@ function DashboardShell() {
               RestoFlow
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(false)}
+            className="ml-auto inline-flex h-10 w-10 items-center justify-center rounded-xl border lg:hidden"
+            style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-2)' }}
+          >
+            <X size={18} />
+          </button>
         </div>
 
         <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto overflow-x-hidden custom-scrollbar">
@@ -574,6 +571,7 @@ function DashboardShell() {
                   background: active ? 'var(--sidebar-item-active-bg)' : undefined,
                   color: active ? 'var(--sidebar-text-active)' : 'var(--sidebar-text)',
                 }}
+                onClick={() => setMobileNavOpen(false)}
                 onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--sidebar-item-hover-bg)'; }}
                 onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = ''; }}
               >
@@ -595,7 +593,7 @@ function DashboardShell() {
         <div className="p-3 space-y-1" style={{ borderTop: '1px solid var(--border)' }}>
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
+            className="hidden w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all lg:flex"
             style={{ color: 'var(--text-3)' }}
           >
             <ChevronRight size={18} className={`transition-transform ${sidebarCollapsed ? '' : 'rotate-180'}`} />
@@ -603,18 +601,45 @@ function DashboardShell() {
           </button>
           <button
             onClick={() => {
+              setMobileNavOpen(false);
               logoutAndReload();
             }}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-400/80 hover:bg-red-500/10 hover:text-red-300 text-sm font-medium transition-all"
           >
             <LogIn size={18} className="rotate-180" />
-            {!sidebarCollapsed && <span>Logout</span>}
+            {(!sidebarCollapsed || mobileNavOpen) && <span>Logout</span>}
           </button>
         </div>
       </aside>
 
-      <main className="relative z-10 flex-1 min-w-0 h-full overflow-hidden flex flex-col bg-transparent">
+      <main className="relative z-10 flex min-h-[100dvh] min-w-0 flex-1 flex-col bg-transparent lg:h-full lg:min-h-0 lg:overflow-hidden">
         <div className="flex-shrink-0 px-3 pt-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-5">
+          <div className="mb-3 flex items-center justify-between gap-3 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border"
+              style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-2)' }}
+            >
+              <Menu size={18} />
+            </button>
+            <div className="min-w-0 text-right">
+              <p className="truncate text-sm font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-1)' }}>
+                {role === 'WAITER' ? 'Waiter workspace' : 'Operations workspace'}
+              </p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--text-3)' }}>
+                {navItems.length} live tools available
+              </p>
+            </div>
+          </div>
+          {isError && role !== 'KITCHEN' && (
+            <div
+              className="mb-3 rounded-2xl border px-4 py-3 text-sm font-semibold"
+              style={{ background: 'rgba(239, 68, 68, 0.08)', borderColor: 'rgba(239, 68, 68, 0.2)', color: '#fecaca' }}
+            >
+              Workspace details are temporarily unavailable. Core tools are still loaded, and you can retry from page refresh if needed.
+            </div>
+          )}
           <VendorTopNav
             path={location.pathname}
             role={role}
@@ -627,6 +652,11 @@ function DashboardShell() {
             unreadNotificationCount={unreadNotificationCount}
             onMarkNotificationsRead={markNotificationsRead}
             onClearNotifications={clearNotifications}
+            onNotificationClick={(n) => {
+              if (n.metadata?.sessionId) {
+                setActiveWaiterCall(n);
+              }
+            }}
             onLogout={logoutAndReload}
           />
         </div>
@@ -650,7 +680,7 @@ function DashboardShell() {
       </main>
 
       {/* Floating Toasts */}
-      <div className="fixed top-6 right-6 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+      <div className="pointer-events-none fixed inset-x-3 top-3 z-[9999] flex w-auto max-w-[calc(100vw-1.5rem)] flex-col gap-3 sm:inset-x-auto sm:right-4 sm:top-4 sm:w-full sm:max-w-sm">
         {toasts.map((toast) => (
           <div
             key={toast.id}
@@ -676,6 +706,58 @@ function DashboardShell() {
           </div>
         ))}
       </div>
+
+      {/* Waiter Call Handshake Modal */}
+      {activeWaiterCall && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <Store size={32} className="text-blue-500" />
+              </div>
+              <h3 className="text-2xl font-black text-white tracking-tight">
+                {activeWaiterCall.metadata?.tableName || 'Table'} Assistance
+              </h3>
+              <p className="mt-2 text-slate-400 font-medium">
+                Customer is requesting <span className="text-blue-400 uppercase">{activeWaiterCall.metadata?.type || 'Help'}</span>.
+              </p>
+              
+              <div className="mt-8 space-y-3">
+                <button
+                  onClick={async () => {
+                    try {
+                      const business = (queryClient.getQueryData(['settings-business']) as any);
+                      const slug = business?.slug;
+                      if (!slug) throw new Error('Tenant slug not found');
+
+                      await api.post(`/public/${slug}/waiter-call/acknowledge`, {
+                        sessionId: activeWaiterCall.metadata?.sessionId,
+                        tableId: activeWaiterCall.metadata?.tableId
+                      });
+                      
+                      // Success feedback
+                      setActiveWaiterCall(null);
+                      setNotifications(prev => prev.filter(n => n.id !== activeWaiterCall.id));
+                    } catch (err) {
+                      console.error('Handshake failed:', err);
+                      setActiveWaiterCall(null);
+                    }
+                  }}
+                  className="w-full h-14 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-500/20"
+                >
+                  ACCEPT & NOTIFY GUEST
+                </button>
+                <button
+                  onClick={() => setActiveWaiterCall(null)}
+                  className="w-full h-14 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl transition-all"
+                >
+                  DISMISS
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes toast-enter {
@@ -703,7 +785,9 @@ function App() {
   };
 
   const handleLogout = () => {
-    clearLocalAuthStorage();
+    markManualLogout();
+    void api.post('/auth/logout').catch(() => undefined);
+    clearDashboardAuthStorage();
     const clerk = (globalThis as any).Clerk;
     if (clerk?.signOut) void Promise.resolve(clerk.signOut()).catch(() => {});
     setMustChangePassword(false);
@@ -717,7 +801,8 @@ function App() {
 
       <Route path="/" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingHomeRoute />} />
       <Route path="/contact" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingContactRoute />} />
-      <Route path="/launch-plan" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingLaunchRoute />} />
+      <Route path="/privacy" element={<MarketingPrivacyRoute />} />
+      <Route path="/terms" element={<MarketingTermsRoute />} />
       <Route path="/login" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <LoginPage onLogin={handleLogin} />} />
       <Route path="/signup" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <SignupPage onLogin={handleLogin} />} />
 
@@ -727,7 +812,7 @@ function App() {
           !isLoggedIn ? (
             <Navigate to="/login" replace />
           ) : FULL_ACCESS_ROLES.has(role) ? (
-            <Onboarding nextPath={mustChangePassword ? '/security-setup' : getDefaultRouteForRole(role)} />
+            <Onboarding nextPath={role === 'OWNER' && mustChangePassword ? '/security-setup' : getDefaultRouteForRole(role)} />
           ) : (
             <Navigate to={getDefaultRouteForRole(role)} replace />
           )
@@ -739,7 +824,7 @@ function App() {
         element={
           !isLoggedIn ? (
             <Navigate to="/login" replace />
-          ) : mustChangePassword ? (
+          ) : role === 'OWNER' && mustChangePassword ? (
             <FirstLoginPasswordGate
               onCompleted={() => setMustChangePassword(false)}
               onLogout={handleLogout}

@@ -1,22 +1,29 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
 import {
   Bell,
   ChevronDown,
   Copy,
   CreditCard,
   ExternalLink,
-  LogOut,
+  Globe2,
+  IndianRupee,
+  Loader2,
+  Lock,
   Mail,
   Phone,
   Settings,
+  ShieldCheck,
   UserCircle2,
   Zap,
 } from 'lucide-react';
+import { api } from '../lib/api';
 import { getCustomerAppUrl } from '../lib/network';
 
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER' | 'UNKNOWN';
+type ProfileLanguage = 'en' | 'hi' | 'hinglish';
 
 export type OpsNotification = {
   id: string;
@@ -25,6 +32,12 @@ export type OpsNotification = {
   level: 'info' | 'warning' | 'success' | 'error';
   createdAt: string;
   read: boolean;
+  metadata?: {
+    tableId?: string;
+    tableName?: string;
+    sessionId?: string;
+    type?: string;
+  };
 };
 
 type VendorTopNavProps = {
@@ -46,7 +59,31 @@ type VendorTopNavProps = {
   unreadNotificationCount: number;
   onMarkNotificationsRead: () => void;
   onClearNotifications: () => void;
+  onNotificationClick?: (notification: OpsNotification) => void;
   onLogout: () => void;
+};
+
+type AuthMeResponse = {
+  tenant?: {
+    businessName?: string;
+    slug?: string;
+    currencySymbol?: string;
+  } | null;
+  user?: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    preferredLanguage?: string;
+    avatarUrl?: string | null;
+    hasSecurityQuestion?: boolean;
+    securitySetupPending?: boolean;
+    tipsSummary?: {
+      today?: { amount: number; sessions: number };
+      week?: { amount: number; sessions: number };
+      month?: { amount: number; sessions: number };
+    };
+  } | null;
 };
 
 const ROUTE_LABELS: Record<string, string> = {
@@ -54,6 +91,7 @@ const ROUTE_LABELS: Record<string, string> = {
   '/app/menu': 'Menu',
   '/app/tables': 'Tables & QR',
   '/app/orders': 'Live Orders',
+  '/app/waiter': 'Waiter Ops',
   '/app/billing': 'Billing',
   '/app/analytics': 'Analytics',
   '/app/settings': 'Settings',
@@ -81,6 +119,18 @@ function levelDot(level: OpsNotification['level']) {
   return '#3b82f6';
 }
 
+function formatMoney(symbol: string, amount?: number) {
+  const safeAmount = Number(amount || 0);
+  return `${symbol}${safeAmount.toFixed(0)}`;
+}
+
+function normalizeLanguage(value?: string): ProfileLanguage {
+  const normalized = String(value || '').toLowerCase();
+  if (normalized === 'hi') return 'hi';
+  if (normalized === 'hinglish') return 'hinglish';
+  return 'en';
+}
+
 export function VendorTopNav({
   path,
   role,
@@ -93,17 +143,81 @@ export function VendorTopNav({
   unreadNotificationCount,
   onMarkNotificationsRead,
   onClearNotifications,
+  onNotificationClick,
   onLogout,
 }: VendorTopNavProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [now, setNow] = useState(() => new Date());
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [preferredLanguage, setPreferredLanguage] = useState<ProfileLanguage>('en');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [securityQuestion, setSecurityQuestion] = useState('');
+  const [securityAnswer, setSecurityAnswer] = useState('');
+  const [profileFeedback, setProfileFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
+  const [securityFeedback, setSecurityFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const profileRef = useRef<HTMLDivElement | null>(null);
   const notificationRef = useRef<HTMLDivElement | null>(null);
   const headerLabel = ROUTE_LABELS[path] || 'Overview';
   const formattedNow = format(now, 'MMM d, yyyy | h:mm a');
   const planName = (billing?.plan || 'FREE').toUpperCase();
+
+  const { data: authMe } = useQuery<AuthMeResponse>({
+    queryKey: ['auth-me'],
+    queryFn: async () => (await api.get('/auth/me')).data,
+    staleTime: 1000 * 60,
+    retry: false,
+  });
+
+  const updateProfileMutation = useMutation({
+    mutationFn: async () =>
+      (
+        await api.patch('/auth/profile', {
+          name: profileName.trim(),
+          preferredLanguage,
+        })
+      ).data,
+    onSuccess: async () => {
+      setProfileFeedback({ tone: 'success', message: 'Profile updated.' });
+      await queryClient.invalidateQueries({ queryKey: ['auth-me'] });
+    },
+    onError: (error: any) => {
+      setProfileFeedback({
+        tone: 'error',
+        message: error?.response?.data?.error || 'Could not update profile right now.',
+      });
+    },
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async () =>
+      (
+        await api.post('/auth/change-password', {
+          currentPassword,
+          newPassword,
+          securityQuestion: securityQuestion.trim() || undefined,
+          securityAnswer: securityAnswer.trim() || undefined,
+        })
+      ).data,
+    onSuccess: async () => {
+      setSecurityFeedback({ tone: 'success', message: 'Security settings updated.' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setSecurityQuestion('');
+      setSecurityAnswer('');
+      await queryClient.invalidateQueries({ queryKey: ['auth-me'] });
+    },
+    onError: (error: any) => {
+      setSecurityFeedback({
+        tone: 'error',
+        message: error?.response?.data?.error || 'Could not update password right now.',
+      });
+    },
+  });
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 30000);
@@ -133,13 +247,23 @@ export function VendorTopNav({
     onMarkNotificationsRead();
   }, [notificationsOpen, onMarkNotificationsRead, unreadNotificationCount]);
 
+  useEffect(() => {
+    setProfileName(authMe?.user?.name || '');
+    setPreferredLanguage(normalizeLanguage(authMe?.user?.preferredLanguage));
+  }, [authMe?.user?.name, authMe?.user?.preferredLanguage]);
+
   const orderLink = useMemo(() => {
-    const slug = business?.slug?.trim();
+    const slug = business?.slug?.trim() || authMe?.tenant?.slug?.trim();
     if (!slug) return '';
     return `${getCustomerAppUrl()}/order/${slug}`;
-  }, [business?.slug]);
+  }, [authMe?.tenant?.slug, business?.slug]);
 
   const visibleNotifications = useMemo(() => notifications.slice(0, 20), [notifications]);
+  const currencySymbol = authMe?.tenant?.currencySymbol || '₹';
+  const workspaceName = business?.businessName?.trim() || authMe?.tenant?.businessName?.trim() || 'Workspace';
+  const workspaceEmail = authMe?.user?.email?.trim() || business?.email?.trim() || 'No email set';
+  const workspacePhone = business?.phone?.trim() || 'No phone set';
+  const securityPending = Boolean(authMe?.user?.securitySetupPending);
 
   const copyOrderLink = async () => {
     if (!orderLink) {
@@ -174,6 +298,11 @@ export function VendorTopNav({
           <span className="rounded-full px-2 py-0.5" style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>
             Live Orders {liveOrderCount}
           </span>
+          {role === 'WAITER' && (
+            <span className="rounded-full px-2 py-0.5" style={{ background: '#dcfce7', color: '#166534' }}>
+              Waiter Console
+            </span>
+          )}
         </p>
       </div>
 
@@ -199,7 +328,7 @@ export function VendorTopNav({
 
           {notificationsOpen && (
             <div
-              className="absolute right-0 top-12 z-50 w-[340px] overflow-hidden rounded-2xl border shadow-xl"
+              className="absolute right-0 top-12 z-50 w-[min(340px,calc(100vw-1rem))] overflow-hidden rounded-2xl border shadow-xl"
               style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
             >
               <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
@@ -233,7 +362,8 @@ export function VendorTopNav({
                 {visibleNotifications.map((entry) => (
                   <div
                     key={entry.id}
-                    className="flex gap-2 px-3 py-2"
+                    onClick={() => onNotificationClick?.(entry)}
+                    className="flex gap-2 px-3 py-2 cursor-pointer hover:bg-slate-50/5 transition-colors"
                     style={{
                       borderBottom: '1px solid var(--border)',
                       background: entry.read ? 'transparent' : 'var(--surface-2)',
@@ -285,26 +415,205 @@ export function VendorTopNav({
 
           {profileOpen && (
             <div
-              className="absolute right-0 top-12 z-50 w-[320px] overflow-hidden rounded-2xl border shadow-xl"
+              className="absolute right-0 top-12 z-50 w-[min(360px,calc(100vw-1rem))] overflow-hidden rounded-2xl border shadow-xl"
               style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
             >
               <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-                <p className="truncate text-base font-black" style={{ color: 'var(--text-1)' }}>
-                  {business?.businessName?.trim() || 'Workspace'}
-                </p>
-                <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--text-3)' }}>
-                  {roleLabel(role)} | {planName} Plan
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-black" style={{ color: 'var(--text-1)' }}>
+                      {workspaceName}
+                    </p>
+                    <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--text-3)' }}>
+                      {roleLabel(role)} | {planName} Plan
+                    </p>
+                  </div>
+                  {securityPending && (
+                    <span
+                      className="inline-flex rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em]"
+                      style={{ background: '#fef3c7', color: '#92400e' }}
+                    >
+                      Security Pending
+                    </span>
+                  )}
+                </div>
               </div>
 
-              <div className="space-y-2 px-4 py-3">
-                <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-2)' }}>
-                  <Mail size={14} />
-                  <span className="truncate font-semibold">{business?.email?.trim() || 'No email set'}</span>
+              <div className="space-y-3 px-4 py-3">
+                <div className="rounded-2xl border p-3" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+                  <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
+                    Staff Name
+                  </label>
+                  <input
+                    value={profileName}
+                    onChange={(event) => setProfileName(event.target.value)}
+                    className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none"
+                    style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-1)' }}
+                  />
+                  <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+                    <div>
+                      <label className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
+                        <Globe2 size={12} /> Language
+                      </label>
+                      <select
+                        value={preferredLanguage}
+                        onChange={(event) => setPreferredLanguage(normalizeLanguage(event.target.value))}
+                        className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none"
+                        style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-1)' }}
+                      >
+                        <option value="en">English</option>
+                        <option value="hi">Hindi</option>
+                        <option value="hinglish">Hinglish</option>
+                      </select>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setProfileFeedback(null);
+                        updateProfileMutation.mutate();
+                      }}
+                      disabled={updateProfileMutation.isPending}
+                      className="inline-flex items-center justify-center gap-2 self-end rounded-xl px-4 py-2.5 text-sm font-black text-white disabled:opacity-60"
+                      style={{ background: 'var(--brand)' }}
+                    >
+                      {updateProfileMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : null}
+                      Save
+                    </button>
+                  </div>
+                  {profileFeedback && (
+                    <p
+                      className="mt-3 text-xs font-bold"
+                      style={{ color: profileFeedback.tone === 'success' ? '#059669' : '#dc2626' }}
+                    >
+                      {profileFeedback.message}
+                    </p>
+                  )}
                 </div>
-                <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-2)' }}>
-                  <Phone size={14} />
-                  <span className="truncate font-semibold">{business?.phone?.trim() || 'No phone set'}</span>
+
+                <div className="space-y-2 rounded-2xl border p-3" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+                  <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-2)' }}>
+                    <Mail size={14} />
+                    <span className="truncate font-semibold">{workspaceEmail}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-2)' }}>
+                    <Phone size={14} />
+                    <span className="truncate font-semibold">{workspacePhone}</span>
+                  </div>
+                </div>
+
+                {role === 'WAITER' && (
+                  <div className="rounded-2xl border p-3" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+                    <div className="mb-3 flex items-center gap-2">
+                      <IndianRupee size={15} className="text-emerald-600" />
+                      <p className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
+                        Tip Summary
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: 'Today', value: authMe?.user?.tipsSummary?.today?.amount, sessions: authMe?.user?.tipsSummary?.today?.sessions },
+                        { label: 'Week', value: authMe?.user?.tipsSummary?.week?.amount, sessions: authMe?.user?.tipsSummary?.week?.sessions },
+                        { label: 'Month', value: authMe?.user?.tipsSummary?.month?.amount, sessions: authMe?.user?.tipsSummary?.month?.sessions },
+                      ].map((entry) => (
+                        <div key={entry.label} className="rounded-xl border p-2.5" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+                          <p className="text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: 'var(--text-3)' }}>
+                            {entry.label}
+                          </p>
+                          <p className="mt-2 text-base font-black" style={{ color: 'var(--text-1)' }}>
+                            {formatMoney(currencySymbol, entry.value)}
+                          </p>
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.08em]" style={{ color: 'var(--text-3)' }}>
+                            {Number(entry.sessions || 0)} sessions
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <button
+                    onClick={() => setSecurityOpen((prev) => !prev)}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition"
+                    style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-2)' }}
+                  >
+                    <ShieldCheck size={14} />
+                    Password & Security
+                  </button>
+
+                  {securityOpen && (
+                    <div className="rounded-2xl border p-3" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+                      <div className="grid gap-3">
+                        <div>
+                          <label className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
+                            <Lock size={12} /> Current Password
+                          </label>
+                          <input
+                            type="password"
+                            value={currentPassword}
+                            onChange={(event) => setCurrentPassword(event.target.value)}
+                            className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none"
+                            style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-1)' }}
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
+                            New Password
+                          </label>
+                          <input
+                            type="password"
+                            value={newPassword}
+                            onChange={(event) => setNewPassword(event.target.value)}
+                            className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none"
+                            style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-1)' }}
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
+                            Security Question
+                          </label>
+                          <input
+                            value={securityQuestion}
+                            onChange={(event) => setSecurityQuestion(event.target.value)}
+                            placeholder="Optional update"
+                            className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none"
+                            style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-1)' }}
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
+                            Security Answer
+                          </label>
+                          <input
+                            value={securityAnswer}
+                            onChange={(event) => setSecurityAnswer(event.target.value)}
+                            placeholder="Optional update"
+                            className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none"
+                            style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-1)' }}
+                          />
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSecurityFeedback(null);
+                            changePasswordMutation.mutate();
+                          }}
+                          disabled={changePasswordMutation.isPending}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black text-white disabled:opacity-60"
+                          style={{ background: '#059669' }}
+                        >
+                          {changePasswordMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : null}
+                          Save Security
+                        </button>
+                        {securityFeedback && (
+                          <p
+                            className="text-xs font-bold"
+                            style={{ color: securityFeedback.tone === 'success' ? '#059669' : '#dc2626' }}
+                          >
+                            {securityFeedback.message}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -351,7 +660,6 @@ export function VendorTopNav({
                   className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-black text-white transition"
                   style={{ background: '#ef4444' }}
                 >
-                  <LogOut size={14} />
                   Logout
                 </button>
               </div>

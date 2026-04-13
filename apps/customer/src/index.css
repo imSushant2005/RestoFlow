@@ -31,6 +31,12 @@
 
   --glass-bg: rgba(255, 255, 255, 0.8);
   --glass-border: rgba(255, 255, 255, 0.5);
+  --customer-safe-bottom: env(safe-area-inset-bottom);
+  --customer-nav-height: 72px;
+  --customer-nav-space: calc(var(--customer-nav-height) + var(--customer-safe-bottom));
+  --customer-action-bottom: calc(var(--customer-nav-space) + 12px);
+  --customer-page-action-height: 0px;
+  --customer-fab-bottom: calc(var(--customer-action-bottom) + var(--customer-page-action-height) + 12px);
 
   /* Legacy aliases used across older pages */
   --bg-primary: var(--bg);
@@ -64,6 +70,12 @@
 
     --glass-bg: rgba(15, 23, 42, 0.8);
     --glass-border: rgba(30, 41, 59, 0.5);
+    --customer-safe-bottom: env(safe-area-inset-bottom);
+    --customer-nav-height: 72px;
+    --customer-nav-space: calc(var(--customer-nav-height) + var(--customer-safe-bottom));
+    --customer-action-bottom: calc(var(--customer-nav-space) + 12px);
+    --customer-page-action-height: 0px;
+    --customer-fab-bottom: calc(var(--customer-action-bottom) + var(--customer-page-action-height) + 12px);
 
     --bg-primary: var(--bg);
     --bg-secondary: var(--surface);
@@ -96,6 +108,12 @@
 
   --glass-bg: rgba(15, 23, 42, 0.8);
   --glass-border: rgba(30, 41, 59, 0.5);
+  --customer-safe-bottom: env(safe-area-inset-bottom);
+  --customer-nav-height: 72px;
+  --customer-nav-space: calc(var(--customer-nav-height) + var(--customer-safe-bottom));
+  --customer-action-bottom: calc(var(--customer-nav-space) + 12px);
+  --customer-page-action-height: 0px;
+  --customer-fab-bottom: calc(var(--customer-action-bottom) + var(--customer-page-action-height) + 12px);
 
   --bg-primary: var(--bg);
   --bg-secondary: var(--surface);
@@ -105,14 +123,21 @@
 }
 
 * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; min-height: 100%; }
 body {
   font-family: var(--font-main);
   background: var(--bg);
   color: var(--text-1);
+  margin: 0;
+  min-height: 100dvh;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-smoothing: grayscale;
   transition: background-color 0.4s ease, color 0.4s ease;
+}
+#root {
+  min-height: 100dvh;
+  overflow-x: hidden;
 }
 
 /* ─── Scrollbars ─────────────────────────────────────────── */
@@ -211,3 +236,7 @@ body {
 
 /* ─── Bottom nav ─────────────────────────────────────────── */
 .bottom-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+.customer-bottom-nav {
+  min-height: var(--customer-nav-height);
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}

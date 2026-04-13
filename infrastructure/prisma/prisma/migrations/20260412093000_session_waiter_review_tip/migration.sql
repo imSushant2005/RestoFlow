@@ -1,0 +1,7 @@
+ALTER TABLE "DiningSession"
+ADD COLUMN "attendedByUserId" TEXT,
+ADD COLUMN "attendedByName" TEXT;
+
+ALTER TABLE "Review"
+ADD COLUMN "tipAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN "serviceStaffName" TEXT;

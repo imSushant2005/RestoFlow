@@ -1,16 +1,18 @@
-import { Routes, Route } from 'react-router-dom'
-import { NotificationsProvider } from './components/Notifications'
-import { LoginPage } from './pages/LoginPage'
-import { PartySizePage } from './pages/PartySizePage'
-import { Storefront } from './pages/Storefront'
-import { OrderStatus } from './pages/OrderStatus'
-import { SessionTracker } from './pages/SessionTracker'
-import { BillPage } from './pages/BillPage'
-import { HistoryPage } from './pages/HistoryPage'
-import { useEffect } from 'react'
-import { v4 as uuidv4 } from 'uuid'
-import { get, set } from 'idb-keyval'
-import { publicApi } from './lib/api'
+import { Route, Routes } from 'react-router-dom';
+import { useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import { get, set } from 'idb-keyval';
+import { NotificationsProvider } from './components/Notifications';
+import { CustomerShell } from './components/CustomerShell';
+import { LoginPage } from './pages/LoginPage';
+import { PartySizePage } from './pages/PartySizePage';
+import { Storefront } from './pages/Storefront';
+import { OrderStatus } from './pages/OrderStatus';
+import { SessionTracker } from './pages/SessionTracker';
+import { BillPage } from './pages/BillPage';
+import { HistoryPage } from './pages/HistoryPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { publicApi } from './lib/api';
 
 function App() {
   useEffect(() => {
@@ -19,72 +21,64 @@ function App() {
       localStorage.setItem('startup_session', uuidv4());
     }
 
-    // Domain mapping check removed to avoid hard-coded product names.
-
     const syncOfflineOrders = async () => {
-      const queue: any[] = await get('offline_orders') || [];
+      const queue: any[] = (await get('offline_orders')) || [];
       if (queue.length === 0) return;
+
       let newQueue = [...queue];
-      for (let i = 0; i < queue.length; i++) {
+      for (let i = 0; i < queue.length; i += 1) {
         const order = queue[i];
         try {
           await publicApi.post(`/${order.tenantSlug}/orders`, order.payload);
-          newQueue = newQueue.filter(o => o !== order);
-        } catch (err) {
-          console.error('Failed to sync order', err);
+          newQueue = newQueue.filter((queuedOrder) => queuedOrder !== order);
+        } catch (error) {
+          console.error('Failed to sync order', error);
         }
       }
+
       await set('offline_orders', newQueue);
     };
 
     window.addEventListener('online', syncOfflineOrders);
-    if (navigator.onLine) syncOfflineOrders();
+    if (navigator.onLine) void syncOfflineOrders();
     return () => window.removeEventListener('online', syncOfflineOrders);
   }, []);
 
   return (
-    <div className="min-h-[100dvh] flex flex-col font-sans antialiased" style={{ background: 'var(--bg)', color: 'var(--text-1)' }}>
+    <div
+      className="min-h-[100dvh] flex flex-col font-sans antialiased"
+      style={{ background: 'var(--bg)', color: 'var(--text-1)' }}
+    >
       <NotificationsProvider>
-        <main className="flex-1 flex flex-col">
+        <main className="relative flex flex-1 flex-col">
           <Routes>
-          {/* === NEW SESSION FLOW === */}
-          {/* Step 1: QR Scan → Login (phone + name) */}
-          <Route path="/order/:tenantSlug/:tableId" element={<LoginPage />} />
-          
-          {/* Step 2: Party Size Selection */}
-          <Route path="/order/:tenantSlug/:tableId/party" element={<PartySizePage />} />
-          
-          {/* Step 3: Menu Browsing + Ordering */}
-          <Route path="/order/:tenantSlug/:tableId/menu" element={<Storefront />} />
-          
-          {/* Step 4: Session Tracker (multi-order view + running bill) */}
-          <Route path="/order/:tenantSlug/session/:sessionId" element={<SessionTracker />} />
-          
-          {/* Step 5: Final Bill */}
-          <Route path="/order/:tenantSlug/session/:sessionId/bill" element={<BillPage />} />
-          
-          {/* Order History */}
-          <Route path="/order/:tenantSlug/history" element={<HistoryPage />} />
-          
-          {/* Legacy: Order Status (kept for backward compatibility) */}
-          <Route path="/order/:tenantSlug/status" element={<OrderStatus />} />
-          
-          {/* Takeaway (no table) — skip home, go to storefront */}
-          <Route path="/order/:tenantSlug" element={<Storefront />} />
-          
-          {/* Fallback */}
-          <Route path="*" element={
-            <div className="flex flex-col items-center justify-center min-h-[100dvh] text-center px-6 gap-4">
-              <div className="text-5xl">📱</div>
-              <h2 className="text-xl font-black text-gray-800">Scan a QR code to order</h2>
-              <p className="text-gray-400 text-sm">Ask your server for the table QR code.</p>
-            </div>
-          } />
-        </Routes>
+            <Route path="/order/:tenantSlug" element={<CustomerShell />}>
+              <Route index element={<Storefront />} />
+              <Route path="status" element={<OrderStatus />} />
+              <Route path="history" element={<HistoryPage />} />
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="session/:sessionId" element={<SessionTracker />} />
+              <Route path="session/:sessionId/bill" element={<BillPage />} />
+              <Route path=":tableId" element={<LoginPage />} />
+              <Route path=":tableId/party" element={<PartySizePage />} />
+              <Route path=":tableId/menu" element={<Storefront />} />
+            </Route>
+
+            <Route
+              path="*"
+              element={
+                <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 px-6 text-center">
+                  <div className="text-5xl">📱</div>
+                  <h2 className="text-xl font-black text-gray-800">Scan a QR code to order</h2>
+                  <p className="text-sm text-gray-400">Ask your server for the table QR code.</p>
+                </div>
+              }
+            />
+          </Routes>
         </main>
       </NotificationsProvider>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

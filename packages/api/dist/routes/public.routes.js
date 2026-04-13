@@ -48,6 +48,7 @@ router.get('/:tenantSlug/sessions/:sessionToken/orders', PublicController.getSes
 router.get('/:tenantSlug/orders/:id', PublicController.getOrderInfo);
 router.post('/orders/:id/feedback', PublicController.submitFeedback);
 router.post('/:tenantSlug/waiter-call', PublicController.waiterCall);
+router.post('/:tenantSlug/waiter-call/acknowledge', PublicController.acknowledgeWaiterCall);
 router.post('/tables/:id/session', TableController.createSession);
 router.post('/customer/login', async (req, res, next) => {
     try {

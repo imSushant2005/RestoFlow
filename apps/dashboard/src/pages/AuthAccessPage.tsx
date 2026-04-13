@@ -80,7 +80,7 @@ function setSession(data: any, onLogin: (state: { mustChangePassword: boolean })
   localStorage.setItem('accessToken', data.accessToken);
   localStorage.setItem('userRole', role);
 
-  const mustChangePassword = Boolean(data?.user?.mustChangePassword);
+  const mustChangePassword = role === 'OWNER' && Boolean(data?.user?.mustChangePassword);
   if (mustChangePassword) localStorage.setItem('mustChangePassword', '1');
   else localStorage.removeItem('mustChangePassword');
 

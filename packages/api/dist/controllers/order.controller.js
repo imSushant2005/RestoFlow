@@ -16,10 +16,120 @@ const VALID_ORDER_STATUSES = new Set([
 const ROLE_ALLOWED_STATUS_UPDATES = {
     OWNER: new Set(VALID_ORDER_STATUSES),
     MANAGER: new Set(VALID_ORDER_STATUSES),
-    KITCHEN: new Set(['ACCEPTED', 'PREPARING', 'READY', 'SERVED']),
+    KITCHEN: new Set(['ACCEPTED', 'PREPARING', 'READY']),
     CASHIER: new Set(['SERVED', 'RECEIVED', 'CANCELLED']),
     WAITER: new Set(['SERVED']),
 };
+const orderItemSelect = {
+    id: true,
+    name: true,
+    quantity: true,
+    unitPrice: true,
+    totalPrice: true,
+    specialNote: true,
+    selectedModifiers: true,
+    menuItem: {
+        select: {
+            id: true,
+            name: true,
+            price: true,
+        },
+    },
+};
+const orderSelect = {
+    id: true,
+    tenantId: true,
+    tableId: true,
+    diningSessionId: true,
+    orderNumber: true,
+    orderType: true,
+    status: true,
+    placedBy: true,
+    subtotal: true,
+    taxAmount: true,
+    discountAmount: true,
+    totalAmount: true,
+    customerName: true,
+    customerPhone: true,
+    specialInstructions: true,
+    estimatedPrepMins: true,
+    acceptedAt: true,
+    preparingAt: true,
+    readyAt: true,
+    servedAt: true,
+    completedAt: true,
+    cancelledAt: true,
+    cancellationReason: true,
+    hasReview: true,
+    createdAt: true,
+    updatedAt: true,
+    table: {
+        select: {
+            id: true,
+            name: true,
+            zone: {
+                select: {
+                    id: true,
+                    name: true,
+                },
+            },
+        },
+    },
+    diningSession: {
+        select: {
+            id: true,
+            openedAt: true,
+            sessionStatus: true,
+            partySize: true,
+            attendedByUserId: true,
+            attendedByName: true,
+            bill: {
+                select: {
+                    invoiceNumber: true,
+                    paymentStatus: true,
+                    paymentMethod: true,
+                    paidAt: true,
+                    totalAmount: true,
+                },
+            },
+            customer: {
+                select: {
+                    id: true,
+                    name: true,
+                    phone: true,
+                },
+            },
+        },
+    },
+    items: {
+        select: orderItemSelect,
+    },
+};
+function getTodayStart() {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    return start;
+}
+function buildWaiterPickupPayload(order) {
+    const tableName = order.table?.name || null;
+    const zoneName = order.table?.zone?.name || null;
+    const orderType = String(order.orderType || '').toUpperCase();
+    const destinationLabel = orderType === 'TAKEAWAY'
+        ? 'Takeaway Pack'
+        : [tableName ? `Table ${tableName}` : null, zoneName ? `Zone ${zoneName}` : null]
+            .filter(Boolean)
+            .join(' • ') || 'Dining Service';
+    return {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        tableName,
+        zoneName,
+        destinationLabel,
+        orderType,
+        itemCount: (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+        readyAt: order.readyAt || order.createdAt,
+    };
+}
 const getOrders = async (req, res) => {
     try {
         const orders = await prisma_1.prisma.order.findMany({
@@ -27,20 +137,13 @@ const getOrders = async (req, res) => {
                 tenantId: req.tenantId,
                 status: { notIn: ['RECEIVED', 'CANCELLED'] },
             },
-            include: {
-                table: true,
-                diningSession: { include: { customer: true } },
-                items: {
-                    include: {
-                        menuItem: true,
-                    },
-                },
-            },
+            select: orderSelect,
             orderBy: { createdAt: 'asc' },
         });
         res.json(orders);
     }
     catch (error) {
+        console.error('getOrders error:', error);
         res.status(500).json({ error: 'Failed to fetch orders' });
     }
 };
@@ -57,14 +160,14 @@ const getOrderHistory = async (req, res) => {
         const whereClause = {
             tenantId: req.tenantId,
             status: statusFilter,
+            createdAt: {
+                gte: getTodayStart(),
+            },
         };
         const [orders, total] = await Promise.all([
             prisma_1.prisma.order.findMany({
                 where: whereClause,
-                include: {
-                    table: true,
-                    items: { include: { menuItem: true } },
-                },
+                select: orderSelect,
                 orderBy: { createdAt: 'desc' },
                 skip,
                 take: limit,
@@ -84,6 +187,7 @@ const getOrderHistory = async (req, res) => {
         });
     }
     catch (error) {
+        console.error('getOrderHistory error:', error);
         res.status(500).json({ error: 'Failed to fetch order history' });
     }
 };
@@ -118,6 +222,11 @@ const updateOrderStatus = async (req, res) => {
         if (!existingOrder) {
             return res.status(404).json({ error: 'Order not found' });
         }
+        if (existingOrder.diningSessionId && normalizedStatus === 'RECEIVED') {
+            return res.status(409).json({
+                error: 'Session orders are settled when the final bill is paid.',
+            });
+        }
         const dataToUpdate = { status: normalizedStatus };
         if (cancelReason !== undefined)
             dataToUpdate.cancellationReason = cancelReason;
@@ -131,22 +240,30 @@ const updateOrderStatus = async (req, res) => {
             dataToUpdate.preparingAt = new Date();
         if (normalizedStatus === 'READY')
             dataToUpdate.readyAt = new Date();
-        const order = await prisma_1.prisma.order.update({
-            where: { id: existingOrder.id },
-            data: dataToUpdate,
-            include: {
-                table: true,
-                diningSession: {
-                    include: {
-                        customer: true,
+        if (normalizedStatus === 'SERVED')
+            dataToUpdate.servedAt = new Date();
+        const attendingStaffName = normalizedStatus === 'SERVED' && existingOrder.diningSessionId && req.user?.id
+            ? (await prisma_1.prisma.user.findUnique({
+                where: { id: req.user.id },
+                select: { name: true },
+            }))?.name?.trim() || 'Service Staff'
+            : null;
+        const order = await prisma_1.prisma.$transaction(async (tx) => {
+            const updatedOrder = await tx.order.update({
+                where: { id: existingOrder.id },
+                data: dataToUpdate,
+                select: orderSelect,
+            });
+            if (normalizedStatus === 'SERVED' && existingOrder.diningSessionId && req.user?.id) {
+                await tx.diningSession.update({
+                    where: { id: existingOrder.diningSessionId },
+                    data: {
+                        attendedByUserId: req.user.id,
+                        attendedByName: attendingStaffName,
                     },
-                },
-                items: {
-                    include: {
-                        menuItem: true,
-                    },
-                },
-            },
+                });
+            }
+            return updatedOrder;
         });
         const tenantRoom = (0, socket_1.getTenantRoom)(req.tenantId);
         (0, socket_1.getIO)().to(tenantRoom).emit('order:update', order);
@@ -158,8 +275,9 @@ const updateOrderStatus = async (req, res) => {
                 updatedAt: new Date().toISOString(),
             });
         }
-        // Table status is now managed exclusively by DiningSession creation and closure to support multi-order sessions.
-        // Individual order completion should NOT trigger a table reset to CLEANING.
+        if (normalizedStatus === 'READY') {
+            (0, socket_1.getIO)().to(tenantRoom).emit('waiter:pickup_ready', buildWaiterPickupPayload(order));
+        }
         if (order.customerPhone) {
             try {
                 if (normalizedStatus === 'ACCEPTED') {
@@ -171,12 +289,12 @@ const updateOrderStatus = async (req, res) => {
             }
             catch (notifError) {
                 console.error('[NOTIF_ERROR] WhatsApp delivery failed:', notifError);
-                // We continue as the order update itself was successful in the DB.
             }
         }
         res.json(order);
     }
     catch (error) {
+        console.error('updateOrderStatus error:', error);
         res.status(500).json({ error: 'Failed to update order status' });
     }
 };

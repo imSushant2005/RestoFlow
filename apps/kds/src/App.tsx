@@ -73,8 +73,8 @@ function KitchenLogin({
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-slate-950 px-4">
+      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
             <UtensilsCrossed size={20} className="text-white" />
@@ -192,7 +192,7 @@ function App() {
 
   if (authState === 'checking') {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-slate-950 text-slate-100 font-sans flex items-center justify-center">
         <div className="flex items-center gap-3 text-sm font-semibold text-slate-400">
           <Loader2 size={18} className="animate-spin text-blue-400" />
           <span>Checking session...</span>
@@ -203,7 +203,7 @@ function App() {
 
   if (authState === 'unauthenticated') {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
+      <div className="min-h-[100dvh] bg-slate-950 text-slate-100 font-sans">
         <KitchenLogin
           initialError={authError}
           onLogin={() => {
@@ -216,7 +216,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 font-sans">
+    <div className="min-h-[100dvh] bg-gray-900 text-gray-100 font-sans">
       <Routes>
         <Route
           path="/"

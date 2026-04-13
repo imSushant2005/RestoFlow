@@ -13,10 +13,17 @@ export const prisma =
     ],
   });
 
-// Performance monitoring: Log queries taking longer than 200ms
+const PERF_ALERT_THRESHOLD_MS = 500;
+
+// Performance monitoring: Log only meaningfully slow queries in development.
 if (process.env.NODE_ENV !== 'production') {
   (prisma as any).$on('query', (e: any) => {
-    if (e.duration > 200) {
+    const normalizedQuery = String(e.query || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    if (normalizedQuery === 'SELECT 1') {
+      return;
+    }
+
+    if (e.duration >= PERF_ALERT_THRESHOLD_MS) {
       console.warn(`[PRISMA_PERF_ALERT]: Slow query detected (${e.duration}ms):`, e.query);
     }
   });

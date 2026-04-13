@@ -21,6 +21,9 @@ export const login = async (req: Request, res: Response) => {
       (async () => {
         let c = await prisma.customer.findUnique({ where: { phone } });
         if (c) {
+          if (!c.isActive) {
+            throw new Error('CUSTOMER_DEACTIVATED');
+          }
           return prisma.customer.update({
             where: { id: c.id },
             data: { lastSeenAt: new Date(), ...(name && { name }) },
@@ -55,10 +58,14 @@ export const login = async (req: Request, res: Response) => {
         id: customer.id,
         phone: customer.phone,
         name: customer.name,
+        isActive: customer.isActive,
         createdAt: customer.createdAt,
       },
     });
   } catch (error) {
+    if (error instanceof Error && error.message === 'CUSTOMER_DEACTIVATED') {
+      return res.status(403).json({ error: 'This customer account has been deactivated.' });
+    }
     console.error('Customer login error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
@@ -80,6 +87,9 @@ export const getProfile = async (req: Request, res: Response) => {
         phone: true,
         name: true,
         email: true,
+        isActive: true,
+        deactivatedAt: true,
+        anonymizedAt: true,
         createdAt: true,
         lastSeenAt: true,
       },
@@ -91,6 +101,48 @@ export const getProfile = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('getProfile error:', error);
     res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+};
+
+export const deactivateAccount = async (req: Request, res: Response) => {
+  try {
+    const customerId = (req as any).customerId;
+    if (!customerId) return res.status(401).json({ error: 'Not authenticated' });
+
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+      select: {
+        id: true,
+        isActive: true,
+      },
+    });
+
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+    if (!customer.isActive) {
+      return res.json({ success: true, message: 'Account already deactivated.' });
+    }
+
+    const anonymizedPhone = `deactivated_${customer.id}`;
+
+    await prisma.customer.update({
+      where: { id: customer.id },
+      data: {
+        isActive: false,
+        deactivatedAt: new Date(),
+        anonymizedAt: new Date(),
+        phone: anonymizedPhone,
+        name: 'Deleted customer',
+        email: null,
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: 'Customer account deactivated and personal data anonymized.',
+    });
+  } catch (error) {
+    console.error('deactivateAccount error:', error);
+    return res.status(500).json({ error: 'Failed to deactivate account' });
   }
 };
 
@@ -140,7 +192,16 @@ export const getHistory = async (req: Request, res: Response) => {
           },
           orderBy: { createdAt: 'asc' },
         },
-        review: { select: { overallRating: true, comment: true } },
+        review: {
+          select: {
+            overallRating: true,
+            foodRating: true,
+            serviceRating: true,
+            comment: true,
+            tipAmount: true,
+            serviceStaffName: true,
+          },
+        },
       },
       orderBy: { openedAt: 'desc' },
       take: 50,

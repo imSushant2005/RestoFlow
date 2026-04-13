@@ -10,6 +10,7 @@ const socket_io_1 = require("socket.io");
 const redis_adapter_1 = require("@socket.io/redis-adapter");
 const ioredis_1 = __importDefault(require("ioredis"));
 const prisma_1 = require("./db/prisma");
+const env_1 = require("./config/env");
 const jwt_1 = require("./utils/jwt");
 const WS_PING_INTERVAL_MS = 25_000;
 const WS_PING_TIMEOUT_MS = 20_000;
@@ -145,7 +146,7 @@ let redisPubClient = null;
 let redisSubClient = null;
 let shutdownHooksRegistered = false;
 async function setupRedisAdapter() {
-    if (!process.env.REDIS_URL) {
+    if (!env_1.env.REDIS_URL) {
         logger.warn('REDIS_URL not configured; using in-memory Socket.IO adapter');
         return;
     }
@@ -153,10 +154,10 @@ async function setupRedisAdapter() {
         lazyConnect: true,
         maxRetriesPerRequest: null,
         enableOfflineQueue: false,
-        connectTimeout: 5000,
+        connectTimeout: 3000,
         retryStrategy: (attempt) => Math.min(500 * 2 ** Math.min(attempt, 4), 10_000),
     };
-    const pub = new ioredis_1.default(process.env.REDIS_URL, redisOptions);
+    const pub = new ioredis_1.default(env_1.env.REDIS_URL, redisOptions);
     const sub = pub.duplicate(redisOptions);
     const noop = () => { };
     pub.on('error', noop);
@@ -237,7 +238,9 @@ async function authMiddleware(socket, next) {
             }
             socket.data.user = verifiedToken;
             socket.data.connectedAt = Date.now();
-            socket.join((0, exports.getTenantRoom)(verifiedToken.tenantId));
+            const staffRoom = (0, exports.getTenantRoom)(verifiedToken.tenantId);
+            socket.join(staffRoom);
+            console.log(`[DEBUG_SOCKET] Staff authenticated & joined room: ${staffRoom} (Socket: ${socket.id}, User: ${verifiedToken.userId})`);
             return next();
         }
         const tenantSlug = auth.tenantSlug;
@@ -363,10 +366,24 @@ function onConnection(socket) {
     });
 }
 function buildAllowedOrigins() {
-    return [...new Set((process.env.WS_ORIGINS ?? process.env.CORS_ORIGIN ?? '')
-            .split(',')
-            .map((v) => v.trim())
-            .filter(Boolean))];
+    const envOrigins = (process.env.WS_ORIGINS ?? process.env.CORS_ORIGIN ?? '')
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean);
+    const clientUrl = process.env.CLIENT_URL || '';
+    const origins = [...new Set([...envOrigins, clientUrl])].filter(Boolean);
+    // In development, if no origins are set, allow common local dev ports
+    if (origins.length === 0 && process.env.NODE_ENV !== 'production') {
+        return [
+            'http://localhost:3000',
+            'http://localhost:3001',
+            'http://localhost:3002',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:3001',
+            'http://127.0.0.1:3002',
+        ];
+    }
+    return origins;
 }
 function registerShutdownHooks() {
     if (shutdownHooksRegistered)

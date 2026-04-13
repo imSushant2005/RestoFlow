@@ -17,7 +17,7 @@ import {
 import { publicApi } from '../lib/api';
 import { formatINR } from '../lib/currency';
 import { getSocketUrl } from '../lib/network';
-import { getActiveSessionForTenant } from '../lib/tenantStorage';
+import { getActiveSessionForTenant, setLastTableIdForTenant } from '../lib/tenantStorage';
 import { useNotifications } from '../components/Notifications';
 
 interface StepConfig {
@@ -79,6 +79,7 @@ export function OrderStatus() {
   const { tenantSlug } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { notify } = useNotifications();
   const [rating, setRating] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [tab, setTab] = useState<'TRACKING' | 'HISTORY'>('TRACKING');
@@ -136,8 +137,6 @@ export function OrderStatus() {
       reconnectionDelayMax: 3000,
       timeout: 10000,
     });
-
-    const { notify } = useNotifications();
 
     const upsertOrderInCache = (incomingOrder: any) => {
       if (!incomingOrder) return;
@@ -253,6 +252,12 @@ export function OrderStatus() {
   const addMoreUrl = firstTableId ? `/order/${tenantSlug}/${firstTableId}/menu` : `/order/${tenantSlug}`;
   const brandColor = orders[0]?.tenant?.primaryColor || '#f97316';
 
+  useEffect(() => {
+    if (tenantSlug && firstTableId) {
+      setLastTableIdForTenant(tenantSlug, firstTableId);
+    }
+  }, [firstTableId, tenantSlug]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
@@ -265,7 +270,14 @@ export function OrderStatus() {
   }
 
   return (
-    <div className="min-h-screen pb-32 transition-colors duration-400" style={{ background: 'var(--bg)', '--brand': brandColor } as any}>
+    <div
+      className="min-h-screen transition-colors duration-400"
+      style={{
+        background: 'var(--bg)',
+        '--brand': brandColor,
+        paddingBottom: 'calc(var(--customer-nav-space) + var(--customer-page-action-height) + 2rem)',
+      } as any}
+    >
       <div className="sticky top-0 z-40 border-b px-4 py-3" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'transparent', color: 'var(--text-1)' }}>
@@ -518,11 +530,11 @@ export function OrderStatus() {
         )}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-6 pointer-events-none">
+      <div className="fixed left-0 right-0 z-[60] p-6 pointer-events-none" style={{ bottom: 'var(--customer-action-bottom)' }}>
         <div className="mx-auto max-w-screen-sm pointer-events-auto">
           <button
             onClick={() => navigate(addMoreUrl)}
-            className="w-full rounded-3xl py-4.5 font-black text-white shadow-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-3"
+            className="flex w-full items-center justify-center gap-3 rounded-3xl py-[1.125rem] font-black text-white shadow-2xl transition-all active:scale-[0.98]"
             style={{ background: 'var(--brand)' }}
           >
             <UtensilsCrossed size={18} strokeWidth={3} />
