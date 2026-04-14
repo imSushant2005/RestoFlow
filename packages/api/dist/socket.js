@@ -3,7 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSessionRoom = exports.getTenantRoom = exports.io = void 0;
+exports.getSessionRoom = exports.getRoleRoom = exports.getTenantRoom = exports.io = void 0;
+exports.getSocketMetrics = getSocketMetrics;
 exports.initSocket = initSocket;
 exports.getIO = getIO;
 const socket_io_1 = require("socket.io");
@@ -28,12 +29,28 @@ function isVerifiedAccessToken(value) {
     if (!value || typeof value !== 'object')
         return false;
     const v = value;
-    return typeof v.id === 'string' && v.id.length > 0 && typeof v.tenantId === 'string' && v.tenantId.length > 0;
+    const userId = typeof v.userId === 'string' ? v.userId : typeof v.id === 'string' ? v.id : '';
+    return userId.length > 0 && typeof v.tenantId === 'string' && v.tenantId.length > 0;
 }
 const getTenantRoom = (tenantId) => `tenant_${tenantId}`;
 exports.getTenantRoom = getTenantRoom;
+const getRoleRoom = (tenantId, role) => `tenant_${tenantId}_role_${String(role || 'unknown').toUpperCase()}`;
+exports.getRoleRoom = getRoleRoom;
 const getSessionRoom = (tenantId, sessionToken) => `session_${tenantId}_${sessionToken}`;
 exports.getSessionRoom = getSessionRoom;
+const socketMetrics = {
+    activeConnections: 0,
+    totalConnections: 0,
+    rejectedAuthCount: 0,
+    handledEventCount: 0,
+    rateLimitedEventCount: 0,
+    redisAdapterEnabled: false,
+    lastConnectionAt: null,
+    lastDisconnectAt: null,
+};
+function getSocketMetrics() {
+    return { ...socketMetrics };
+}
 const logger = {
     info(message, meta) {
         console.log(JSON.stringify({ level: 'info', message, ...meta, ts: new Date().toISOString() }));
@@ -209,6 +226,7 @@ async function resolveTenantIdFromSlug(slug) {
     return tenant.id;
 }
 function rejectAuth(socket, next, reason) {
+    socketMetrics.rejectedAuthCount += 1;
     logger.warn('Socket auth rejected', {
         socketId: socket.id,
         reason,
@@ -221,13 +239,25 @@ async function authMiddleware(socket, next) {
         const auth = socket.handshake.auth ?? {};
         const rawToken = auth.token;
         if (typeof rawToken === 'string' && rawToken.length > 0 && rawToken.length <= MAX_TOKEN_LENGTH) {
-            const decoded = (0, jwt_1.verifyAccessToken)(rawToken);
+            let decoded;
+            try {
+                decoded = (0, jwt_1.verifyAccessToken)(rawToken);
+            }
+            catch (err) {
+                const name = err && err.name ? String(err.name) : 'UnknownError';
+                // Distinguish expired tokens from other JWT errors so clients can refresh tokens.
+                if (name === 'TokenExpiredError') {
+                    return rejectAuth(socket, next, 'jwt_expired');
+                }
+                return rejectAuth(socket, next, 'invalid_jwt');
+            }
             if (!isVerifiedAccessToken(decoded)) {
                 return rejectAuth(socket, next, 'invalid_jwt_claims');
             }
             const verifiedToken = {
                 userId: decoded.id,
                 tenantId: decoded.tenantId,
+                role: decoded.role,
             };
             const user = await prisma_1.prisma.user.findUnique({
                 where: { id: verifiedToken.userId },
@@ -238,9 +268,10 @@ async function authMiddleware(socket, next) {
             }
             socket.data.user = verifiedToken;
             socket.data.connectedAt = Date.now();
-            const staffRoom = (0, exports.getTenantRoom)(verifiedToken.tenantId);
-            socket.join(staffRoom);
-            console.log(`[DEBUG_SOCKET] Staff authenticated & joined room: ${staffRoom} (Socket: ${socket.id}, User: ${verifiedToken.userId})`);
+            socket.join((0, exports.getTenantRoom)(verifiedToken.tenantId));
+            if (verifiedToken.role) {
+                socket.join((0, exports.getRoleRoom)(verifiedToken.tenantId, verifiedToken.role));
+            }
             return next();
         }
         const tenantSlug = auth.tenantSlug;
@@ -279,6 +310,7 @@ async function authMiddleware(socket, next) {
 function registerHandler(socket, event, handler) {
     socket.on(event, (payload, ack) => {
         if (!rateLimiter.consume(socket.id)) {
+            socketMetrics.rateLimitedEventCount += 1;
             socket.emit('error', {
                 code: 'RATE_LIMITED',
                 event: String(event),
@@ -287,6 +319,7 @@ function registerHandler(socket, event, handler) {
             return;
         }
         try {
+            socketMetrics.handledEventCount += 1;
             handler(payload, ack);
         }
         catch (error) {
@@ -315,6 +348,9 @@ function onConnection(socket) {
         presenceTracker.add(tenantId, socket.id);
         emitTenantPresence(tenantId);
     }
+    socketMetrics.activeConnections += 1;
+    socketMetrics.totalConnections += 1;
+    socketMetrics.lastConnectionAt = nowIso();
     socket.use(([event], next) => {
         if (!['client:ping', 'sync:request'].includes(String(event))) {
             logger.warn('Blocked disallowed socket event', {
@@ -358,6 +394,8 @@ function onConnection(socket) {
             emitTenantPresence(tenantId);
         }
         rateLimiter.remove(socket.id);
+        socketMetrics.activeConnections = Math.max(0, socketMetrics.activeConnections - 1);
+        socketMetrics.lastDisconnectAt = nowIso();
         logger.info('Socket disconnected', {
             socketId: socket.id,
             tenantId,
@@ -366,14 +404,9 @@ function onConnection(socket) {
     });
 }
 function buildAllowedOrigins() {
-    const envOrigins = (process.env.WS_ORIGINS ?? process.env.CORS_ORIGIN ?? '')
-        .split(',')
-        .map((v) => v.trim())
-        .filter(Boolean);
-    const clientUrl = process.env.CLIENT_URL || '';
-    const origins = [...new Set([...envOrigins, clientUrl])].filter(Boolean);
+    const origins = [...env_1.env.ALLOWED_ORIGINS];
     // In development, if no origins are set, allow common local dev ports
-    if (origins.length === 0 && process.env.NODE_ENV !== 'production') {
+    if (origins.length === 0 && env_1.env.NODE_ENV !== 'production') {
         return [
             'http://localhost:3000',
             'http://localhost:3001',
@@ -416,7 +449,7 @@ function registerShutdownHooks() {
 }
 async function initSocket(server) {
     const allowedOrigins = buildAllowedOrigins();
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isProduction = env_1.env.NODE_ENV === 'production';
     exports.io = new socket_io_1.Server(server, {
         cors: {
             origin(origin, callback) {
@@ -445,13 +478,28 @@ async function initSocket(server) {
         transports: ['websocket', 'polling'],
         allowEIO3: false,
         serveClient: false,
+        connectionStateRecovery: {
+            maxDisconnectionDuration: 2 * 60 * 1000,
+            skipMiddlewares: true,
+        },
     });
     await setupRedisAdapter();
+    socketMetrics.redisAdapterEnabled = Boolean(redisPubClient && redisSubClient);
+    if (isProduction && env_1.env.REQUIRE_REDIS_FOR_PROD && !socketMetrics.redisAdapterEnabled) {
+        logger.error('Redis adapter required for production but not available');
+        throw new Error('Redis adapter required for production');
+    }
     exports.io.use(authMiddleware);
     exports.io.on('connection', onConnection);
+    exports.io.engine.on('connection_error', (err) => {
+        logger.warn('Socket engine connection error', {
+            code: err.code,
+            message: err.message,
+        });
+    });
     registerShutdownHooks();
     logger.info('Socket.IO initialized', {
-        redisEnabled: Boolean(process.env.REDIS_URL),
+        redisEnabled: Boolean(env_1.env.REDIS_URL),
         origins: allowedOrigins,
         maxHttpBufferSize: WS_MAX_HTTP_BUFFER_SIZE,
     });

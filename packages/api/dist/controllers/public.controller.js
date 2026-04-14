@@ -86,7 +86,7 @@ function normalizeStarRating(value) {
     return Math.round(parsed);
 }
 async function resolveTenantIdBySlug(tenantSlug) {
-    return (0, cache_service_1.withCache)(`tenant_id_by_slug_${tenantSlug}`, async () => {
+    return (0, cache_service_1.withCache)(`tenant_id_by_slug_${tenantSlug}`, async () => (0, prisma_1.withPrismaRetry)(async () => {
         const tenant = await prisma_1.prisma.tenant.findUnique({
             where: { slug: tenantSlug },
             select: { id: true },
@@ -95,7 +95,27 @@ async function resolveTenantIdBySlug(tenantSlug) {
             throw new Error('Restaurant not found');
         }
         return tenant.id;
-    }, 86400);
+    }, `resolve-tenant-id:${tenantSlug}`), 86400);
+}
+async function resolveTenantBySlug(tenantSlug) {
+    return (0, cache_service_1.withCache)(`tenant_by_slug_${tenantSlug}`, async () => (0, prisma_1.withPrismaRetry)(async () => {
+        const tenant = await prisma_1.prisma.tenant.findUnique({
+            where: { slug: tenantSlug },
+            select: { id: true, taxRate: true },
+        });
+        if (!tenant) {
+            throw new Error('Vendor not found');
+        }
+        return tenant;
+    }, `resolve-tenant:${tenantSlug}`), 300);
+}
+async function invalidateOperationalCaches(tenantId, sessionId) {
+    await Promise.all([
+        (0, cache_service_1.deleteCache)(`dashboard_live_orders_${tenantId}`),
+        (0, cache_service_1.deleteCache)(`dashboard_order_history_${tenantId}_*`),
+        sessionId ? (0, cache_service_1.deleteCache)(`public_session_${tenantId}_${sessionId}`) : Promise.resolve(),
+        sessionId ? (0, cache_service_1.deleteCache)(`session_orders_${tenantId}_${sessionId}`) : Promise.resolve(),
+    ]);
 }
 async function resolveWaiterTableName(tenantId, tableId) {
     if (!tableId)
@@ -136,7 +156,7 @@ const getPublicMenu = async (req, res) => {
     try {
         const { tenantSlug } = req.params;
         const cacheKey = `public_menu_${tenantSlug}`;
-        const publicData = await (0, cache_service_1.withCache)(cacheKey, async () => {
+        const publicData = await (0, cache_service_1.withCache)(cacheKey, async () => (0, prisma_1.withPrismaRetry)(async () => {
             const tenant = await prisma_1.prisma.tenant.findUnique({
                 where: { slug: tenantSlug },
                 include: {
@@ -175,8 +195,9 @@ const getPublicMenu = async (req, res) => {
                 primaryColor: tenant.primaryColor,
                 accentColor: tenant.accentColor,
                 taxRate: tenant.taxRate,
+                businessHours: tenant.businessHours,
             };
-        }, 1800); // 30-minute cache
+        }, `public-menu:${tenantSlug}`), 1800); // 30-minute cache
         res.json(publicData);
     }
     catch (error) {
@@ -215,13 +236,7 @@ const createOrder = async (req, res) => {
         const requestedTableInput = readOptionalString(tableId);
         const requestIdempotencyKey = readOptionalString(req.header('x-idempotency-key')) ||
             readOptionalString(req.body?.idempotencyKey);
-        const tenant = await prisma_1.prisma.tenant.findUnique({
-            where: { slug: tenantSlug },
-            select: { id: true, taxRate: true },
-        });
-        if (!tenant) {
-            return res.status(404).json({ error: 'Vendor not found' });
-        }
+        const tenant = await resolveTenantBySlug(tenantSlug);
         if (!Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ error: 'Order must include at least one item' });
         }
@@ -429,43 +444,57 @@ const createOrder = async (req, res) => {
             const check = await prisma_1.prisma.order.findFirst({ where: { tenantId: tenant.id, orderNumber } });
             exists = !!check;
         }
-        const order = await prisma_1.prisma.$transaction(async (tx) => {
-            const createdOrder = await tx.order.create({
-                data: {
-                    diningSessionId: resolvedSession.id,
-                    tenantId: tenant.id,
-                    tableId: safeTableId || resolvedSession.tableId,
-                    customerName,
-                    customerPhone,
-                    orderNumber,
-                    orderType: orderType,
-                    subtotal,
-                    taxAmount,
-                    discountAmount: 0,
-                    totalAmount,
-                    items: {
-                        create: orderItemsCreate,
-                    },
-                },
-                select: publicOrderSelect,
-            });
-            await tx.diningSession.update({
-                where: { id: resolvedSession.id },
-                data: { sessionStatus: 'ACTIVE' },
-            });
-            const tableIdToUpdate = safeTableId || resolvedSession.tableId || null;
-            if (tableIdToUpdate) {
-                await tx.table.update({
-                    where: { id: tableIdToUpdate },
+        let order;
+        try {
+            order = await prisma_1.prisma.$transaction(async (tx) => {
+                const createdOrder = await tx.order.create({
                     data: {
-                        status: 'ORDERING_OPEN',
-                        currentOrderId: createdOrder.id,
-                        currentSessionId: resolvedSession.id,
+                        diningSessionId: resolvedSession.id,
+                        tenantId: tenant.id,
+                        tableId: safeTableId || resolvedSession.tableId,
+                        customerName,
+                        customerPhone,
+                        orderNumber,
+                        orderType: orderType,
+                        subtotal,
+                        taxAmount,
+                        discountAmount: 0,
+                        totalAmount,
+                        items: {
+                            create: orderItemsCreate,
+                        },
                     },
+                    select: publicOrderSelect,
                 });
-            }
-            return createdOrder;
-        });
+                await tx.diningSession.update({
+                    where: { id: resolvedSession.id },
+                    data: { sessionStatus: 'ACTIVE' },
+                });
+                const tableIdToUpdate = safeTableId || resolvedSession.tableId || null;
+                if (tableIdToUpdate) {
+                    await tx.table.update({
+                        where: { id: tableIdToUpdate },
+                        data: {
+                            status: 'ORDERING_OPEN',
+                            currentOrderId: createdOrder.id,
+                            currentSessionId: resolvedSession.id,
+                        },
+                    });
+                }
+                return createdOrder;
+            });
+        }
+        catch (err) {
+            console.error('createOrder prisma.$transaction failed', {
+                tenantSlug,
+                resolvedSessionId: resolvedSession?.id,
+                safeTableId,
+                itemsSummary: Array.isArray(items) ? `${items.length} items` : typeof items,
+                idempotencyKey: requestIdempotencyKey || null,
+                error: err && (err instanceof Error ? err.stack || err.message : String(err)),
+            });
+            throw err;
+        }
         const tableIdToUpdate = safeTableId || resolvedSession.tableId || null;
         (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(tenant.id)).emit('order:new', order);
         (0, socket_1.getIO)().to((0, socket_1.getSessionRoom)(tenant.id, resolvedSession.id)).emit('order:new', order);
@@ -487,7 +516,7 @@ const createOrder = async (req, res) => {
             });
         }
         await Promise.all([
-            (0, cache_service_1.deleteCache)(`session_orders_${resolvedSession.id}`),
+            invalidateOperationalCaches(tenant.id, resolvedSession.id),
             requestIdempotencyKey
                 ? (0, cache_service_1.setCache)(`public_order_idempotency_${tenant.id}_${requestIdempotencyKey}`, {
                     ...order,
@@ -513,17 +542,18 @@ const createOrder = async (req, res) => {
 exports.createOrder = createOrder;
 const getOrderInfo = async (req, res) => {
     try {
-        const { id } = req.params;
+        const { tenantSlug, id } = req.params;
+        const tenant = await resolveTenantBySlug(tenantSlug);
         // Cache for 2 minutes since orders don't change status *that* frequently 
         // and live updates are handled by Socket.io anyway.
-        const cacheKey = `order_info_${id}`;
+        const cacheKey = `order_info_${tenant.id}_${id}`;
         const cachedOrder = await (0, cache_service_1.getCache)(cacheKey);
         if (cachedOrder)
             return res.json(cachedOrder);
-        const order = await prisma_1.prisma.order.findUnique({
-            where: { id },
+        const order = await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.order.findFirst({
+            where: { id, tenantId: tenant.id },
             include: { table: true, items: { include: { menuItem: true } } }
-        });
+        }), `public-order-info:${tenant.id}:${id}`);
         if (!order)
             return res.status(404).json({ error: 'Order not found' });
         await (0, cache_service_1.setCache)(cacheKey, order, 120);
@@ -537,24 +567,19 @@ exports.getOrderInfo = getOrderInfo;
 const getSessionOrders = async (req, res) => {
     try {
         const { tenantSlug, sessionToken } = req.params;
-        const tenant = await prisma_1.prisma.tenant.findUnique({
-            where: { slug: tenantSlug },
-            select: { id: true }
-        });
-        if (!tenant)
-            return res.status(404).json({ error: 'Vendor not found' });
-        const cacheKey = `session_orders_${sessionToken}`;
+        const tenant = await resolveTenantBySlug(tenantSlug);
+        const cacheKey = `session_orders_${tenant.id}_${sessionToken}`;
         const cachedOrders = await (0, cache_service_1.getCache)(cacheKey);
         if (cachedOrders)
             return res.json(cachedOrders);
-        const orders = await prisma_1.prisma.order.findMany({
+        const orders = await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.order.findMany({
             where: {
                 tenantId: tenant.id,
                 diningSessionId: sessionToken,
             },
             include: { table: true, items: { include: { menuItem: true } } },
             orderBy: { createdAt: 'desc' }
-        });
+        }), `session-orders:${tenant.id}:${sessionToken}`);
         // Parse JSON modifiers before sending
         const parsedOrders = orders.map(o => ({
             ...o,

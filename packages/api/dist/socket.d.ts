@@ -1,8 +1,10 @@
 import { Server } from 'socket.io';
 import { Server as HttpServer } from 'http';
+import { UserRole } from '@dineflow/prisma';
 type VerifiedAccessToken = {
     userId: string;
     tenantId: string;
+    role?: UserRole;
 };
 type SocketData = {
     user?: VerifiedAccessToken;
@@ -107,7 +109,18 @@ type InterServerEvents = Record<string, never>;
 type SocketServer = Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
 export declare let io: SocketServer;
 export declare const getTenantRoom: (tenantId: string) => string;
+export declare const getRoleRoom: (tenantId: string, role: string) => string;
 export declare const getSessionRoom: (tenantId: string, sessionToken: string) => string;
+export declare function getSocketMetrics(): {
+    activeConnections: number;
+    totalConnections: number;
+    rejectedAuthCount: number;
+    handledEventCount: number;
+    rateLimitedEventCount: number;
+    redisAdapterEnabled: boolean;
+    lastConnectionAt: string | null;
+    lastDisconnectAt: string | null;
+};
 export declare function initSocket(server: HttpServer): Promise<SocketServer>;
 export declare function getIO(): SocketServer;
 export {};

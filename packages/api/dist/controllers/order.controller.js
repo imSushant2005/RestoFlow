@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateOrderStatus = exports.getOrderHistory = exports.getOrders = void 0;
+exports.createAssistedOrder = exports.lookupAssistedCustomer = exports.updateOrderStatus = exports.getOrderHistory = exports.getOrders = void 0;
 const prisma_1 = require("../db/prisma");
 const socket_1 = require("../socket");
+const cache_service_1 = require("../services/cache.service");
 const notification_service_1 = require("../services/notification.service");
 const VALID_ORDER_STATUSES = new Set([
     'NEW',
@@ -13,6 +14,10 @@ const VALID_ORDER_STATUSES = new Set([
     'RECEIVED',
     'CANCELLED',
 ]);
+const ASSISTED_FULFILLMENT_MODES = new Set(['SEND_TO_KITCHEN', 'DIRECT_BILL']);
+const ASSISTED_PAYMENT_METHODS = new Set(['cash', 'upi', 'card', 'online']);
+const LIVE_ORDERS_CACHE_TTL_SECONDS = 3;
+const ORDER_HISTORY_CACHE_TTL_SECONDS = 15;
 const ROLE_ALLOWED_STATUS_UPDATES = {
     OWNER: new Set(VALID_ORDER_STATUSES),
     MANAGER: new Set(VALID_ORDER_STATUSES),
@@ -130,16 +135,162 @@ function buildWaiterPickupPayload(order) {
         readyAt: order.readyAt || order.createdAt,
     };
 }
+function normalizePhone(value) {
+    return String(value || '').replace(/\s+/g, '').trim();
+}
+async function resolveStaffName(userId) {
+    if (!userId)
+        return 'Staff';
+    const user = await prisma_1.prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true },
+    });
+    return user?.name?.trim() || 'Staff';
+}
+async function generateOrderNumberForTenant(tx, tenantId) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let orderNumber = '';
+    let exists = true;
+    while (exists) {
+        orderNumber = `#${Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')}`;
+        const existing = await tx.order.findFirst({
+            where: { tenantId, orderNumber },
+            select: { id: true },
+        });
+        exists = Boolean(existing);
+    }
+    return orderNumber;
+}
+async function buildServerPricedOrderPayload(tx, tenantId, items) {
+    if (!Array.isArray(items) || items.length === 0) {
+        throw new Error('ORDER_ITEMS_REQUIRED');
+    }
+    const normalizedItems = items.map((item) => ({
+        menuItemId: String(item?.menuItemId || item?.menuItem?.id || '').trim(),
+        quantity: Math.max(1, Number(item?.quantity) || 1),
+        notes: typeof item?.notes === 'string' ? item.notes.trim() : typeof item?.specialNote === 'string' ? item.specialNote.trim() : '',
+        selectedModifierIds: Array.from(new Set((Array.isArray(item?.selectedModifierIds)
+            ? item.selectedModifierIds
+            : Array.isArray(item?.selectedModifiers)
+                ? item.selectedModifiers.map((modifier) => modifier?.id)
+                : Array.isArray(item?.modifiers)
+                    ? item.modifiers.map((modifier) => modifier?.id)
+                    : [])
+            .map((value) => String(value || '').trim())
+            .filter(Boolean))),
+    }));
+    if (normalizedItems.some((item) => !item.menuItemId)) {
+        throw new Error('ORDER_ITEMS_INVALID');
+    }
+    const menuItems = await tx.menuItem.findMany({
+        where: {
+            tenantId,
+            isAvailable: true,
+            id: { in: normalizedItems.map((item) => item.menuItemId) },
+        },
+        select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            images: true,
+            isVeg: true,
+            modifierGroups: {
+                select: {
+                    id: true,
+                    name: true,
+                    isRequired: true,
+                    minSelections: true,
+                    maxSelections: true,
+                    modifiers: {
+                        where: { isAvailable: true },
+                        select: {
+                            id: true,
+                            name: true,
+                            priceAdjustment: true,
+                        },
+                    },
+                },
+            },
+        },
+    });
+    const menuMap = new Map(menuItems.map((menuItem) => [menuItem.id, menuItem]));
+    let subtotal = 0;
+    const orderItems = normalizedItems.map((item) => {
+        const menuItem = menuMap.get(item.menuItemId);
+        if (!menuItem) {
+            throw new Error(`MENU_ITEM_NOT_FOUND:${item.menuItemId}`);
+        }
+        const availableModifierIds = new Set((menuItem.modifierGroups || []).flatMap((group) => (group.modifiers || []).map((modifier) => modifier.id)));
+        if (item.selectedModifierIds.some((modifierId) => !availableModifierIds.has(modifierId))) {
+            throw new Error(`MODIFIER_NOT_FOUND:${menuItem.id}`);
+        }
+        let unitPrice = Number(menuItem.price || 0);
+        const selectedModifiers = [];
+        for (const group of menuItem.modifierGroups || []) {
+            const groupMinSelections = Math.max(0, Number(group.minSelections || 0));
+            const groupMaxSelections = Math.max(1, Number(group.maxSelections || 1));
+            const groupSelections = (group.modifiers || []).filter((modifier) => item.selectedModifierIds.includes(modifier.id));
+            if (groupSelections.length < groupMinSelections) {
+                throw new Error(`MODIFIER_REQUIRED:${group.name}`);
+            }
+            if (groupSelections.length > groupMaxSelections) {
+                throw new Error(`MODIFIER_LIMIT:${group.name}`);
+            }
+            groupSelections.forEach((modifier) => {
+                const priceAdjustment = Number(modifier.priceAdjustment || 0);
+                unitPrice += priceAdjustment;
+                selectedModifiers.push({
+                    id: modifier.id,
+                    name: modifier.name,
+                    groupName: group.name,
+                    priceAdjustment,
+                });
+            });
+        }
+        const totalPrice = unitPrice * item.quantity;
+        subtotal += totalPrice;
+        return {
+            menuItemId: menuItem.id,
+            name: menuItem.name,
+            description: menuItem.description || '',
+            imageUrl: menuItem.images?.[0] || null,
+            unitPrice,
+            quantity: item.quantity,
+            totalPrice,
+            selectedModifiers,
+            specialNote: item.notes || null,
+            isVeg: menuItem.isVeg,
+        };
+    });
+    return {
+        subtotal,
+        orderItems,
+    };
+}
+function getLiveOrdersCacheKey(tenantId) {
+    return `dashboard_live_orders_${tenantId}`;
+}
+function getOrderHistoryCacheKey(tenantId, page, limit, statusKey) {
+    return `dashboard_order_history_${tenantId}_${page}_${limit}_${statusKey}`;
+}
+async function invalidateDashboardOrderCaches(tenantId) {
+    await Promise.all([
+        (0, cache_service_1.deleteCache)(getLiveOrdersCacheKey(tenantId)),
+        (0, cache_service_1.deleteCache)(`dashboard_order_history_${tenantId}_*`),
+    ]);
+}
 const getOrders = async (req, res) => {
     try {
-        const orders = await prisma_1.prisma.order.findMany({
+        const tenantId = req.tenantId;
+        const orders = await (0, cache_service_1.withCache)(getLiveOrdersCacheKey(tenantId), () => (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.order.findMany({
             where: {
-                tenantId: req.tenantId,
+                tenantId,
                 status: { notIn: ['RECEIVED', 'CANCELLED'] },
             },
             select: orderSelect,
             orderBy: { createdAt: 'asc' },
-        });
+        }), `dashboard-live-orders:${tenantId}`), LIVE_ORDERS_CACHE_TTL_SECONDS);
         res.json(orders);
     }
     catch (error) {
@@ -157,6 +308,7 @@ const getOrderHistory = async (req, res) => {
         const statusFilter = statusQuery === 'RECEIVED' || statusQuery === 'CANCELLED'
             ? { in: [statusQuery] }
             : { in: ['RECEIVED', 'CANCELLED'] };
+        const historyCacheKey = getOrderHistoryCacheKey(req.tenantId, page, limit, statusQuery || 'terminal');
         const whereClause = {
             tenantId: req.tenantId,
             status: statusFilter,
@@ -164,18 +316,21 @@ const getOrderHistory = async (req, res) => {
                 gte: getTodayStart(),
             },
         };
-        const [orders, total] = await Promise.all([
-            prisma_1.prisma.order.findMany({
-                where: whereClause,
-                select: orderSelect,
-                orderBy: { createdAt: 'desc' },
-                skip,
-                take: limit,
-            }),
-            prisma_1.prisma.order.count({
-                where: whereClause,
-            }),
-        ]);
+        const { orders, total } = await (0, cache_service_1.withCache)(historyCacheKey, async () => {
+            const [orders, total] = await Promise.all([
+                (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.order.findMany({
+                    where: whereClause,
+                    select: orderSelect,
+                    orderBy: { createdAt: 'desc' },
+                    skip,
+                    take: limit,
+                }), `dashboard-order-history:${req.tenantId}:orders`),
+                (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.order.count({
+                    where: whereClause,
+                }), `dashboard-order-history:${req.tenantId}:count`),
+            ]);
+            return { orders, total };
+        }, ORDER_HISTORY_CACHE_TTL_SECONDS);
         res.json({
             data: orders,
             pagination: {
@@ -276,7 +431,7 @@ const updateOrderStatus = async (req, res) => {
             });
         }
         if (normalizedStatus === 'READY') {
-            (0, socket_1.getIO)().to(tenantRoom).emit('waiter:pickup_ready', buildWaiterPickupPayload(order));
+            (0, socket_1.getIO)().to((0, socket_1.getRoleRoom)(req.tenantId, 'WAITER')).emit('waiter:pickup_ready', buildWaiterPickupPayload(order));
         }
         if (order.customerPhone) {
             try {
@@ -291,6 +446,7 @@ const updateOrderStatus = async (req, res) => {
                 console.error('[NOTIF_ERROR] WhatsApp delivery failed:', notifError);
             }
         }
+        await invalidateDashboardOrderCaches(req.tenantId);
         res.json(order);
     }
     catch (error) {
@@ -299,4 +455,380 @@ const updateOrderStatus = async (req, res) => {
     }
 };
 exports.updateOrderStatus = updateOrderStatus;
+const lookupAssistedCustomer = async (req, res) => {
+    try {
+        const phone = normalizePhone(req.query.phone);
+        if (phone.length < 10) {
+            return res.status(400).json({ error: 'A valid mobile number is required for lookup.' });
+        }
+        const customer = await prisma_1.prisma.customer.findUnique({
+            where: { phone },
+            select: {
+                id: true,
+                name: true,
+                phone: true,
+                isActive: true,
+                lastSeenAt: true,
+            },
+        });
+        if (!customer) {
+            return res.json({ customer: null });
+        }
+        const [visitCount, lastSession] = await Promise.all([
+            prisma_1.prisma.diningSession.count({
+                where: {
+                    tenantId: req.tenantId,
+                    customerId: customer.id,
+                },
+            }),
+            prisma_1.prisma.diningSession.findFirst({
+                where: {
+                    tenantId: req.tenantId,
+                    customerId: customer.id,
+                },
+                orderBy: { openedAt: 'desc' },
+                select: {
+                    openedAt: true,
+                    source: true,
+                    table: {
+                        select: { name: true },
+                    },
+                },
+            }),
+        ]);
+        res.json({
+            customer: {
+                ...customer,
+                visitCount,
+                lastSessionAt: lastSession?.openedAt || null,
+                lastTableName: lastSession?.table?.name || null,
+                lastSource: lastSession?.source || null,
+            },
+        });
+    }
+    catch (error) {
+        console.error('lookupAssistedCustomer error:', error);
+        res.status(500).json({ error: 'Failed to lookup customer' });
+    }
+};
+exports.lookupAssistedCustomer = lookupAssistedCustomer;
+const createAssistedOrder = async (req, res) => {
+    try {
+        if (!req.user?.id || !req.tenantId) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        const customerName = String(req.body?.customerName || '').trim();
+        const customerPhone = normalizePhone(req.body?.customerPhone);
+        const orderType = String(req.body?.orderType || 'TAKEAWAY').toUpperCase();
+        const fulfillmentMode = String(req.body?.fulfillmentMode || 'SEND_TO_KITCHEN').toUpperCase();
+        const paymentMethod = String(req.body?.paymentMethod || '').trim().toLowerCase();
+        const note = String(req.body?.note || '').trim();
+        const seat = String(req.body?.seat || '').trim();
+        const guestCount = Math.max(1, Math.min(24, Number(req.body?.guestCount) || 1));
+        const requestedTableId = typeof req.body?.tableId === 'string' ? req.body.tableId.trim() : '';
+        const markPaid = Boolean(req.body?.markPaid);
+        if (!ASSISTED_FULFILLMENT_MODES.has(fulfillmentMode)) {
+            return res.status(400).json({ error: 'Unsupported assisted ordering mode.' });
+        }
+        if (!['DINE_IN', 'TAKEAWAY', 'ROAMING'].includes(orderType)) {
+            return res.status(400).json({ error: 'Unsupported order type.' });
+        }
+        if (paymentMethod && !ASSISTED_PAYMENT_METHODS.has(paymentMethod)) {
+            return res.status(400).json({ error: 'Unsupported payment method.' });
+        }
+        if (orderType === 'DINE_IN' && !requestedTableId) {
+            return res.status(400).json({ error: 'Select a table for dine-in assisted orders.' });
+        }
+        const tenant = await prisma_1.prisma.tenant.findUnique({
+            where: { id: req.tenantId },
+            select: {
+                id: true,
+                slug: true,
+                businessName: true,
+                taxRate: true,
+                address: true,
+                gstin: true,
+                fssai: true,
+            },
+        });
+        if (!tenant) {
+            return res.status(404).json({ error: 'Tenant not found' });
+        }
+        const table = requestedTableId
+            ? await prisma_1.prisma.table.findFirst({
+                where: { id: requestedTableId, tenantId: tenant.id },
+                select: { id: true, name: true, capacity: true },
+            })
+            : null;
+        if (requestedTableId && !table) {
+            return res.status(404).json({ error: 'Selected table was not found for this restaurant.' });
+        }
+        if (table && guestCount > Number(table.capacity || 0)) {
+            return res.status(400).json({ error: 'Guest count exceeds table capacity.' });
+        }
+        const activeTableSession = table
+            ? await prisma_1.prisma.diningSession.findFirst({
+                where: {
+                    tenantId: tenant.id,
+                    tableId: table.id,
+                    sessionStatus: { notIn: ['CLOSED', 'CANCELLED'] },
+                },
+                select: { id: true },
+            })
+            : null;
+        if (activeTableSession) {
+            return res.status(409).json({ error: 'This table already has an active session. Choose another table or finish the open session first.' });
+        }
+        const staffName = await resolveStaffName(req.user.id);
+        const result = await prisma_1.prisma.$transaction(async (tx) => {
+            const { subtotal, orderItems } = await buildServerPricedOrderPayload(tx, tenant.id, req.body?.items);
+            const taxAmount = subtotal * (Number(tenant.taxRate || 0) / 100);
+            const totalAmount = subtotal + taxAmount;
+            const normalizedPhone = customerPhone.length >= 10
+                ? customerPhone
+                : `guest_assisted_${tenant.id}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            let customer = await tx.customer.findUnique({
+                where: { phone: normalizedPhone },
+                select: { id: true, isActive: true, name: true, phone: true },
+            });
+            if (customer && !customer.isActive) {
+                throw new Error('CUSTOMER_DEACTIVATED');
+            }
+            if (!customer) {
+                customer = await tx.customer.create({
+                    data: {
+                        phone: normalizedPhone,
+                        name: customerName || null,
+                    },
+                    select: { id: true, isActive: true, name: true, phone: true },
+                });
+            }
+            else {
+                customer = await tx.customer.update({
+                    where: { id: customer.id },
+                    data: {
+                        lastSeenAt: new Date(),
+                        ...(customerName ? { name: customerName } : {}),
+                    },
+                    select: { id: true, isActive: true, name: true, phone: true },
+                });
+            }
+            const orderNumber = await generateOrderNumberForTenant(tx, tenant.id);
+            const isDirectBill = fulfillmentMode === 'DIRECT_BILL';
+            const shouldSettleImmediately = isDirectBill && (markPaid || Boolean(paymentMethod));
+            const sessionStatus = isDirectBill
+                ? shouldSettleImmediately
+                    ? 'CLOSED'
+                    : 'AWAITING_BILL'
+                : 'ACTIVE';
+            const session = await tx.diningSession.create({
+                data: {
+                    tenantId: tenant.id,
+                    tableId: table?.id || null,
+                    customerId: customer.id,
+                    partySize: guestCount,
+                    sessionStatus: sessionStatus,
+                    source: isDirectBill ? 'staff_assisted_direct_bill' : 'staff_assisted',
+                    isBillGenerated: isDirectBill,
+                    billGeneratedAt: isDirectBill ? new Date() : null,
+                    closedAt: shouldSettleImmediately ? new Date() : null,
+                    attendedByUserId: req.user.id,
+                    attendedByName: staffName,
+                },
+                select: {
+                    id: true,
+                    tenantId: true,
+                    tableId: true,
+                    sessionStatus: true,
+                    closedAt: true,
+                },
+            });
+            const order = await tx.order.create({
+                data: {
+                    tenantId: tenant.id,
+                    tableId: table?.id || null,
+                    diningSessionId: session.id,
+                    orderNumber,
+                    orderType: orderType,
+                    status: isDirectBill ? 'RECEIVED' : 'NEW',
+                    placedBy: 'vendor',
+                    subtotal,
+                    taxAmount,
+                    discountAmount: 0,
+                    totalAmount,
+                    customerName: customerName || customer.name || null,
+                    customerPhone: customer.phone,
+                    specialInstructions: [note, seat ? `Seat ${seat}` : null].filter(Boolean).join(' | ') || null,
+                    completedAt: isDirectBill ? new Date() : null,
+                    items: {
+                        create: orderItems,
+                    },
+                },
+                select: orderSelect,
+            });
+            const bill = isDirectBill
+                ? await tx.bill.create({
+                    data: {
+                        tenantId: tenant.id,
+                        sessionId: session.id,
+                        subtotal,
+                        taxAmount,
+                        discountAmount: 0,
+                        totalAmount,
+                        invoiceNumber: `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`,
+                        paymentStatus: shouldSettleImmediately ? 'PAID' : 'UNPAID',
+                        paymentMethod: shouldSettleImmediately ? paymentMethod || 'cash' : null,
+                        paidAt: shouldSettleImmediately ? new Date() : null,
+                        businessName: tenant.businessName,
+                        businessAddress: tenant.address,
+                        gstin: tenant.gstin,
+                        fssai: tenant.fssai,
+                    },
+                    select: {
+                        id: true,
+                        invoiceNumber: true,
+                        paymentStatus: true,
+                        paymentMethod: true,
+                        totalAmount: true,
+                    },
+                })
+                : null;
+            if (table?.id) {
+                await tx.table.update({
+                    where: { id: table.id },
+                    data: {
+                        status: isDirectBill
+                            ? shouldSettleImmediately
+                                ? 'AVAILABLE'
+                                : 'AWAITING_BILL'
+                            : 'ORDERING_OPEN',
+                        currentOrderId: isDirectBill ? null : order.id,
+                        currentSessionId: shouldSettleImmediately ? null : session.id,
+                    },
+                });
+            }
+            return {
+                order,
+                session,
+                bill,
+            };
+        });
+        const tenantRoom = (0, socket_1.getTenantRoom)(tenant.id);
+        const sessionRoom = (0, socket_1.getSessionRoom)(tenant.id, result.session.id);
+        const billPath = `/order/${tenant.slug}/session/${result.session.id}/bill`;
+        const isDirectBill = fulfillmentMode === 'DIRECT_BILL';
+        const settledImmediately = Boolean(result.bill && result.bill.paymentStatus === 'PAID');
+        if (!isDirectBill) {
+            (0, socket_1.getIO)().to(tenantRoom).emit('order:new', result.order);
+            (0, socket_1.getIO)().to(sessionRoom).emit('order:new', result.order);
+            (0, socket_1.getIO)().to(tenantRoom).emit('session:update', {
+                sessionId: result.session.id,
+                status: 'ACTIVE',
+                updatedAt: new Date().toISOString(),
+            });
+            (0, socket_1.getIO)().to(sessionRoom).emit('session:update', {
+                sessionId: result.session.id,
+                status: 'ACTIVE',
+                updatedAt: new Date().toISOString(),
+            });
+            if (result.order.tableId) {
+                (0, socket_1.getIO)().to(tenantRoom).emit('table:status_change', {
+                    tableId: result.order.tableId,
+                    status: 'ORDERING_OPEN',
+                    orderNumber: result.order.orderNumber,
+                });
+            }
+        }
+        else if (settledImmediately) {
+            (0, socket_1.getIO)().to(tenantRoom).emit('session:completed', {
+                sessionId: result.session.id,
+                paymentMethod: result.bill?.paymentMethod || 'cash',
+                closedAt: result.session.closedAt || new Date().toISOString(),
+            });
+            (0, socket_1.getIO)().to(sessionRoom).emit('session:completed', {
+                sessionId: result.session.id,
+                paymentMethod: result.bill?.paymentMethod || 'cash',
+                closedAt: result.session.closedAt || new Date().toISOString(),
+            });
+            (0, socket_1.getIO)().to(tenantRoom).emit('orders:bulk_status', {
+                sessionId: result.session.id,
+                status: 'RECEIVED',
+                updatedAt: new Date().toISOString(),
+            });
+            if (result.order.tableId) {
+                (0, socket_1.getIO)().to(tenantRoom).emit('table:status_change', {
+                    tableId: result.order.tableId,
+                    status: 'AVAILABLE',
+                });
+            }
+        }
+        else {
+            (0, socket_1.getIO)().to(tenantRoom).emit('session:finished', {
+                sessionId: result.session.id,
+                tableName: table?.name,
+                totalAmount: result.bill?.totalAmount,
+            });
+            (0, socket_1.getIO)().to(sessionRoom).emit('session:finished', {
+                sessionId: result.session.id,
+                tableName: table?.name,
+                totalAmount: result.bill?.totalAmount,
+            });
+            (0, socket_1.getIO)().to(tenantRoom).emit('session:update', {
+                sessionId: result.session.id,
+                status: 'AWAITING_BILL',
+                updatedAt: new Date().toISOString(),
+            });
+            (0, socket_1.getIO)().to(sessionRoom).emit('session:update', {
+                sessionId: result.session.id,
+                status: 'AWAITING_BILL',
+                updatedAt: new Date().toISOString(),
+            });
+            if (result.order.tableId) {
+                (0, socket_1.getIO)().to(tenantRoom).emit('table:status_change', {
+                    tableId: result.order.tableId,
+                    status: 'AWAITING_BILL',
+                });
+            }
+        }
+        await invalidateDashboardOrderCaches(tenant.id);
+        res.status(201).json({
+            source: isDirectBill ? 'STAFF_ASSISTED_DIRECT_BILL' : 'STAFF_ASSISTED',
+            tenantSlug: tenant.slug,
+            sessionId: result.session.id,
+            orderId: result.order.id,
+            billId: result.bill?.id || null,
+            invoiceNumber: result.bill?.invoiceNumber || null,
+            sessionStatus: result.session.sessionStatus,
+            paymentStatus: result.bill?.paymentStatus || null,
+            billPath,
+            createdByStaffUserId: req.user.id,
+            order: result.order,
+            bill: result.bill,
+        });
+    }
+    catch (error) {
+        console.error('createAssistedOrder error:', error);
+        const message = error instanceof Error ? error.message : 'Failed to create assisted order';
+        if (message === 'ORDER_ITEMS_REQUIRED' || message === 'ORDER_ITEMS_INVALID') {
+            return res.status(400).json({ error: 'Select at least one valid menu item before creating the order.' });
+        }
+        if (message === 'CUSTOMER_DEACTIVATED') {
+            return res.status(403).json({ error: 'This customer account has been deactivated and cannot be reused.' });
+        }
+        if (message.startsWith('MENU_ITEM_NOT_FOUND')) {
+            return res.status(409).json({ error: 'One or more items are no longer available. Refresh the menu and try again.' });
+        }
+        if (message.startsWith('MODIFIER_REQUIRED')) {
+            return res.status(400).json({ error: `Required choices are missing for ${message.split(':')[1] || 'this item'}.` });
+        }
+        if (message.startsWith('MODIFIER_LIMIT')) {
+            return res.status(400).json({ error: `Too many choices were selected for ${message.split(':')[1] || 'this item'}.` });
+        }
+        if (message.startsWith('MODIFIER_NOT_FOUND')) {
+            return res.status(409).json({ error: 'One or more modifiers are no longer available. Refresh the menu and try again.' });
+        }
+        res.status(500).json({ error: 'Failed to create assisted order' });
+    }
+};
+exports.createAssistedOrder = createAssistedOrder;
 //# sourceMappingURL=order.controller.js.map

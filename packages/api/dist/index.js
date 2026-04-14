@@ -3,19 +3,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config(); // Must be FIRST before any other imports that read process.env
-const env_1 = require("./config/env"); // Triggers Zod validation immediately
+const env_1 = require("./config/env");
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const helmet_1 = __importDefault(require("helmet"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const pino_http_1 = __importDefault(require("pino-http"));
-const logger_1 = require("./utils/logger");
-const error_middleware_1 = require("./middlewares/error.middleware");
-require("express-async-errors"); // Pass async errors to the global handler
 const http_1 = require("http");
+require("express-async-errors");
 const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
 const menu_routes_1 = __importDefault(require("./routes/menu.routes"));
 const table_routes_1 = __importDefault(require("./routes/table.routes"));
@@ -29,41 +25,97 @@ const ai_routes_1 = __importDefault(require("./routes/ai.routes"));
 const notification_routes_1 = __importDefault(require("./routes/notification.routes"));
 const customer_routes_1 = __importDefault(require("./routes/customer.routes"));
 const session_routes_1 = __importDefault(require("./routes/session.routes"));
+const prisma_1 = require("./db/prisma");
+const error_middleware_1 = require("./middlewares/error.middleware");
 const socket_1 = require("./socket");
+const logger_1 = require("./utils/logger");
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
 const port = env_1.env.PORT || 4000;
-// Security Middlewares
+const isProduction = env_1.env.NODE_ENV === 'production';
+function buildAllowedOrigins() {
+    if (env_1.env.ALLOWED_ORIGINS.length > 0)
+        return env_1.env.ALLOWED_ORIGINS;
+    if (!isProduction) {
+        return [
+            'http://localhost:3000',
+            'http://localhost:3001',
+            'http://localhost:3002',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:3001',
+            'http://127.0.0.1:3002',
+        ];
+    }
+    return [];
+}
+const allowedOrigins = buildAllowedOrigins();
+function isOriginAllowed(origin) {
+    if (!origin)
+        return !isProduction || allowedOrigins.length === 0;
+    return allowedOrigins.includes(origin);
+}
+app.disable('x-powered-by');
+if (env_1.env.TRUST_PROXY) {
+    app.set('trust proxy', env_1.env.TRUST_PROXY);
+}
 app.use((0, helmet_1.default)({
-    crossOriginResourcePolicy: { policy: "cross-origin" }
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
-// Rate limiting for public routes (defaults to 500 req / 15 min per IP, configurable via PUBLIC_RATE_LIMIT_MAX)
-const publicRateLimitMaxRaw = Number(process.env.PUBLIC_RATE_LIMIT_MAX || 500);
-const publicRateLimitMax = Number.isFinite(publicRateLimitMaxRaw) && publicRateLimitMaxRaw > 0
-    ? publicRateLimitMaxRaw
-    : 500;
 const apiLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000,
-    max: publicRateLimitMax,
+    max: env_1.env.PUBLIC_RATE_LIMIT_MAX,
     message: 'Too many requests from this IP, please try again later.',
     standardHeaders: true,
     legacyHeaders: false,
 });
-app.use('/public', apiLimiter); // Stricter on unauthenticated routes
-// Request Logging
+app.use('/public', apiLimiter);
 app.use((0, pino_http_1.default)({ logger: logger_1.logger }));
 app.use((0, cors_1.default)({
-    origin: true,
-    credentials: true
+    origin(origin, callback) {
+        if (isOriginAllowed(origin)) {
+            callback(null, true);
+            return;
+        }
+        callback(new Error('Origin not allowed by CORS'));
+    },
+    credentials: true,
 }));
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: env_1.env.JSON_BODY_LIMIT }));
 app.use((0, cookie_parser_1.default)());
 void (0, socket_1.initSocket)(httpServer).catch((error) => {
     logger_1.logger.error({ error }, 'Socket initialization failed');
     process.exit(1);
 });
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', version: '1.0.0' });
+app.get('/health/live', (_req, res) => {
+    res.json({ status: 'ok', uptimeSec: Math.round(process.uptime()) });
+});
+app.get('/health/ready', async (_req, res) => {
+    try {
+        await (0, prisma_1.checkPrismaReadiness)();
+        res.json({
+            status: 'ready',
+            db: 'ok',
+            sockets: (0, socket_1.getSocketMetrics)(),
+            version: '1.0.0',
+        });
+    }
+    catch (error) {
+        res.status(503).json({
+            status: 'degraded',
+            db: 'unavailable',
+            sockets: (0, socket_1.getSocketMetrics)(),
+            error: error instanceof Error ? error.message : 'Database readiness failed',
+        });
+    }
+});
+app.get('/health', async (_req, res) => {
+    try {
+        await (0, prisma_1.checkPrismaReadiness)();
+        res.json({ status: 'ok', version: '1.0.0', sockets: (0, socket_1.getSocketMetrics)() });
+    }
+    catch {
+        res.status(503).json({ status: 'degraded', version: '1.0.0', sockets: (0, socket_1.getSocketMetrics)() });
+    }
 });
 app.use('/auth', auth_routes_1.default);
 app.use('/menus', menu_routes_1.default);
@@ -78,7 +130,6 @@ app.use('/ai', ai_routes_1.default);
 app.use('/notifications', notification_routes_1.default);
 app.use('/customer', customer_routes_1.default);
 app.use('/public', session_routes_1.default);
-// Global Error Handler must be the LAST middleware
 app.use(error_middleware_1.globalErrorHandler);
 httpServer.on('error', (error) => {
     if (error?.code === 'EADDRINUSE') {

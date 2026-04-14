@@ -340,30 +340,147 @@ body {
   max-width: 100%;
   box-shadow: var(--card-shadow);
   background: var(--kanban-col-bg);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.kanban-col-drop-active {
+  border-color: rgba(59, 130, 246, 0.55);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2), 0 20px 45px rgba(15, 23, 42, 0.28);
+  transform: translateY(-2px);
 }
 .kanban-col-header {
   flex-shrink: 0;
-  padding: 14px 16px;
+  padding: 14px 16px 12px;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-raised);
+}
+.kanban-col-title-group {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.kanban-col-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.kanban-col-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--text-3);
 }
 .kanban-col-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   max-height: calc(100dvh - 280px);
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+.pipeline-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.5fr) minmax(220px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+}
+.pipeline-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  padding: 0 14px;
+  color: var(--text-3);
+}
+.pipeline-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-1);
+  font: inherit;
+}
+.pipeline-search input::placeholder {
+  color: var(--text-3);
+}
+.pipeline-toolbar-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.pipeline-toolbar-stat {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 92px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  padding: 10px 12px;
+}
+.pipeline-toolbar-stat strong {
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-1);
+}
+.pipeline-toolbar-stat span:last-child {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+.pipeline-toolbar-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.pipeline-toolbar-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text-2);
+  padding: 12px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.pipeline-toolbar-toggle-active {
+  border-color: rgba(37, 99, 235, 0.28);
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+}
+.pipeline-filter-hint {
+  border-radius: 14px;
+  border: 1px dashed var(--border);
+  background: var(--surface);
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-3);
 }
 
 /* ─── Pipeline cards ─────────────────────────────────────── */
@@ -375,6 +492,19 @@ body {
   box-shadow: var(--card-shadow);
   transition: box-shadow 0.2s, transform 0.15s;
 }
+.pipeline-card > button {
+  display: block;
+}
+.pipeline-card-grab {
+  cursor: grab;
+}
+.pipeline-card-grab:active {
+  cursor: grabbing;
+}
+.pipeline-card-dragging {
+  opacity: 0.5;
+  transform: scale(0.985);
+}
 .pipeline-card-expanded {
   border-color: rgba(59, 130, 246, 0.38);
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.34);
@@ -382,6 +512,80 @@ body {
 .pipeline-card:hover {
   box-shadow: var(--card-shadow-hover);
   transform: translateY(-1px);
+}
+.pipeline-mini-stat {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.pipeline-mini-label {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.pipeline-mini-value {
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.1;
+  color: var(--text-1);
+}
+.pipeline-action-panel,
+.pipeline-context-card,
+.pipeline-items-card,
+.pipeline-callout {
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  padding: 14px;
+}
+.pipeline-action-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.pipeline-section-label {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.pipeline-action-lane {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+.pipeline-callout {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 700;
+}
+.pipeline-readonly {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+.pipeline-items-scroll {
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 12px;
+  padding-right: 4px;
 }
 .pipeline-card-stripe { height: 3px; }
 .stripe-new      { background: linear-gradient(90deg, #3b82f6, #6366f1); }
@@ -415,6 +619,14 @@ body {
 }
 
 @media (max-width: 1023px) {
+  .pipeline-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .pipeline-toolbar-actions {
+    justify-content: flex-start;
+  }
+
   .kanban-board {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -433,5 +645,13 @@ body {
   .kanban-board {
     grid-template-columns: minmax(0, 1fr);
     overflow-y: auto;
+  }
+
+  .kanban-col-meta {
+    gap: 4px;
+  }
+
+  .pipeline-toolbar-stat {
+    min-width: calc(50% - 6px);
   }
 }

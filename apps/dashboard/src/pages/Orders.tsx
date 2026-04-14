@@ -1,9 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, memo } from 'react';
 import { format } from 'date-fns';
 import { formatINR } from '../lib/currency';
-import { CreditCard, ReceiptText, RefreshCw, Signal, XCircle, Zap } from 'lucide-react';
+import { CreditCard, ReceiptText, RefreshCw, Signal, XCircle, Zap, ShoppingBag, UtensilsCrossed, Clock, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
+import { 
+  DndContext, 
+  DragOverlay, 
+  closestCorners, 
+  PointerSensor, 
+  useSensor, 
+  useSensors, 
+  useDroppable,
+  useDraggable,
+  DragStartEvent,
+  DragEndEvent,
+  defaultDropAnimationSideEffects
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER';
 type BillWorkflowAction = 'AWAITING_BILL' | 'PAID_CASH' | 'PAID_ONLINE';
@@ -89,6 +103,401 @@ function getStatusChipClass(status: string) {
   if (status === 'READY') return 'chip-green';
   return 'chip-gray';
 }
+
+
+const TicketCard = memo(({
+  ticket,
+  canCloseSession,
+  selectedBillAction,
+  onSelectBillAction,
+  finishPending,
+  paymentPending,
+  onFinishSession,
+  onCompleteSession
+}: {
+  ticket: any;
+  canCloseSession: boolean;
+  selectedBillAction: string;
+  onSelectBillAction: (sessionId: string, action: string) => void;
+  finishPending: boolean;
+  paymentPending: boolean;
+  onFinishSession: (sessionId: string) => void;
+  onCompleteSession: (sessionId: string, paymentMethod: 'cash' | 'online') => void;
+}) => {
+  const ticketOrders = Array.isArray(ticket?.orders) ? ticket.orders : [];
+  const sessionStatus = String(ticket?.session?.sessionStatus || '').toUpperCase();
+  const sessionPaymentMethod = String(ticket?.session?.bill?.paymentMethod || '').toUpperCase();
+  const isCancelled = ticketOrders.length > 0 && ticketOrders.every((o: any) => o?.status === 'CANCELLED');
+  const isClosedSession = ticket.isSession && sessionStatus === 'CLOSED';
+  const createdAtMs = toValidTimestamp(ticket?.createdAt);
+  const elapsedMin = createdAtMs > 0 ? Math.max(0, Math.floor((Date.now() - createdAtMs) / 60000)) : 0;
+  const activeBatches = ticketOrders.filter((order: any) => order?.status !== 'CANCELLED');
+  const outstandingBatches = activeBatches.filter(
+    (order: any) => !['SERVED', 'RECEIVED'].includes(String(order?.status || '').toUpperCase()),
+  );
+  const canGenerateBill = ticket.isSession && canCloseSession && ticket.sessionId && sessionStatus !== 'AWAITING_BILL' && sessionStatus !== 'CLOSED' && activeBatches.length > 0 && outstandingBatches.length === 0;
+  const canCapturePayment = ticket.isSession && canCloseSession && ticket.sessionId && sessionStatus === 'AWAITING_BILL';
+  const isUrgent = elapsedMin >= 15 && activeBatches.some((o: any) => ['NEW', 'ACCEPTED', 'PREPARING'].includes(String(o.status).toUpperCase()));
+
+  return (
+    <div
+      className={`relative flex flex-col gap-4 rounded-2xl p-4 transition-all duration-300 ${isCancelled ? 'opacity-60' : ''} ${isUrgent ? 'ring-2 ring-red-500/50 shadow-xl shadow-red-500/20' : ''}`}
+      style={{ background: '#111318', border: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 8px 32px -4px rgba(0,0,0,0.5)' }}
+    >
+      <div className={`absolute left-0 right-0 top-0 h-1.5 rounded-t-2xl ${isCancelled ? 'bg-red-500/50' : isUrgent ? 'bg-red-500' : 'bg-blue-600'}`} />
+      
+      <div className="flex justify-between items-start mt-2">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            {ticket.table?.name ? (
+              <UtensilsCrossed size={14} className="text-blue-400" />
+            ) : (
+              <ShoppingBag size={14} className="text-amber-400" />
+            )}
+            <h3 className="text-xl font-black text-white tracking-tight leading-none">
+              {getTableLabel(ticket)}
+            </h3>
+          </div>
+          <div className="inline-flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1.5">
+             <span>{ticket.isSession ? 'Tab' : `#${asOrderCode(ticketOrders?.[0]?.id)}`}</span>
+             <span className="text-slate-700">|</span>
+             <span className="flex items-center gap-1.5 bg-slate-800/50 px-2 py-0.5 rounded-md border border-slate-700/50">
+               <Clock size={10} className="text-slate-500" />
+               {formatTimeValue(ticket?.createdAt)}
+               {elapsedMin > 0 && (
+                 <span className={isUrgent ? 'text-red-400' : 'text-slate-400'}>
+                   ({formatElapsedLabel(elapsedMin)})
+                 </span>
+               )}
+             </span>
+          </div>
+        </div>
+        <div className="text-right">
+          <span className="text-xl font-black text-blue-500">{formatINR(ticket.totalAmount || 0)}</span>
+          {ticket.isSession && sessionStatus && (
+            <div className="mt-1">
+              <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border border-slate-700">
+                {sessionStatus.replace(/_/g, ' ')}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-3 mt-1">
+        {ticketOrders.map((order: any, idx: number) => (
+          <div key={order.id} className="rounded-xl bg-black/30 border border-white/5 p-3 shadow-inner">
+            <div className="flex justify-between items-center mb-2">
+               <span className="text-[10px] font-black text-slate-500 uppercase">Batch {idx + 1}</span>
+               <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${getStatusChipClass(String(order.status || '').toUpperCase())}`}>
+                 {order.status}
+               </span>
+            </div>
+            <ul className="space-y-1.5 mt-1">
+              {order.items?.map((item: any) => (
+                <li key={item.id} className="flex gap-2.5 items-start">
+                   <span className="bg-white text-blue-600 px-1.5 py-0.5 rounded text-[10px] font-black mt-0.5">{item.quantity}x</span>
+                   <div className="min-w-0 flex-1">
+                     <span className="text-sm font-bold text-slate-200 leading-tight block">{item.menuItem?.name || item.name}</span>
+                     {item.notes && <span className="text-[10px] font-semibold text-slate-500 mt-0.5 block italic">↳ {item.notes}</span>}
+                   </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+
+      {ticket.isSession && (
+        <div className="mt-2 pt-4 border-t border-white/5 space-y-3">
+          {isClosedSession ? (
+             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center">
+               <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-1">Settled</p>
+               <p className="text-[11px] font-semibold text-emerald-400/70">
+                 Payment via {sessionPaymentMethod.toLowerCase()}. Archived in history.
+               </p>
+             </div>
+          ) : (
+            <>
+              {!outstandingBatches.length && sessionStatus !== 'AWAITING_BILL' && (
+                <div className="bg-blue-500/5 rounded-xl p-3 text-center border border-blue-500/10">
+                   <p className="text-[11px] font-bold text-blue-400 uppercase tracking-wider">Ready to Bill</p>
+                </div>
+              )}
+              {outstandingBatches.length > 0 && (
+                <div className="bg-amber-500/5 rounded-xl p-3 text-center border border-amber-500/10">
+                   <p className="text-[11px] font-bold text-amber-500 uppercase tracking-wider">
+                     {outstandingBatches.length} batch{outstandingBatches.length > 1 ? 'es' : ''} active
+                   </p>
+                </div>
+              )}
+              {canCloseSession && ticket.sessionId && (
+                <div className="flex gap-2">
+                  <select
+                    value={selectedBillAction}
+                    onChange={(e) => onSelectBillAction(ticket.sessionId!, e.target.value)}
+                    className="flex-1 rounded-xl bg-slate-900 border border-slate-700 px-3 py-3 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="AWAITING_BILL">Waiting for Bill</option>
+                    <option value="PAID_CASH">Paid Cash</option>
+                    <option value="PAID_ONLINE">Paid Online</option>
+                  </select>
+                  <button
+                    onClick={() => {
+                        if (!ticket.sessionId) return;
+                        if (selectedBillAction === 'AWAITING_BILL') {
+                          if (!canGenerateBill && sessionStatus !== 'AWAITING_BILL') {
+                            window.alert('Serve every active batch first.');
+                            return;
+                          }
+                          if (sessionStatus === 'AWAITING_BILL') return;
+                          onFinishSession(ticket.sessionId);
+                          return;
+                        }
+                        if (!canCapturePayment) {
+                          window.alert('Generate final bill first.');
+                          return;
+                        }
+                        onCompleteSession(ticket.sessionId, selectedBillAction === 'PAID_ONLINE' ? 'online' : 'cash');
+                    }}
+                    disabled={finishPending || paymentPending}
+                    className="rounded-xl bg-blue-600 px-5 py-3 text-xs font-black text-white hover:bg-blue-500 transition-all disabled:opacity-50"
+                  >
+                    <ReceiptText size={16} />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
+
+const KanbanColumn = ({ id, label, color, bg, badge, children, pulse, isActive }: any) => {
+  const { isOver, setNodeRef } = useDroppable({ id });
+  
+  return (
+    <div 
+      ref={setNodeRef} 
+      className={`kanban-col flex-shrink-0 transition-all duration-300 min-h-[500px] rounded-3xl ${isOver ? 'ring-2 ring-blue-500/50 bg-blue-500/5' : ''}`}
+      style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}
+    >
+      <div className={`kanban-col-header sticky top-0 shadow-sm z-20 rounded-t-3xl backdrop-blur-md ${bg}`}>
+        <div className="flex items-center gap-2.5">
+          {pulse && isActive && (
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+            </span>
+          )}
+          <span className={`font-black text-[11px] tracking-[0.2em] ${color} uppercase`}>{label}</span>
+        </div>
+        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${badge.className || ''}`}>{badge.count || 0}</span>
+      </div>
+      <div className="kanban-col-body custom-scrollbar flex flex-col gap-4 p-4">
+        {children}
+      </div>
+    </div>
+  );
+};
+
+const PipelineCard = memo(({
+  order,
+  canSetKitchenStages,
+  canSetServiceStages,
+  isStatusPending,
+  onUpdateStatus
+}: {
+  order: any;
+  canSetKitchenStages: boolean;
+  canSetServiceStages: boolean;
+  isStatusPending: boolean;
+  onUpdateStatus: (id: string, status: string, cancelReason?: string) => void;
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const currentStatus = String(order?.status || '').toUpperCase();
+  const createdAtMs = toValidTimestamp(order?.createdAt);
+  const elapsedMinutes = createdAtMs > 0 ? Math.max(0, Math.floor((Date.now() - createdAtMs) / 60000)) : 0;
+  const isUrgent = elapsedMinutes >= 15 && ['NEW', 'ACCEPTED', 'PREPARING'].includes(currentStatus);
+  const isSessionOrder = Boolean(order?.diningSessionId);
+  const sessionStatus = String(order?.diningSession?.sessionStatus || '').toUpperCase();
+  
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    isDragging
+  } = useDraggable({
+    id: order.id,
+    data: { order }
+  });
+
+  const style = transform ? {
+    transform: CSS.Translate.toString(transform),
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.5 : undefined,
+  } : undefined;
+
+  const stripeClass = order.status === 'NEW' || order.status === 'ACCEPTED' ? 'bg-blue-600' : order.status === 'PREPARING' ? 'bg-amber-500' : order.status === 'READY' ? 'bg-emerald-500' : 'bg-slate-700';
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`relative flex flex-col gap-0 rounded-2xl transition-all duration-300 ${isUrgent ? 'ring-2 ring-red-500 shadow-xl shadow-red-500/20' : ''} ${isDragging ? 'shadow-2xl scale-105 rotate-1' : ''}`}
+      style={{ ...style, background: '#0F1115', border: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 8px 32px -4px rgba(0,0,0,0.5)' }}
+    >
+      <div className={`absolute left-0 right-0 top-0 h-1 rounded-t-2xl opacity-80 ${stripeClass}`} />
+      
+      {/* Header - Always Visible */}
+      <div 
+        className="flex items-center justify-between p-4 cursor-pointer hover:bg-white/5 transition-colors rounded-2xl"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center gap-3">
+          <div {...attributes} {...listeners} className="p-1 cursor-grab active:cursor-grabbing text-slate-600 hover:text-slate-400 transition-colors">
+            <GripVertical size={16} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <h3 className="text-base font-black text-white leading-none tracking-tight">
+              {order.orderNumber || `#${asOrderCode(order?.id)}`}
+            </h3>
+            <div className="flex items-center gap-2">
+              {order.table?.name ? (
+                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest leading-none">Table {order.table.name}</span>
+              ) : (
+                <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest leading-none">
+                  {String(order.orderType || '').toUpperCase() === 'TAKEAWAY' ? 'Takeaway' : 'Walk-In'}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          <div className="text-right flex flex-col items-end gap-1">
+            <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+               <Clock size={10} className="text-slate-600" />
+               {formatTimeValue(order?.createdAt)}
+            </div>
+            {isUrgent && (
+              <span className="text-[9px] font-black text-red-500 uppercase tracking-widest animate-pulse">LATE</span>
+            )}
+          </div>
+          <div className="text-slate-500">
+            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </div>
+        </div>
+      </div>
+
+      {/* Body - Accordion Content */}
+      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[1000px] border-t border-white/5 opacity-100' : 'max-h-0 opacity-0'}`}>
+        <div className="p-4 space-y-4">
+          {order.customerName && (
+            <div className="px-3 py-2 rounded-lg bg-slate-800/30 border border-slate-700/50">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Guest</p>
+              <p className="text-sm font-bold text-slate-200">{order.customerName}</p>
+            </div>
+          )}
+
+          <ul className="flex flex-col gap-2.5">
+            {order.items?.map((item: any) => (
+              <li key={item.id} className="flex items-start gap-3">
+                <span className="flex min-w-[24px] items-center justify-center rounded-md bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white shadow-sm mt-0.5">
+                  {item.quantity}x
+                </span>
+                <div className="min-w-0 flex-1">
+                   <span className="block text-sm font-bold leading-tight text-slate-100 tracking-wide">
+                     {item.menuItem?.name || item.name}
+                   </span>
+                   {item.notes && (
+                     <span className="mt-1 block text-[10px] font-semibold text-slate-500 leading-tight">↳ {item.notes}</span>
+                   )}
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {order.specialInstructions && (
+            <div className="rounded-xl bg-orange-500/10 p-3 border border-orange-500/20">
+              <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-1">Kitchen Note</p>
+              <p className="text-xs font-semibold text-orange-300/80 leading-snug">{order.specialInstructions}</p>
+            </div>
+          )}
+
+          <div className="pt-2">
+            <div className="flex flex-col gap-2.5">
+              {currentStatus === 'NEW' && canSetKitchenStages && (
+                <div className="grid grid-cols-5 gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'ACCEPTED'); }}
+                    disabled={isStatusPending}
+                    className="col-span-3 rounded-xl bg-blue-600 hover:bg-blue-500 py-3 text-xs font-black text-white transition-all active:scale-[0.97] disabled:opacity-50"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'CANCELLED', 'Rejected'); }}
+                    disabled={isStatusPending}
+                    className="col-span-2 rounded-xl border border-red-500/30 hover:bg-red-500/10 py-3 text-xs font-bold text-red-500 transition-all active:scale-[0.97]"
+                  >
+                    Reject
+                  </button>
+                </div>
+              )}
+              {currentStatus === 'ACCEPTED' && canSetKitchenStages && (
+                <button
+                   onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'PREPARING'); }}
+                   disabled={isStatusPending}
+                   className="w-full rounded-xl bg-amber-500 hover:bg-amber-600 py-3 text-xs font-black text-white transition-all active:scale-[0.97]"
+                >
+                  Start Preparing
+                </button>
+              )}
+              {currentStatus === 'PREPARING' && canSetKitchenStages && (
+                <button
+                   onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'READY'); }}
+                   disabled={isStatusPending}
+                   className="w-full rounded-xl bg-orange-500 hover:bg-orange-600 py-3 text-xs font-black text-white transition-all active:scale-[0.97]"
+                >
+                  Mark Ready
+                </button>
+              )}
+              {currentStatus === 'READY' && canSetServiceStages && (
+                <button
+                   onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'SERVED'); }}
+                   disabled={isStatusPending}
+                   className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 py-3 text-xs font-black text-white transition-all active:scale-[0.97]"
+                >
+                  Mark Served
+                </button>
+              )}
+              {currentStatus === 'SERVED' && isSessionOrder && (
+                <div className="rounded-xl bg-slate-900 border border-slate-700/50 p-3 text-center">
+                  <p className="text-xs font-bold text-slate-400">
+                    {sessionStatus === 'AWAITING_BILL' ? 'Awaiting Payment' : 'Served'}
+                  </p>
+                </div>
+              )}
+              {currentStatus === 'SERVED' && !isSessionOrder && canSetServiceStages && (
+                <button
+                   onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'RECEIVED'); }}
+                   disabled={isStatusPending}
+                   className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 py-3 text-xs font-black text-white"
+                >
+                  <CreditCard size={14} />
+                  Mark Paid
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 export function Orders({ role }: { role?: string }) {
   const queryClient = useQueryClient();
@@ -297,343 +706,70 @@ export function Orders({ role }: { role?: string }) {
   };
   const overviewTimestamp = format(overviewNow, 'MMM d, yyyy | h:mm a');
   const readyOrders = liveOrders.filter((order: any) => order.status === 'READY');
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
 
-  const TicketCard = ({ ticket }: { ticket: any }) => {
-    const ticketOrders = Array.isArray(ticket?.orders) ? ticket.orders : [];
-    const sessionStatus = String(ticket?.session?.sessionStatus || '').toUpperCase();
-    const sessionPaymentMethod = String(ticket?.session?.bill?.paymentMethod || '').toUpperCase();
-    const isCancelled = ticketOrders.length > 0 && ticketOrders.every((o: any) => o?.status === 'CANCELLED');
-    const isClosedSession = ticket.isSession && sessionStatus === 'CLOSED';
-    const createdAtMs = toValidTimestamp(ticket?.createdAt);
-    const elapsedMin = createdAtMs > 0 ? Math.max(0, Math.floor((Date.now() - createdAtMs) / 60000)) : 0;
-    const guestDots =
-      ticket.session?.partySize > 0 ? Array.from({ length: Math.min(ticket.session.partySize, 6) }) : [];
-    const activeBatches = ticketOrders.filter((order: any) => order?.status !== 'CANCELLED');
-    const outstandingBatches = activeBatches.filter(
-      (order: any) => !['SERVED', 'RECEIVED'].includes(String(order?.status || '').toUpperCase()),
-    );
-    const canGenerateBill =
-      ticket.isSession &&
-      canCloseSession &&
-      ticket.sessionId &&
-      sessionStatus !== 'AWAITING_BILL' &&
-      sessionStatus !== 'CLOSED' &&
-      activeBatches.length > 0 &&
-      outstandingBatches.length === 0;
-    const canCapturePayment = ticket.isSession && canCloseSession && ticket.sessionId && sessionStatus === 'AWAITING_BILL';
-    const selectedBillAction = ticket.sessionId ? billSelections[ticket.sessionId] || 'AWAITING_BILL' : 'AWAITING_BILL';
-    const finishPending =
-      finishSessionMutation.isPending && finishSessionMutation.variables?.sessionId === ticket.sessionId;
-    const paymentPending =
-      completeSessionMutation.isPending && completeSessionMutation.variables?.sessionId === ticket.sessionId;
+  const [activeDragOrder, setActiveDragOrder] = useState<any>(null);
 
-    return (
-      <div
-        className={`pipeline-card card-hover flex flex-col animate-in fade-in duration-300 ${isCancelled ? 'opacity-60' : ''}`}
-        style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}
-      >
-        <div
-          className={`pipeline-card-stripe ${isCancelled ? 'bg-red-400' : 'bg-gradient-to-r from-blue-500 to-indigo-500'}`}
-        />
-
-        <div className="p-4 flex flex-col gap-3">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="font-black text-base block leading-tight" style={{ color: 'var(--text-1)' }}>
-                {getTableLabel(ticket)}
-              </span>
-              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>
-                {ticket.isSession ? 'Open Tab' : `#${asOrderCode(ticketOrders?.[0]?.id)}`} | {formatTimeValue(ticket?.createdAt)}
-                {elapsedMin > 0 && ` | ${formatElapsedLabel(elapsedMin)}`}
-              </span>
-            </div>
-            <div className="text-right">
-              <span className="font-black text-blue-600 text-lg">{formatINR(ticket.totalAmount || 0)}</span>
-              {ticket.isSession && sessionStatus && (
-                <p className="mt-1 text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                  {sessionStatus.replace(/_/g, ' ')}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            {guestDots.length > 0 && (
-              <div className="flex items-center gap-1">
-                {guestDots.map((_, i) => (
-                  <span
-                    key={i}
-                    className="w-5 h-5 bg-slate-100 border border-slate-200 rounded-full text-[9px] flex items-center justify-center font-black text-slate-500"
-                  >
-                    {i + 1}
-                  </span>
-                ))}
-                {ticket.session?.partySize > 6 && (
-                  <span className="text-xs text-slate-400 font-bold">+{ticket.session.partySize - 6}</span>
-                )}
-              </div>
-            )}
-            {ticket.customerName && (
-              <span className="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full">
-                {ticket.customerName}
-              </span>
-            )}
-          </div>
-
-          <div className="space-y-2 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
-            {ticketOrders.map((order: any, idx: number) => (
-              <div
-                key={order.id}
-                className="rounded-xl p-3"
-                style={{ background: 'var(--surface-3)', border: '1px solid var(--border)' }}
-              >
-                <div className="flex justify-between items-center gap-3 mb-2">
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>
-                      Batch {idx + 1}
-                    </span>
-                    <p className="text-[11px] font-semibold mt-1" style={{ color: 'var(--text-3)' }}>
-                      {order.orderNumber || `#${asOrderCode(order.id)}`} | {formatTimeValue(order.createdAt)}
-                    </p>
-                  </div>
-                  <span className={`chip ${getStatusChipClass(String(order.status || '').toUpperCase())}`}>
-                    {order.status}
-                  </span>
-                </div>
-                <ul className="space-y-1">
-                  {order.items?.map((item: any) => (
-                    <li key={item.id} className="text-sm font-medium flex gap-2" style={{ color: 'var(--text-1)' }}>
-                      <span className="font-black text-blue-600">{item.quantity}x</span>
-                      {item.menuItem?.name || item.name || 'Item'}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-
-          {ticket.isSession && (
-            <div
-              className="rounded-2xl p-3"
-              style={{ background: 'var(--surface-3)', border: '1px solid var(--border)' }}
-            >
-              {isClosedSession ? (
-                <>
-                  <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                    Session Closed
-                  </p>
-                  <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
-                    Payment settled{sessionPaymentMethod ? ` via ${sessionPaymentMethod.toLowerCase()}.` : '.'} This full bill is now archived in today&apos;s history.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                    Bill Workflow
-                  </p>
-                  <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
-                    {outstandingBatches.length > 0
-                      ? `${outstandingBatches.length} active batch${outstandingBatches.length > 1 ? 'es are' : ' is'} still moving through the pipeline.`
-                      : sessionStatus === 'AWAITING_BILL'
-                        ? 'The final bill is with the guest. Mark the payment once it is settled.'
-                        : 'All served batches will merge into one full bill for this table.'}
-                  </p>
-                  {canCloseSession && ticket.sessionId && (
-                    <div className="mt-3 flex gap-2">
-                      <select
-                        value={selectedBillAction}
-                        onChange={(event) =>
-                          setBillSelections((previous) => ({
-                            ...previous,
-                            [ticket.sessionId]: event.target.value as BillWorkflowAction,
-                          }))
-                        }
-                        className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-sm font-black outline-none"
-                        style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-1)' }}
-                      >
-                        <option value="AWAITING_BILL">Waiting for Bill</option>
-                        <option value="PAID_CASH">Paid Cash</option>
-                        <option value="PAID_ONLINE">Paid Online</option>
-                      </select>
-                      <button
-                        onClick={() => {
-                          if (!ticket.sessionId) return;
-                          if (selectedBillAction === 'AWAITING_BILL') {
-                            if (!canGenerateBill && sessionStatus !== 'AWAITING_BILL') {
-                              window.alert('Serve every active batch before moving this table to billing.');
-                              return;
-                            }
-                            if (sessionStatus === 'AWAITING_BILL') {
-                              return;
-                            }
-                            finishSessionMutation.mutate({ sessionId: ticket.sessionId });
-                            return;
-                          }
-
-                          if (!canCapturePayment) {
-                            window.alert('Generate the final bill first, then mark the payment method.');
-                            return;
-                          }
-
-                          completeSessionMutation.mutate({
-                            sessionId: ticket.sessionId,
-                            paymentMethod: selectedBillAction === 'PAID_ONLINE' ? 'online' : 'cash',
-                          });
-                        }}
-                        disabled={finishPending || paymentPending}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-blue-500 disabled:opacity-60"
-                      >
-                        <ReceiptText size={15} />
-                        {finishPending
-                          ? 'Sharing Bill...'
-                          : paymentPending
-                            ? 'Saving...'
-                            : selectedBillAction === 'AWAITING_BILL'
-                              ? sessionStatus === 'AWAITING_BILL'
-                                ? 'Bill Shared'
-                                : 'Update'
-                              : 'Update'}
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    );
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    setActiveDragOrder(active.data.current?.order);
   };
 
-  const PipelineCard = ({ order }: { order: any }) => {
-    const createdAtMs = toValidTimestamp(order?.createdAt);
-    const elapsedMinutes = createdAtMs > 0 ? Math.max(0, Math.floor((Date.now() - createdAtMs) / 60000)) : 0;
-    const isUrgent = elapsedMinutes >= 15 && ['NEW', 'ACCEPTED', 'PREPARING'].includes(String(order?.status || '').toUpperCase());
-    const stripeClass =
-      order.status === 'NEW' || order.status === 'ACCEPTED'
-        ? 'stripe-new'
-        : order.status === 'PREPARING'
-          ? 'stripe-preparing'
-          : order.status === 'READY'
-            ? 'stripe-ready'
-            : 'stripe-served';
-    const sessionStatus = String(order?.diningSession?.sessionStatus || '').toUpperCase();
-    const isSessionOrder = Boolean(order?.diningSessionId);
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDragOrder(null);
 
-    return (
-      <div
-        className={`pipeline-card card-hover animate-in fade-in duration-300 ${isUrgent ? 'ring-1 ring-red-300' : ''}`}
-        style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}
-      >
-        <div className={`pipeline-card-stripe ${stripeClass}`} />
-        <div className="p-4">
-          <div className="flex justify-between items-start mb-1">
-            <div>
-              <span className="font-black text-sm block" style={{ color: 'var(--text-1)' }}>
-                {order.orderNumber || `#${asOrderCode(order?.id)}`}
-              </span>
-              <span className="text-[11px] font-semibold" style={{ color: 'var(--text-3)' }}>
-                {getTableLabel(order)}
-              </span>
-            </div>
-            <div className="text-right">
-              <span className="text-[11px] font-bold" style={{ color: 'var(--text-3)' }}>
-                {formatTimeValue(order?.createdAt)}
-              </span>
-              {isUrgent && (
-                <div className="text-[10px] font-black text-red-500 mt-0.5">
-                  Alert: {formatElapsedLabel(elapsedMinutes)}
-                </div>
-              )}
-            </div>
-          </div>
+    if (!over) return;
 
-          <ul className="mt-3 mb-4 space-y-1.5">
-            {order.items?.map((item: any) => (
-              <li key={item.id} className="flex gap-2 text-sm font-medium items-start" style={{ color: 'var(--text-1)' }}>
-                <span className="bg-blue-50 text-blue-700 text-xs font-black px-1.5 py-0.5 rounded-md flex-shrink-0 mt-0.5">
-                  {item.quantity}x
-                </span>
-                <span className="leading-tight">{item.menuItem?.name || item.name}</span>
-              </li>
-            ))}
-          </ul>
+    const orderId = active.id as string;
+    const targetColId = over.id as string;
+    const order = active.data.current?.order;
 
-          {order.status === 'NEW' && canSetKitchenStages && (
-            <button
-              onClick={() => statusMutation.mutate({ id: order.id, status: 'ACCEPTED' })}
-              disabled={statusMutation.isPending}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition-all active:scale-[0.97] disabled:opacity-50 shadow-md shadow-blue-600/20 text-sm"
-            >
-              Accept Order
-            </button>
-          )}
-          {order.status === 'ACCEPTED' && canSetKitchenStages && (
-            <button
-              onClick={() => statusMutation.mutate({ id: order.id, status: 'PREPARING' })}
-              disabled={statusMutation.isPending}
-              className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl transition-all active:scale-[0.97] disabled:opacity-50 shadow-md shadow-amber-500/20 text-sm"
-            >
-              Start Preparing
-            </button>
-          )}
-          {order.status === 'PREPARING' && canSetKitchenStages && (
-            <button
-              onClick={() => statusMutation.mutate({ id: order.id, status: 'READY' })}
-              disabled={statusMutation.isPending}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 rounded-xl transition-all active:scale-[0.97] disabled:opacity-50 shadow-md shadow-orange-500/20 text-sm"
-            >
-              Mark Ready
-            </button>
-          )}
-          {order.status === 'READY' && canSetServiceStages && (
-            <button
-              onClick={() => statusMutation.mutate({ id: order.id, status: 'SERVED' })}
-              disabled={statusMutation.isPending}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl transition-all active:scale-[0.97] disabled:opacity-50 shadow-md shadow-emerald-600/20 text-sm"
-            >
-              Mark Served
-            </button>
-          )}
-          {order.status === 'SERVED' && isSessionOrder && (
-            <div
-              className="rounded-xl border px-3 py-3 text-sm font-bold"
-              style={{ background: 'var(--surface-3)', borderColor: 'var(--border)', color: 'var(--text-2)' }}
-            >
-              <p className="font-black uppercase text-[11px] tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
-                Final Billing
-              </p>
-              <p className="mt-1">
-                {sessionStatus === 'AWAITING_BILL' ? 'Bill generated. Waiting for payment.' : 'Waiting for the final table bill.'}
-              </p>
-            </div>
-          )}
-          {order.status === 'SERVED' && !isSessionOrder && canSetServiceStages && (
-            <button
-              onClick={() => statusMutation.mutate({ id: order.id, status: 'RECEIVED' })}
-              disabled={statusMutation.isPending}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 transition-all active:scale-[0.97] disabled:opacity-50 shadow-md shadow-slate-800/20 text-sm"
-            >
-              <CreditCard size={15} />
-              Mark Paid
-            </button>
-          )}
-          {((order.status === 'NEW' && !canSetKitchenStages) ||
-            (order.status === 'ACCEPTED' && !canSetKitchenStages) ||
-            (order.status === 'PREPARING' && !canSetKitchenStages) ||
-            (order.status === 'READY' && !canSetServiceStages) ||
-            (order.status === 'SERVED' && !canSetServiceStages && !isSessionOrder)) && (
-            <div
-              className="w-full rounded-xl py-2 text-center text-xs font-semibold"
-              style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', color: 'var(--text-3)' }}
-            >
-              Read-only for your role
-            </div>
-          )}
-        </div>
-      </div>
-    );
+    if (!order) return;
+
+    // Logic for transition based on column
+    let newStatus = '';
+    if (targetColId === 'col-kitchen') {
+      if (order.status === 'NEW') newStatus = 'ACCEPTED';
+      else if (order.status === 'ACCEPTED') newStatus = 'PREPARING';
+    } else if (targetColId === 'col-ready') {
+      if (['NEW', 'ACCEPTED', 'PREPARING'].includes(order.status)) newStatus = 'READY';
+    } else if (targetColId === 'col-served') {
+      if (order.status === 'READY') newStatus = 'SERVED';
+    }
+
+    if (newStatus && newStatus !== order.status) {
+      statusMutation.mutate({ id: orderId, status: newStatus });
+    }
   };
+
+  const handleSelectBillAction = useCallback((sessionId: string, action: string) => {
+    setBillSelections((previous) => ({
+      ...previous,
+      [sessionId]: action as BillWorkflowAction,
+    }));
+  }, []);
+
+  const handleFinishSession = useCallback((sessionId: string) => {
+    finishSessionMutation.mutate({ sessionId });
+  }, [finishSessionMutation]);
+
+  const handleCompleteSession = useCallback((sessionId: string, paymentMethod: 'cash' | 'online') => {
+    completeSessionMutation.mutate({ sessionId, paymentMethod });
+  }, [completeSessionMutation]);
+
+  const handleUpdateStatus = useCallback((id: string, status: string, cancelReason?: string) => {
+    statusMutation.mutate({ id, status, cancelReason });
+  }, [statusMutation]);
+
+
+
 
   return (
     <div className="flex h-full min-h-0 flex-col p-3 sm:p-5 lg:p-8">
@@ -723,52 +859,76 @@ export function Orders({ role }: { role?: string }) {
       </div>
 
       {activeTab === 'PIPELINE' ? (
-        <div
-          className="flex flex-1 flex-col gap-4 overflow-y-auto custom-scrollbar p-3 sm:p-4 lg:h-full lg:flex-row lg:gap-6 lg:overflow-x-auto lg:overflow-y-hidden lg:p-6"
-          style={{ background: 'var(--kanban-bg)' }}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
         >
-          {[
-            { label: 'NEW ORDERS', color: 'text-blue-700', bg: 'bg-blue-50 border-b border-blue-100', badge: 'bg-blue-100 text-blue-800', filter: (o: any) => o.status === 'NEW', pulse: true },
-            { label: 'IN KITCHEN', color: 'text-amber-700', bg: 'bg-amber-50 border-b border-amber-100', badge: 'bg-amber-100 text-amber-800', filter: (o: any) => o.status === 'ACCEPTED' || o.status === 'PREPARING', pulse: false },
-            { label: 'READY TO SERVE', color: 'text-emerald-700', bg: 'bg-emerald-50 border-b border-emerald-100', badge: 'bg-emerald-100 text-emerald-800', filter: (o: any) => o.status === 'READY', pulse: false },
-            { label: 'SERVED', color: 'text-slate-600', bg: 'bg-slate-100 border-b border-slate-200', badge: 'bg-slate-200 text-slate-600', filter: (o: any) => o.status === 'SERVED', pulse: false },
-          ].map(({ label, color, bg, badge, filter, pulse }) => {
-            const colOrders = liveOrders.filter(filter);
-            return (
-              <div key={label} className="kanban-col flex-shrink-0">
-                <div className={`kanban-col-header shadow-sm z-10 ${bg}`}>
-                  <div className="flex items-center gap-2.5">
-                    {pulse && colOrders.length > 0 && (
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
-                      </span>
-                    )}
-                    <span className={`font-black text-[11px] tracking-[0.15em] ${color}`}>{label}</span>
-                  </div>
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${badge}`}>{colOrders.length}</span>
-                </div>
-                <div className="kanban-col-body custom-scrollbar">
+          <div
+            className="flex flex-1 flex-col gap-4 overflow-y-auto custom-scrollbar p-3 sm:p-4 lg:h-full lg:flex-row lg:gap-6 lg:overflow-x-auto lg:overflow-y-hidden lg:p-6"
+            style={{ background: 'var(--kanban-bg)' }}
+          >
+            {[
+              { id: 'col-new', label: 'NEW ORDERS', color: 'text-blue-700', bg: 'bg-blue-50/50', badge: 'bg-blue-100 text-blue-800', filter: (o: any) => o.status === 'NEW', pulse: true },
+              { id: 'col-kitchen', label: 'IN KITCHEN', color: 'text-amber-700', bg: 'bg-amber-50/50', badge: 'bg-amber-100 text-amber-800', filter: (o: any) => o.status === 'ACCEPTED' || o.status === 'PREPARING', pulse: false },
+              { id: 'col-ready', label: 'READY TO SERVE', color: 'text-emerald-700', bg: 'bg-emerald-50/50', badge: 'bg-emerald-100 text-emerald-800', filter: (o: any) => o.status === 'READY', pulse: false },
+              { id: 'col-served', label: 'SERVED', color: 'text-slate-500', bg: 'bg-slate-100/50', badge: 'bg-slate-200 text-slate-600', filter: (o: any) => o.status === 'SERVED', pulse: false },
+            ].map(({ id, label, color, bg, badge, filter, pulse }) => {
+              const colOrders = liveOrders.filter(filter);
+              return (
+                <KanbanColumn 
+                  key={id} 
+                  id={id} 
+                  label={label} 
+                  color={color} 
+                  bg={bg} 
+                  badge={{ count: colOrders.length, className: badge }}
+                  pulse={pulse}
+                  isActive={activeTab === 'PIPELINE'}
+                >
                   {colOrders.map((order: any) => (
-                    <PipelineCard key={order.id} order={order} />
+                    <PipelineCard
+                      key={order.id}
+                      order={order}
+                      canSetKitchenStages={canSetKitchenStages}
+                      canSetServiceStages={canSetServiceStages}
+                      isStatusPending={statusMutation.isPending && statusMutation.variables?.id === order.id}
+                      onUpdateStatus={handleUpdateStatus}
+                    />
                   ))}
                   {colOrders.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-full py-16 text-center px-4">
-                      <p className="text-slate-500 text-sm font-semibold">No orders yet</p>
-                      <p className="text-slate-400 text-xs mt-1">Start by scanning a QR or placing a test order.</p>
-                      <button
-                        onClick={openTestOrder}
-                        className="mt-3 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold"
-                      >
-                        Create Test Order
-                      </button>
+                    <div className="flex flex-col items-center justify-center py-10 text-center px-4 opacity-40">
+                      <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">No orders</p>
                     </div>
                   )}
-                </div>
+                </KanbanColumn>
+              );
+            })}
+          </div>
+          
+          <DragOverlay dropAnimation={{
+            sideEffects: defaultDropAnimationSideEffects({
+              styles: {
+                active: {
+                  opacity: '0.5',
+                },
+              },
+            }),
+          }}>
+            {activeDragOrder ? (
+              <div className="w-[300px] pointer-events-none opacity-90 scale-105 rotate-2">
+                <PipelineCard
+                  order={activeDragOrder}
+                  canSetKitchenStages={false}
+                  canSetServiceStages={false}
+                  isStatusPending={false}
+                  onUpdateStatus={() => {}}
+                />
               </div>
-            );
-          })}
-        </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       ) : activeTab === 'SESSIONS' ? (
         <div
           className="flex-1 overflow-y-auto custom-scrollbar p-3 rounded-3xl sm:p-4 lg:p-6"
@@ -776,7 +936,17 @@ export function Orders({ role }: { role?: string }) {
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-6 items-start">
             {groupedLive.map((ticket: any) => (
-              <TicketCard key={ticket.id} ticket={ticket} />
+              <TicketCard 
+                key={ticket.id} 
+                ticket={ticket}
+                canCloseSession={canCloseSession}
+                selectedBillAction={ticket.sessionId ? billSelections[ticket.sessionId] || 'AWAITING_BILL' : 'AWAITING_BILL'}
+                onSelectBillAction={handleSelectBillAction}
+                finishPending={finishSessionMutation.isPending && finishSessionMutation.variables?.sessionId === ticket.sessionId}
+                paymentPending={completeSessionMutation.isPending && completeSessionMutation.variables?.sessionId === ticket.sessionId}
+                onFinishSession={handleFinishSession}
+                onCompleteSession={handleCompleteSession}
+              />
             ))}
             {groupedLive.length === 0 && (
               <div className="col-span-full flex flex-col items-center justify-center mt-20">
@@ -802,7 +972,17 @@ export function Orders({ role }: { role?: string }) {
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-6 items-start">
             {historyTickets.map((ticket: any) => (
-              <TicketCard key={`history_${ticket.id}`} ticket={ticket} />
+              <TicketCard 
+                key={`history_${ticket.id}`} 
+                ticket={ticket}
+                canCloseSession={canCloseSession}
+                selectedBillAction={ticket.sessionId ? billSelections[ticket.sessionId] || 'AWAITING_BILL' : 'AWAITING_BILL'}
+                onSelectBillAction={handleSelectBillAction}
+                finishPending={false}
+                paymentPending={false}
+                onFinishSession={handleFinishSession}
+                onCompleteSession={handleCompleteSession}
+              />
             ))}
             {historyTickets.length === 0 && (
               <div className="col-span-full text-center mt-20">
