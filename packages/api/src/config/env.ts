@@ -79,7 +79,7 @@ const envSchema = z
       } catch {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'REDIS_URL must be a valid URL',
+          message: 'REDIS_URL must be a valid URL (starting with redis://)',
           path: ['REDIS_URL'],
         });
       }

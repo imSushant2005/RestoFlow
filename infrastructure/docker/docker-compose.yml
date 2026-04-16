@@ -51,6 +51,7 @@ services:
       - JWT_SECRET=super-secret-jwt-key-change-in-production
       - JWT_REFRESH_SECRET=super-secret-refresh-key-change-in-production
       - CLIENT_URL=http://localhost:3000
+      - ADMIN_SECRET_KEY=default-admin-secret-key-change-in-production
 
 volumes:
   postgres_data:
