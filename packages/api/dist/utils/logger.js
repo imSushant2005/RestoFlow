@@ -5,15 +5,20 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.logger = void 0;
 const pino_1 = __importDefault(require("pino"));
+const isProduction = process.env.NODE_ENV === 'production';
 exports.logger = (0, pino_1.default)({
-    transport: {
-        target: 'pino-pretty',
-        options: {
-            colorize: true,
-            translateTime: 'SYS:standard',
-            ignore: 'pid,hostname',
-        },
-    },
-    level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+    ...(isProduction
+        ? {}
+        : {
+            transport: {
+                target: 'pino-pretty',
+                options: {
+                    colorize: true,
+                    translateTime: 'SYS:standard',
+                    ignore: 'pid,hostname',
+                },
+            },
+        }),
+    level: isProduction ? 'info' : 'debug',
 });
 //# sourceMappingURL=logger.js.map

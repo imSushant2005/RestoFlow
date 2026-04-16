@@ -32,19 +32,12 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_middleware_1 = require("../middlewares/auth.middleware");
 const PaymentController = __importStar(require("../controllers/payment.controller"));
-const express_2 = __importDefault(require("express"));
 const rbac_js_1 = require("../constants/rbac.js");
 const router = (0, express_1.Router)();
-// Secure Webhooks don't use standard parsed JSON if utilizing raw signatures, but we mapped it with body parse text.
-// The public webhook listener
-router.post('/webhook', express_2.default.raw({ type: 'application/json' }), PaymentController.handleWebhook);
 // Protected Tenant Financial Routes
 router.use(auth_middleware_1.requireAuth);
 router.post('/create-order', (0, auth_middleware_1.requireRole)(rbac_js_1.FULL_ACCESS_ROLES), PaymentController.createSubscriptionOrder);

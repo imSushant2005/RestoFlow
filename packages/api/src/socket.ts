@@ -246,6 +246,24 @@ const tenantSlugCache = new BoundedTTLCache<string>(
   TENANT_SLUG_CACHE_TTL_MS,
 );
 
+// Cache validated user IDs for 5 minutes to prevent DB hit on every reconnect
+const socketUserAuthCache = new BoundedTTLCache<boolean>(10_000, 5 * 60 * 1000);
+
+// Debounce presence broadcasts per tenant to prevent reconnect-storm fan-out
+const presenceDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function emitTenantPresenceDebounced(tenantId: string): void {
+  const existing = presenceDebounceTimers.get(tenantId);
+  if (existing) clearTimeout(existing);
+  presenceDebounceTimers.set(
+    tenantId,
+    setTimeout(() => {
+      presenceDebounceTimers.delete(tenantId);
+      emitTenantPresence(tenantId);
+    }, 300),
+  );
+}
+
 type Bucket = {
   tokens: number;
   lastRefillMs: number;
@@ -448,13 +466,20 @@ async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void):
         role: decoded.role,
       };
 
-      const user = await prisma.user.findUnique({
-        where: { id: verifiedToken.userId },
-        select: { id: true, isActive: true },
-      });
+      const cacheKey = `auth_user_${verifiedToken.userId}`;
+      const isCached = socketUserAuthCache.get(cacheKey);
 
-      if (!user || !user.isActive) {
-        return rejectAuth(socket, next, 'user_missing_or_inactive');
+      if (!isCached) {
+        const user = await prisma.user.findUnique({
+          where: { id: verifiedToken.userId },
+          select: { id: true, isActive: true },
+        });
+
+        if (!user || !user.isActive) {
+          return rejectAuth(socket, next, 'user_missing_or_inactive');
+        }
+
+        socketUserAuthCache.set(cacheKey, true);
       }
 
       socket.data.user = verifiedToken;
@@ -555,7 +580,7 @@ function onConnection(socket: TypedSocket): void {
 
   if (isStaff && tenantId) {
     presenceTracker.add(tenantId, socket.id);
-    emitTenantPresence(tenantId);
+    emitTenantPresenceDebounced(tenantId);
   }
 
   socketMetrics.activeConnections += 1;
@@ -608,7 +633,7 @@ function onConnection(socket: TypedSocket): void {
   socket.on('disconnect', (reason) => {
     if (isStaff && tenantId) {
       presenceTracker.remove(tenantId, socket.id);
-      emitTenantPresence(tenantId);
+      emitTenantPresenceDebounced(tenantId);
     }
 
     rateLimiter.remove(socket.id);

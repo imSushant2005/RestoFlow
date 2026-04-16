@@ -103,6 +103,11 @@ export type Review = $Result.DefaultSelection<Prisma.$ReviewPayload>
  * 
  */
 export type DailyAnalytics = $Result.DefaultSelection<Prisma.$DailyAnalyticsPayload>
+/**
+ * Model OrderAuditLog
+ * 
+ */
+export type OrderAuditLog = $Result.DefaultSelection<Prisma.$OrderAuditLogPayload>
 
 /**
  * Enums
@@ -194,6 +199,15 @@ export const OrderStatus: {
 
 export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus]
 
+
+export const AuditActorType: {
+  USER: 'USER',
+  CUSTOMER: 'CUSTOMER',
+  SYSTEM: 'SYSTEM'
+};
+
+export type AuditActorType = (typeof AuditActorType)[keyof typeof AuditActorType]
+
 }
 
 export type Plan = $Enums.Plan
@@ -227,6 +241,10 @@ export const OrderType: typeof $Enums.OrderType
 export type OrderStatus = $Enums.OrderStatus
 
 export const OrderStatus: typeof $Enums.OrderStatus
+
+export type AuditActorType = $Enums.AuditActorType
+
+export const AuditActorType: typeof $Enums.AuditActorType
 
 /**
  * ##  Prisma Client ʲˢ
@@ -530,6 +548,16 @@ export class PrismaClient<
     * ```
     */
   get dailyAnalytics(): Prisma.DailyAnalyticsDelegate<ExtArgs>;
+
+  /**
+   * `prisma.orderAuditLog`: Exposes CRUD operations for the **OrderAuditLog** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more OrderAuditLogs
+    * const orderAuditLogs = await prisma.orderAuditLog.findMany()
+    * ```
+    */
+  get orderAuditLog(): Prisma.OrderAuditLogDelegate<ExtArgs>;
 }
 
 export namespace Prisma {
@@ -988,7 +1016,8 @@ export namespace Prisma {
     Order: 'Order',
     OrderItem: 'OrderItem',
     Review: 'Review',
-    DailyAnalytics: 'DailyAnalytics'
+    DailyAnalytics: 'DailyAnalytics',
+    OrderAuditLog: 'OrderAuditLog'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -1004,7 +1033,7 @@ export namespace Prisma {
 
   export type TypeMap<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, ClientOptions = {}> = {
     meta: {
-      modelProps: "tenant" | "user" | "refreshToken" | "staffInvite" | "category" | "menuItem" | "modifierGroup" | "modifier" | "offer" | "zone" | "table" | "customer" | "diningSession" | "bill" | "order" | "orderItem" | "review" | "dailyAnalytics"
+      modelProps: "tenant" | "user" | "refreshToken" | "staffInvite" | "category" | "menuItem" | "modifierGroup" | "modifier" | "offer" | "zone" | "table" | "customer" | "diningSession" | "bill" | "order" | "orderItem" | "review" | "dailyAnalytics" | "orderAuditLog"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -2268,6 +2297,76 @@ export namespace Prisma {
           }
         }
       }
+      OrderAuditLog: {
+        payload: Prisma.$OrderAuditLogPayload<ExtArgs>
+        fields: Prisma.OrderAuditLogFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.OrderAuditLogFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$OrderAuditLogPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.OrderAuditLogFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$OrderAuditLogPayload>
+          }
+          findFirst: {
+            args: Prisma.OrderAuditLogFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$OrderAuditLogPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.OrderAuditLogFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$OrderAuditLogPayload>
+          }
+          findMany: {
+            args: Prisma.OrderAuditLogFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$OrderAuditLogPayload>[]
+          }
+          create: {
+            args: Prisma.OrderAuditLogCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$OrderAuditLogPayload>
+          }
+          createMany: {
+            args: Prisma.OrderAuditLogCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.OrderAuditLogCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$OrderAuditLogPayload>[]
+          }
+          delete: {
+            args: Prisma.OrderAuditLogDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$OrderAuditLogPayload>
+          }
+          update: {
+            args: Prisma.OrderAuditLogUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$OrderAuditLogPayload>
+          }
+          deleteMany: {
+            args: Prisma.OrderAuditLogDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.OrderAuditLogUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.OrderAuditLogUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$OrderAuditLogPayload>
+          }
+          aggregate: {
+            args: Prisma.OrderAuditLogAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateOrderAuditLog>
+          }
+          groupBy: {
+            args: Prisma.OrderAuditLogGroupByArgs<ExtArgs>
+            result: $Utils.Optional<OrderAuditLogGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.OrderAuditLogCountArgs<ExtArgs>
+            result: $Utils.Optional<OrderAuditLogCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -2441,6 +2540,7 @@ export namespace Prisma {
     staffInvites: number
     analytics: number
     bills: number
+    orderAuditLogs: number
   }
 
   export type TenantCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -2456,6 +2556,7 @@ export namespace Prisma {
     staffInvites?: boolean | TenantCountOutputTypeCountStaffInvitesArgs
     analytics?: boolean | TenantCountOutputTypeCountAnalyticsArgs
     bills?: boolean | TenantCountOutputTypeCountBillsArgs
+    orderAuditLogs?: boolean | TenantCountOutputTypeCountOrderAuditLogsArgs
   }
 
   // Custom InputTypes
@@ -2551,6 +2652,13 @@ export namespace Prisma {
    */
   export type TenantCountOutputTypeCountBillsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: BillWhereInput
+  }
+
+  /**
+   * TenantCountOutputType without action
+   */
+  export type TenantCountOutputTypeCountOrderAuditLogsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: OrderAuditLogWhereInput
   }
 
 
@@ -2844,10 +2952,12 @@ export namespace Prisma {
 
   export type OrderCountOutputType = {
     items: number
+    auditLogs: number
   }
 
   export type OrderCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     items?: boolean | OrderCountOutputTypeCountItemsArgs
+    auditLogs?: boolean | OrderCountOutputTypeCountAuditLogsArgs
   }
 
   // Custom InputTypes
@@ -2866,6 +2976,13 @@ export namespace Prisma {
    */
   export type OrderCountOutputTypeCountItemsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: OrderItemWhereInput
+  }
+
+  /**
+   * OrderCountOutputType without action
+   */
+  export type OrderCountOutputTypeCountAuditLogsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: OrderAuditLogWhereInput
   }
 
 
@@ -2921,6 +3038,7 @@ export namespace Prisma {
     trialEndsAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
+    isPilot: boolean | null
     gstin: string | null
     fssai: string | null
   }
@@ -2953,6 +3071,7 @@ export namespace Prisma {
     trialEndsAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
+    isPilot: boolean | null
     gstin: string | null
     fssai: string | null
   }
@@ -2986,6 +3105,7 @@ export namespace Prisma {
     businessHours: number
     createdAt: number
     updatedAt: number
+    isPilot: number
     gstin: number
     fssai: number
     _all: number
@@ -3028,6 +3148,7 @@ export namespace Prisma {
     trialEndsAt?: true
     createdAt?: true
     updatedAt?: true
+    isPilot?: true
     gstin?: true
     fssai?: true
   }
@@ -3060,6 +3181,7 @@ export namespace Prisma {
     trialEndsAt?: true
     createdAt?: true
     updatedAt?: true
+    isPilot?: true
     gstin?: true
     fssai?: true
   }
@@ -3093,6 +3215,7 @@ export namespace Prisma {
     businessHours?: true
     createdAt?: true
     updatedAt?: true
+    isPilot?: true
     gstin?: true
     fssai?: true
     _all?: true
@@ -3213,6 +3336,7 @@ export namespace Prisma {
     businessHours: JsonValue | null
     createdAt: Date
     updatedAt: Date
+    isPilot: boolean
     gstin: string | null
     fssai: string | null
     _count: TenantCountAggregateOutputType | null
@@ -3265,6 +3389,7 @@ export namespace Prisma {
     businessHours?: boolean
     createdAt?: boolean
     updatedAt?: boolean
+    isPilot?: boolean
     gstin?: boolean
     fssai?: boolean
     users?: boolean | Tenant$usersArgs<ExtArgs>
@@ -3279,6 +3404,7 @@ export namespace Prisma {
     staffInvites?: boolean | Tenant$staffInvitesArgs<ExtArgs>
     analytics?: boolean | Tenant$analyticsArgs<ExtArgs>
     bills?: boolean | Tenant$billsArgs<ExtArgs>
+    orderAuditLogs?: boolean | Tenant$orderAuditLogsArgs<ExtArgs>
     _count?: boolean | TenantCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["tenant"]>
 
@@ -3311,6 +3437,7 @@ export namespace Prisma {
     businessHours?: boolean
     createdAt?: boolean
     updatedAt?: boolean
+    isPilot?: boolean
     gstin?: boolean
     fssai?: boolean
   }, ExtArgs["result"]["tenant"]>
@@ -3344,6 +3471,7 @@ export namespace Prisma {
     businessHours?: boolean
     createdAt?: boolean
     updatedAt?: boolean
+    isPilot?: boolean
     gstin?: boolean
     fssai?: boolean
   }
@@ -3361,6 +3489,7 @@ export namespace Prisma {
     staffInvites?: boolean | Tenant$staffInvitesArgs<ExtArgs>
     analytics?: boolean | Tenant$analyticsArgs<ExtArgs>
     bills?: boolean | Tenant$billsArgs<ExtArgs>
+    orderAuditLogs?: boolean | Tenant$orderAuditLogsArgs<ExtArgs>
     _count?: boolean | TenantCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type TenantIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
@@ -3380,6 +3509,7 @@ export namespace Prisma {
       staffInvites: Prisma.$StaffInvitePayload<ExtArgs>[]
       analytics: Prisma.$DailyAnalyticsPayload<ExtArgs>[]
       bills: Prisma.$BillPayload<ExtArgs>[]
+      orderAuditLogs: Prisma.$OrderAuditLogPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -3410,6 +3540,7 @@ export namespace Prisma {
       businessHours: Prisma.JsonValue | null
       createdAt: Date
       updatedAt: Date
+      isPilot: boolean
       gstin: string | null
       fssai: string | null
     }, ExtArgs["result"]["tenant"]>
@@ -3788,6 +3919,7 @@ export namespace Prisma {
     staffInvites<T extends Tenant$staffInvitesArgs<ExtArgs> = {}>(args?: Subset<T, Tenant$staffInvitesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$StaffInvitePayload<ExtArgs>, T, "findMany"> | Null>
     analytics<T extends Tenant$analyticsArgs<ExtArgs> = {}>(args?: Subset<T, Tenant$analyticsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DailyAnalyticsPayload<ExtArgs>, T, "findMany"> | Null>
     bills<T extends Tenant$billsArgs<ExtArgs> = {}>(args?: Subset<T, Tenant$billsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$BillPayload<ExtArgs>, T, "findMany"> | Null>
+    orderAuditLogs<T extends Tenant$orderAuditLogsArgs<ExtArgs> = {}>(args?: Subset<T, Tenant$orderAuditLogsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrderAuditLogPayload<ExtArgs>, T, "findMany"> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -3845,6 +3977,7 @@ export namespace Prisma {
     readonly businessHours: FieldRef<"Tenant", 'Json'>
     readonly createdAt: FieldRef<"Tenant", 'DateTime'>
     readonly updatedAt: FieldRef<"Tenant", 'DateTime'>
+    readonly isPilot: FieldRef<"Tenant", 'Boolean'>
     readonly gstin: FieldRef<"Tenant", 'String'>
     readonly fssai: FieldRef<"Tenant", 'String'>
   }
@@ -4398,6 +4531,26 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: BillScalarFieldEnum | BillScalarFieldEnum[]
+  }
+
+  /**
+   * Tenant.orderAuditLogs
+   */
+  export type Tenant$orderAuditLogsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrderAuditLog
+     */
+    select?: OrderAuditLogSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderAuditLogInclude<ExtArgs> | null
+    where?: OrderAuditLogWhereInput
+    orderBy?: OrderAuditLogOrderByWithRelationInput | OrderAuditLogOrderByWithRelationInput[]
+    cursor?: OrderAuditLogWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: OrderAuditLogScalarFieldEnum | OrderAuditLogScalarFieldEnum[]
   }
 
   /**
@@ -18418,6 +18571,7 @@ export namespace Prisma {
   }
 
   export type OrderAvgAggregateOutputType = {
+    version: number | null
     subtotal: number | null
     taxAmount: number | null
     discountAmount: number | null
@@ -18426,6 +18580,7 @@ export namespace Prisma {
   }
 
   export type OrderSumAggregateOutputType = {
+    version: number | null
     subtotal: number | null
     taxAmount: number | null
     discountAmount: number | null
@@ -18435,6 +18590,7 @@ export namespace Prisma {
 
   export type OrderMinAggregateOutputType = {
     id: string | null
+    version: number | null
     tenantId: string | null
     tableId: string | null
     diningSessionId: string | null
@@ -18464,6 +18620,7 @@ export namespace Prisma {
 
   export type OrderMaxAggregateOutputType = {
     id: string | null
+    version: number | null
     tenantId: string | null
     tableId: string | null
     diningSessionId: string | null
@@ -18493,6 +18650,7 @@ export namespace Prisma {
 
   export type OrderCountAggregateOutputType = {
     id: number
+    version: number
     tenantId: number
     tableId: number
     diningSessionId: number
@@ -18523,6 +18681,7 @@ export namespace Prisma {
 
 
   export type OrderAvgAggregateInputType = {
+    version?: true
     subtotal?: true
     taxAmount?: true
     discountAmount?: true
@@ -18531,6 +18690,7 @@ export namespace Prisma {
   }
 
   export type OrderSumAggregateInputType = {
+    version?: true
     subtotal?: true
     taxAmount?: true
     discountAmount?: true
@@ -18540,6 +18700,7 @@ export namespace Prisma {
 
   export type OrderMinAggregateInputType = {
     id?: true
+    version?: true
     tenantId?: true
     tableId?: true
     diningSessionId?: true
@@ -18569,6 +18730,7 @@ export namespace Prisma {
 
   export type OrderMaxAggregateInputType = {
     id?: true
+    version?: true
     tenantId?: true
     tableId?: true
     diningSessionId?: true
@@ -18598,6 +18760,7 @@ export namespace Prisma {
 
   export type OrderCountAggregateInputType = {
     id?: true
+    version?: true
     tenantId?: true
     tableId?: true
     diningSessionId?: true
@@ -18714,6 +18877,7 @@ export namespace Prisma {
 
   export type OrderGroupByOutputType = {
     id: string
+    version: number
     tenantId: string
     tableId: string | null
     diningSessionId: string | null
@@ -18762,6 +18926,7 @@ export namespace Prisma {
 
   export type OrderSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    version?: boolean
     tenantId?: boolean
     tableId?: boolean
     diningSessionId?: boolean
@@ -18792,11 +18957,13 @@ export namespace Prisma {
     diningSession?: boolean | Order$diningSessionArgs<ExtArgs>
     items?: boolean | Order$itemsArgs<ExtArgs>
     review?: boolean | Order$reviewArgs<ExtArgs>
+    auditLogs?: boolean | Order$auditLogsArgs<ExtArgs>
     _count?: boolean | OrderCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["order"]>
 
   export type OrderSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    version?: boolean
     tenantId?: boolean
     tableId?: boolean
     diningSessionId?: boolean
@@ -18829,6 +18996,7 @@ export namespace Prisma {
 
   export type OrderSelectScalar = {
     id?: boolean
+    version?: boolean
     tenantId?: boolean
     tableId?: boolean
     diningSessionId?: boolean
@@ -18862,6 +19030,7 @@ export namespace Prisma {
     diningSession?: boolean | Order$diningSessionArgs<ExtArgs>
     items?: boolean | Order$itemsArgs<ExtArgs>
     review?: boolean | Order$reviewArgs<ExtArgs>
+    auditLogs?: boolean | Order$auditLogsArgs<ExtArgs>
     _count?: boolean | OrderCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type OrderIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -18878,9 +19047,11 @@ export namespace Prisma {
       diningSession: Prisma.$DiningSessionPayload<ExtArgs> | null
       items: Prisma.$OrderItemPayload<ExtArgs>[]
       review: Prisma.$ReviewPayload<ExtArgs> | null
+      auditLogs: Prisma.$OrderAuditLogPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
+      version: number
       tenantId: string
       tableId: string | null
       diningSessionId: string | null
@@ -19275,6 +19446,7 @@ export namespace Prisma {
     diningSession<T extends Order$diningSessionArgs<ExtArgs> = {}>(args?: Subset<T, Order$diningSessionArgs<ExtArgs>>): Prisma__DiningSessionClient<$Result.GetResult<Prisma.$DiningSessionPayload<ExtArgs>, T, "findUniqueOrThrow"> | null, null, ExtArgs>
     items<T extends Order$itemsArgs<ExtArgs> = {}>(args?: Subset<T, Order$itemsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrderItemPayload<ExtArgs>, T, "findMany"> | Null>
     review<T extends Order$reviewArgs<ExtArgs> = {}>(args?: Subset<T, Order$reviewArgs<ExtArgs>>): Prisma__ReviewClient<$Result.GetResult<Prisma.$ReviewPayload<ExtArgs>, T, "findUniqueOrThrow"> | null, null, ExtArgs>
+    auditLogs<T extends Order$auditLogsArgs<ExtArgs> = {}>(args?: Subset<T, Order$auditLogsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrderAuditLogPayload<ExtArgs>, T, "findMany"> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -19305,6 +19477,7 @@ export namespace Prisma {
    */ 
   interface OrderFieldRefs {
     readonly id: FieldRef<"Order", 'String'>
+    readonly version: FieldRef<"Order", 'Int'>
     readonly tenantId: FieldRef<"Order", 'String'>
     readonly tableId: FieldRef<"Order", 'String'>
     readonly diningSessionId: FieldRef<"Order", 'String'>
@@ -19710,6 +19883,26 @@ export namespace Prisma {
      */
     include?: ReviewInclude<ExtArgs> | null
     where?: ReviewWhereInput
+  }
+
+  /**
+   * Order.auditLogs
+   */
+  export type Order$auditLogsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrderAuditLog
+     */
+    select?: OrderAuditLogSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderAuditLogInclude<ExtArgs> | null
+    where?: OrderAuditLogWhereInput
+    orderBy?: OrderAuditLogOrderByWithRelationInput | OrderAuditLogOrderByWithRelationInput[]
+    cursor?: OrderAuditLogWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: OrderAuditLogScalarFieldEnum | OrderAuditLogScalarFieldEnum[]
   }
 
   /**
@@ -23134,6 +23327,1013 @@ export namespace Prisma {
 
 
   /**
+   * Model OrderAuditLog
+   */
+
+  export type AggregateOrderAuditLog = {
+    _count: OrderAuditLogCountAggregateOutputType | null
+    _min: OrderAuditLogMinAggregateOutputType | null
+    _max: OrderAuditLogMaxAggregateOutputType | null
+  }
+
+  export type OrderAuditLogMinAggregateOutputType = {
+    id: string | null
+    tenantId: string | null
+    orderId: string | null
+    actorType: $Enums.AuditActorType | null
+    actorId: string | null
+    deviceId: string | null
+    previousStatus: $Enums.OrderStatus | null
+    newStatus: $Enums.OrderStatus | null
+    reasonCode: string | null
+    createdAt: Date | null
+  }
+
+  export type OrderAuditLogMaxAggregateOutputType = {
+    id: string | null
+    tenantId: string | null
+    orderId: string | null
+    actorType: $Enums.AuditActorType | null
+    actorId: string | null
+    deviceId: string | null
+    previousStatus: $Enums.OrderStatus | null
+    newStatus: $Enums.OrderStatus | null
+    reasonCode: string | null
+    createdAt: Date | null
+  }
+
+  export type OrderAuditLogCountAggregateOutputType = {
+    id: number
+    tenantId: number
+    orderId: number
+    actorType: number
+    actorId: number
+    deviceId: number
+    previousStatus: number
+    newStatus: number
+    reasonCode: number
+    metadata: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type OrderAuditLogMinAggregateInputType = {
+    id?: true
+    tenantId?: true
+    orderId?: true
+    actorType?: true
+    actorId?: true
+    deviceId?: true
+    previousStatus?: true
+    newStatus?: true
+    reasonCode?: true
+    createdAt?: true
+  }
+
+  export type OrderAuditLogMaxAggregateInputType = {
+    id?: true
+    tenantId?: true
+    orderId?: true
+    actorType?: true
+    actorId?: true
+    deviceId?: true
+    previousStatus?: true
+    newStatus?: true
+    reasonCode?: true
+    createdAt?: true
+  }
+
+  export type OrderAuditLogCountAggregateInputType = {
+    id?: true
+    tenantId?: true
+    orderId?: true
+    actorType?: true
+    actorId?: true
+    deviceId?: true
+    previousStatus?: true
+    newStatus?: true
+    reasonCode?: true
+    metadata?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type OrderAuditLogAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which OrderAuditLog to aggregate.
+     */
+    where?: OrderAuditLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of OrderAuditLogs to fetch.
+     */
+    orderBy?: OrderAuditLogOrderByWithRelationInput | OrderAuditLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: OrderAuditLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` OrderAuditLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` OrderAuditLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned OrderAuditLogs
+    **/
+    _count?: true | OrderAuditLogCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: OrderAuditLogMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: OrderAuditLogMaxAggregateInputType
+  }
+
+  export type GetOrderAuditLogAggregateType<T extends OrderAuditLogAggregateArgs> = {
+        [P in keyof T & keyof AggregateOrderAuditLog]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateOrderAuditLog[P]>
+      : GetScalarType<T[P], AggregateOrderAuditLog[P]>
+  }
+
+
+
+
+  export type OrderAuditLogGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: OrderAuditLogWhereInput
+    orderBy?: OrderAuditLogOrderByWithAggregationInput | OrderAuditLogOrderByWithAggregationInput[]
+    by: OrderAuditLogScalarFieldEnum[] | OrderAuditLogScalarFieldEnum
+    having?: OrderAuditLogScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: OrderAuditLogCountAggregateInputType | true
+    _min?: OrderAuditLogMinAggregateInputType
+    _max?: OrderAuditLogMaxAggregateInputType
+  }
+
+  export type OrderAuditLogGroupByOutputType = {
+    id: string
+    tenantId: string
+    orderId: string
+    actorType: $Enums.AuditActorType
+    actorId: string | null
+    deviceId: string | null
+    previousStatus: $Enums.OrderStatus | null
+    newStatus: $Enums.OrderStatus
+    reasonCode: string | null
+    metadata: JsonValue | null
+    createdAt: Date
+    _count: OrderAuditLogCountAggregateOutputType | null
+    _min: OrderAuditLogMinAggregateOutputType | null
+    _max: OrderAuditLogMaxAggregateOutputType | null
+  }
+
+  type GetOrderAuditLogGroupByPayload<T extends OrderAuditLogGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<OrderAuditLogGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof OrderAuditLogGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], OrderAuditLogGroupByOutputType[P]>
+            : GetScalarType<T[P], OrderAuditLogGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type OrderAuditLogSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    tenantId?: boolean
+    orderId?: boolean
+    actorType?: boolean
+    actorId?: boolean
+    deviceId?: boolean
+    previousStatus?: boolean
+    newStatus?: boolean
+    reasonCode?: boolean
+    metadata?: boolean
+    createdAt?: boolean
+    tenant?: boolean | TenantDefaultArgs<ExtArgs>
+    order?: boolean | OrderDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["orderAuditLog"]>
+
+  export type OrderAuditLogSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    tenantId?: boolean
+    orderId?: boolean
+    actorType?: boolean
+    actorId?: boolean
+    deviceId?: boolean
+    previousStatus?: boolean
+    newStatus?: boolean
+    reasonCode?: boolean
+    metadata?: boolean
+    createdAt?: boolean
+    tenant?: boolean | TenantDefaultArgs<ExtArgs>
+    order?: boolean | OrderDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["orderAuditLog"]>
+
+  export type OrderAuditLogSelectScalar = {
+    id?: boolean
+    tenantId?: boolean
+    orderId?: boolean
+    actorType?: boolean
+    actorId?: boolean
+    deviceId?: boolean
+    previousStatus?: boolean
+    newStatus?: boolean
+    reasonCode?: boolean
+    metadata?: boolean
+    createdAt?: boolean
+  }
+
+  export type OrderAuditLogInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    tenant?: boolean | TenantDefaultArgs<ExtArgs>
+    order?: boolean | OrderDefaultArgs<ExtArgs>
+  }
+  export type OrderAuditLogIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    tenant?: boolean | TenantDefaultArgs<ExtArgs>
+    order?: boolean | OrderDefaultArgs<ExtArgs>
+  }
+
+  export type $OrderAuditLogPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "OrderAuditLog"
+    objects: {
+      tenant: Prisma.$TenantPayload<ExtArgs>
+      order: Prisma.$OrderPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      tenantId: string
+      orderId: string
+      actorType: $Enums.AuditActorType
+      actorId: string | null
+      deviceId: string | null
+      previousStatus: $Enums.OrderStatus | null
+      newStatus: $Enums.OrderStatus
+      reasonCode: string | null
+      metadata: Prisma.JsonValue | null
+      createdAt: Date
+    }, ExtArgs["result"]["orderAuditLog"]>
+    composites: {}
+  }
+
+  type OrderAuditLogGetPayload<S extends boolean | null | undefined | OrderAuditLogDefaultArgs> = $Result.GetResult<Prisma.$OrderAuditLogPayload, S>
+
+  type OrderAuditLogCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = 
+    Omit<OrderAuditLogFindManyArgs, 'select' | 'include' | 'distinct'> & {
+      select?: OrderAuditLogCountAggregateInputType | true
+    }
+
+  export interface OrderAuditLogDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['OrderAuditLog'], meta: { name: 'OrderAuditLog' } }
+    /**
+     * Find zero or one OrderAuditLog that matches the filter.
+     * @param {OrderAuditLogFindUniqueArgs} args - Arguments to find a OrderAuditLog
+     * @example
+     * // Get one OrderAuditLog
+     * const orderAuditLog = await prisma.orderAuditLog.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends OrderAuditLogFindUniqueArgs>(args: SelectSubset<T, OrderAuditLogFindUniqueArgs<ExtArgs>>): Prisma__OrderAuditLogClient<$Result.GetResult<Prisma.$OrderAuditLogPayload<ExtArgs>, T, "findUnique"> | null, null, ExtArgs>
+
+    /**
+     * Find one OrderAuditLog that matches the filter or throw an error with `error.code='P2025'` 
+     * if no matches were found.
+     * @param {OrderAuditLogFindUniqueOrThrowArgs} args - Arguments to find a OrderAuditLog
+     * @example
+     * // Get one OrderAuditLog
+     * const orderAuditLog = await prisma.orderAuditLog.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends OrderAuditLogFindUniqueOrThrowArgs>(args: SelectSubset<T, OrderAuditLogFindUniqueOrThrowArgs<ExtArgs>>): Prisma__OrderAuditLogClient<$Result.GetResult<Prisma.$OrderAuditLogPayload<ExtArgs>, T, "findUniqueOrThrow">, never, ExtArgs>
+
+    /**
+     * Find the first OrderAuditLog that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OrderAuditLogFindFirstArgs} args - Arguments to find a OrderAuditLog
+     * @example
+     * // Get one OrderAuditLog
+     * const orderAuditLog = await prisma.orderAuditLog.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends OrderAuditLogFindFirstArgs>(args?: SelectSubset<T, OrderAuditLogFindFirstArgs<ExtArgs>>): Prisma__OrderAuditLogClient<$Result.GetResult<Prisma.$OrderAuditLogPayload<ExtArgs>, T, "findFirst"> | null, null, ExtArgs>
+
+    /**
+     * Find the first OrderAuditLog that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OrderAuditLogFindFirstOrThrowArgs} args - Arguments to find a OrderAuditLog
+     * @example
+     * // Get one OrderAuditLog
+     * const orderAuditLog = await prisma.orderAuditLog.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends OrderAuditLogFindFirstOrThrowArgs>(args?: SelectSubset<T, OrderAuditLogFindFirstOrThrowArgs<ExtArgs>>): Prisma__OrderAuditLogClient<$Result.GetResult<Prisma.$OrderAuditLogPayload<ExtArgs>, T, "findFirstOrThrow">, never, ExtArgs>
+
+    /**
+     * Find zero or more OrderAuditLogs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OrderAuditLogFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all OrderAuditLogs
+     * const orderAuditLogs = await prisma.orderAuditLog.findMany()
+     * 
+     * // Get first 10 OrderAuditLogs
+     * const orderAuditLogs = await prisma.orderAuditLog.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const orderAuditLogWithIdOnly = await prisma.orderAuditLog.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends OrderAuditLogFindManyArgs>(args?: SelectSubset<T, OrderAuditLogFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrderAuditLogPayload<ExtArgs>, T, "findMany">>
+
+    /**
+     * Create a OrderAuditLog.
+     * @param {OrderAuditLogCreateArgs} args - Arguments to create a OrderAuditLog.
+     * @example
+     * // Create one OrderAuditLog
+     * const OrderAuditLog = await prisma.orderAuditLog.create({
+     *   data: {
+     *     // ... data to create a OrderAuditLog
+     *   }
+     * })
+     * 
+     */
+    create<T extends OrderAuditLogCreateArgs>(args: SelectSubset<T, OrderAuditLogCreateArgs<ExtArgs>>): Prisma__OrderAuditLogClient<$Result.GetResult<Prisma.$OrderAuditLogPayload<ExtArgs>, T, "create">, never, ExtArgs>
+
+    /**
+     * Create many OrderAuditLogs.
+     * @param {OrderAuditLogCreateManyArgs} args - Arguments to create many OrderAuditLogs.
+     * @example
+     * // Create many OrderAuditLogs
+     * const orderAuditLog = await prisma.orderAuditLog.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends OrderAuditLogCreateManyArgs>(args?: SelectSubset<T, OrderAuditLogCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many OrderAuditLogs and returns the data saved in the database.
+     * @param {OrderAuditLogCreateManyAndReturnArgs} args - Arguments to create many OrderAuditLogs.
+     * @example
+     * // Create many OrderAuditLogs
+     * const orderAuditLog = await prisma.orderAuditLog.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many OrderAuditLogs and only return the `id`
+     * const orderAuditLogWithIdOnly = await prisma.orderAuditLog.createManyAndReturn({ 
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends OrderAuditLogCreateManyAndReturnArgs>(args?: SelectSubset<T, OrderAuditLogCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrderAuditLogPayload<ExtArgs>, T, "createManyAndReturn">>
+
+    /**
+     * Delete a OrderAuditLog.
+     * @param {OrderAuditLogDeleteArgs} args - Arguments to delete one OrderAuditLog.
+     * @example
+     * // Delete one OrderAuditLog
+     * const OrderAuditLog = await prisma.orderAuditLog.delete({
+     *   where: {
+     *     // ... filter to delete one OrderAuditLog
+     *   }
+     * })
+     * 
+     */
+    delete<T extends OrderAuditLogDeleteArgs>(args: SelectSubset<T, OrderAuditLogDeleteArgs<ExtArgs>>): Prisma__OrderAuditLogClient<$Result.GetResult<Prisma.$OrderAuditLogPayload<ExtArgs>, T, "delete">, never, ExtArgs>
+
+    /**
+     * Update one OrderAuditLog.
+     * @param {OrderAuditLogUpdateArgs} args - Arguments to update one OrderAuditLog.
+     * @example
+     * // Update one OrderAuditLog
+     * const orderAuditLog = await prisma.orderAuditLog.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends OrderAuditLogUpdateArgs>(args: SelectSubset<T, OrderAuditLogUpdateArgs<ExtArgs>>): Prisma__OrderAuditLogClient<$Result.GetResult<Prisma.$OrderAuditLogPayload<ExtArgs>, T, "update">, never, ExtArgs>
+
+    /**
+     * Delete zero or more OrderAuditLogs.
+     * @param {OrderAuditLogDeleteManyArgs} args - Arguments to filter OrderAuditLogs to delete.
+     * @example
+     * // Delete a few OrderAuditLogs
+     * const { count } = await prisma.orderAuditLog.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends OrderAuditLogDeleteManyArgs>(args?: SelectSubset<T, OrderAuditLogDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more OrderAuditLogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OrderAuditLogUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many OrderAuditLogs
+     * const orderAuditLog = await prisma.orderAuditLog.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends OrderAuditLogUpdateManyArgs>(args: SelectSubset<T, OrderAuditLogUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one OrderAuditLog.
+     * @param {OrderAuditLogUpsertArgs} args - Arguments to update or create a OrderAuditLog.
+     * @example
+     * // Update or create a OrderAuditLog
+     * const orderAuditLog = await prisma.orderAuditLog.upsert({
+     *   create: {
+     *     // ... data to create a OrderAuditLog
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the OrderAuditLog we want to update
+     *   }
+     * })
+     */
+    upsert<T extends OrderAuditLogUpsertArgs>(args: SelectSubset<T, OrderAuditLogUpsertArgs<ExtArgs>>): Prisma__OrderAuditLogClient<$Result.GetResult<Prisma.$OrderAuditLogPayload<ExtArgs>, T, "upsert">, never, ExtArgs>
+
+
+    /**
+     * Count the number of OrderAuditLogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OrderAuditLogCountArgs} args - Arguments to filter OrderAuditLogs to count.
+     * @example
+     * // Count the number of OrderAuditLogs
+     * const count = await prisma.orderAuditLog.count({
+     *   where: {
+     *     // ... the filter for the OrderAuditLogs we want to count
+     *   }
+     * })
+    **/
+    count<T extends OrderAuditLogCountArgs>(
+      args?: Subset<T, OrderAuditLogCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], OrderAuditLogCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a OrderAuditLog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OrderAuditLogAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends OrderAuditLogAggregateArgs>(args: Subset<T, OrderAuditLogAggregateArgs>): Prisma.PrismaPromise<GetOrderAuditLogAggregateType<T>>
+
+    /**
+     * Group by OrderAuditLog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {OrderAuditLogGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends OrderAuditLogGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: OrderAuditLogGroupByArgs['orderBy'] }
+        : { orderBy?: OrderAuditLogGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, OrderAuditLogGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetOrderAuditLogGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the OrderAuditLog model
+   */
+  readonly fields: OrderAuditLogFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for OrderAuditLog.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__OrderAuditLogClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    tenant<T extends TenantDefaultArgs<ExtArgs> = {}>(args?: Subset<T, TenantDefaultArgs<ExtArgs>>): Prisma__TenantClient<$Result.GetResult<Prisma.$TenantPayload<ExtArgs>, T, "findUniqueOrThrow"> | Null, Null, ExtArgs>
+    order<T extends OrderDefaultArgs<ExtArgs> = {}>(args?: Subset<T, OrderDefaultArgs<ExtArgs>>): Prisma__OrderClient<$Result.GetResult<Prisma.$OrderPayload<ExtArgs>, T, "findUniqueOrThrow"> | Null, Null, ExtArgs>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the OrderAuditLog model
+   */ 
+  interface OrderAuditLogFieldRefs {
+    readonly id: FieldRef<"OrderAuditLog", 'String'>
+    readonly tenantId: FieldRef<"OrderAuditLog", 'String'>
+    readonly orderId: FieldRef<"OrderAuditLog", 'String'>
+    readonly actorType: FieldRef<"OrderAuditLog", 'AuditActorType'>
+    readonly actorId: FieldRef<"OrderAuditLog", 'String'>
+    readonly deviceId: FieldRef<"OrderAuditLog", 'String'>
+    readonly previousStatus: FieldRef<"OrderAuditLog", 'OrderStatus'>
+    readonly newStatus: FieldRef<"OrderAuditLog", 'OrderStatus'>
+    readonly reasonCode: FieldRef<"OrderAuditLog", 'String'>
+    readonly metadata: FieldRef<"OrderAuditLog", 'Json'>
+    readonly createdAt: FieldRef<"OrderAuditLog", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * OrderAuditLog findUnique
+   */
+  export type OrderAuditLogFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrderAuditLog
+     */
+    select?: OrderAuditLogSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderAuditLogInclude<ExtArgs> | null
+    /**
+     * Filter, which OrderAuditLog to fetch.
+     */
+    where: OrderAuditLogWhereUniqueInput
+  }
+
+  /**
+   * OrderAuditLog findUniqueOrThrow
+   */
+  export type OrderAuditLogFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrderAuditLog
+     */
+    select?: OrderAuditLogSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderAuditLogInclude<ExtArgs> | null
+    /**
+     * Filter, which OrderAuditLog to fetch.
+     */
+    where: OrderAuditLogWhereUniqueInput
+  }
+
+  /**
+   * OrderAuditLog findFirst
+   */
+  export type OrderAuditLogFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrderAuditLog
+     */
+    select?: OrderAuditLogSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderAuditLogInclude<ExtArgs> | null
+    /**
+     * Filter, which OrderAuditLog to fetch.
+     */
+    where?: OrderAuditLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of OrderAuditLogs to fetch.
+     */
+    orderBy?: OrderAuditLogOrderByWithRelationInput | OrderAuditLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for OrderAuditLogs.
+     */
+    cursor?: OrderAuditLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` OrderAuditLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` OrderAuditLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of OrderAuditLogs.
+     */
+    distinct?: OrderAuditLogScalarFieldEnum | OrderAuditLogScalarFieldEnum[]
+  }
+
+  /**
+   * OrderAuditLog findFirstOrThrow
+   */
+  export type OrderAuditLogFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrderAuditLog
+     */
+    select?: OrderAuditLogSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderAuditLogInclude<ExtArgs> | null
+    /**
+     * Filter, which OrderAuditLog to fetch.
+     */
+    where?: OrderAuditLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of OrderAuditLogs to fetch.
+     */
+    orderBy?: OrderAuditLogOrderByWithRelationInput | OrderAuditLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for OrderAuditLogs.
+     */
+    cursor?: OrderAuditLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` OrderAuditLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` OrderAuditLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of OrderAuditLogs.
+     */
+    distinct?: OrderAuditLogScalarFieldEnum | OrderAuditLogScalarFieldEnum[]
+  }
+
+  /**
+   * OrderAuditLog findMany
+   */
+  export type OrderAuditLogFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrderAuditLog
+     */
+    select?: OrderAuditLogSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderAuditLogInclude<ExtArgs> | null
+    /**
+     * Filter, which OrderAuditLogs to fetch.
+     */
+    where?: OrderAuditLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of OrderAuditLogs to fetch.
+     */
+    orderBy?: OrderAuditLogOrderByWithRelationInput | OrderAuditLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing OrderAuditLogs.
+     */
+    cursor?: OrderAuditLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` OrderAuditLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` OrderAuditLogs.
+     */
+    skip?: number
+    distinct?: OrderAuditLogScalarFieldEnum | OrderAuditLogScalarFieldEnum[]
+  }
+
+  /**
+   * OrderAuditLog create
+   */
+  export type OrderAuditLogCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrderAuditLog
+     */
+    select?: OrderAuditLogSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderAuditLogInclude<ExtArgs> | null
+    /**
+     * The data needed to create a OrderAuditLog.
+     */
+    data: XOR<OrderAuditLogCreateInput, OrderAuditLogUncheckedCreateInput>
+  }
+
+  /**
+   * OrderAuditLog createMany
+   */
+  export type OrderAuditLogCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many OrderAuditLogs.
+     */
+    data: OrderAuditLogCreateManyInput | OrderAuditLogCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * OrderAuditLog createManyAndReturn
+   */
+  export type OrderAuditLogCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrderAuditLog
+     */
+    select?: OrderAuditLogSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * The data used to create many OrderAuditLogs.
+     */
+    data: OrderAuditLogCreateManyInput | OrderAuditLogCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderAuditLogIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * OrderAuditLog update
+   */
+  export type OrderAuditLogUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrderAuditLog
+     */
+    select?: OrderAuditLogSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderAuditLogInclude<ExtArgs> | null
+    /**
+     * The data needed to update a OrderAuditLog.
+     */
+    data: XOR<OrderAuditLogUpdateInput, OrderAuditLogUncheckedUpdateInput>
+    /**
+     * Choose, which OrderAuditLog to update.
+     */
+    where: OrderAuditLogWhereUniqueInput
+  }
+
+  /**
+   * OrderAuditLog updateMany
+   */
+  export type OrderAuditLogUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update OrderAuditLogs.
+     */
+    data: XOR<OrderAuditLogUpdateManyMutationInput, OrderAuditLogUncheckedUpdateManyInput>
+    /**
+     * Filter which OrderAuditLogs to update
+     */
+    where?: OrderAuditLogWhereInput
+  }
+
+  /**
+   * OrderAuditLog upsert
+   */
+  export type OrderAuditLogUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrderAuditLog
+     */
+    select?: OrderAuditLogSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderAuditLogInclude<ExtArgs> | null
+    /**
+     * The filter to search for the OrderAuditLog to update in case it exists.
+     */
+    where: OrderAuditLogWhereUniqueInput
+    /**
+     * In case the OrderAuditLog found by the `where` argument doesn't exist, create a new OrderAuditLog with this data.
+     */
+    create: XOR<OrderAuditLogCreateInput, OrderAuditLogUncheckedCreateInput>
+    /**
+     * In case the OrderAuditLog was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<OrderAuditLogUpdateInput, OrderAuditLogUncheckedUpdateInput>
+  }
+
+  /**
+   * OrderAuditLog delete
+   */
+  export type OrderAuditLogDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrderAuditLog
+     */
+    select?: OrderAuditLogSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderAuditLogInclude<ExtArgs> | null
+    /**
+     * Filter which OrderAuditLog to delete.
+     */
+    where: OrderAuditLogWhereUniqueInput
+  }
+
+  /**
+   * OrderAuditLog deleteMany
+   */
+  export type OrderAuditLogDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which OrderAuditLogs to delete
+     */
+    where?: OrderAuditLogWhereInput
+  }
+
+  /**
+   * OrderAuditLog without action
+   */
+  export type OrderAuditLogDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the OrderAuditLog
+     */
+    select?: OrderAuditLogSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderAuditLogInclude<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -23176,6 +24376,7 @@ export namespace Prisma {
     businessHours: 'businessHours',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt',
+    isPilot: 'isPilot',
     gstin: 'gstin',
     fssai: 'fssai'
   };
@@ -23421,6 +24622,7 @@ export namespace Prisma {
 
   export const OrderScalarFieldEnum: {
     id: 'id',
+    version: 'version',
     tenantId: 'tenantId',
     tableId: 'tableId',
     diningSessionId: 'diningSessionId',
@@ -23511,6 +24713,23 @@ export namespace Prisma {
   };
 
   export type DailyAnalyticsScalarFieldEnum = (typeof DailyAnalyticsScalarFieldEnum)[keyof typeof DailyAnalyticsScalarFieldEnum]
+
+
+  export const OrderAuditLogScalarFieldEnum: {
+    id: 'id',
+    tenantId: 'tenantId',
+    orderId: 'orderId',
+    actorType: 'actorType',
+    actorId: 'actorId',
+    deviceId: 'deviceId',
+    previousStatus: 'previousStatus',
+    newStatus: 'newStatus',
+    reasonCode: 'reasonCode',
+    metadata: 'metadata',
+    createdAt: 'createdAt'
+  };
+
+  export type OrderAuditLogScalarFieldEnum = (typeof OrderAuditLogScalarFieldEnum)[keyof typeof OrderAuditLogScalarFieldEnum]
 
 
   export const SortOrder: {
@@ -23746,6 +24965,20 @@ export namespace Prisma {
    */
   export type ListEnumOrderStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OrderStatus[]'>
     
+
+
+  /**
+   * Reference to a field of type 'AuditActorType'
+   */
+  export type EnumAuditActorTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AuditActorType'>
+    
+
+
+  /**
+   * Reference to a field of type 'AuditActorType[]'
+   */
+  export type ListEnumAuditActorTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AuditActorType[]'>
+    
   /**
    * Deep Input Types
    */
@@ -23783,6 +25016,7 @@ export namespace Prisma {
     businessHours?: JsonNullableFilter<"Tenant">
     createdAt?: DateTimeFilter<"Tenant"> | Date | string
     updatedAt?: DateTimeFilter<"Tenant"> | Date | string
+    isPilot?: BoolFilter<"Tenant"> | boolean
     gstin?: StringNullableFilter<"Tenant"> | string | null
     fssai?: StringNullableFilter<"Tenant"> | string | null
     users?: UserListRelationFilter
@@ -23797,6 +25031,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteListRelationFilter
     analytics?: DailyAnalyticsListRelationFilter
     bills?: BillListRelationFilter
+    orderAuditLogs?: OrderAuditLogListRelationFilter
   }
 
   export type TenantOrderByWithRelationInput = {
@@ -23828,6 +25063,7 @@ export namespace Prisma {
     businessHours?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+    isPilot?: SortOrder
     gstin?: SortOrderInput | SortOrder
     fssai?: SortOrderInput | SortOrder
     users?: UserOrderByRelationAggregateInput
@@ -23842,6 +25078,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteOrderByRelationAggregateInput
     analytics?: DailyAnalyticsOrderByRelationAggregateInput
     bills?: BillOrderByRelationAggregateInput
+    orderAuditLogs?: OrderAuditLogOrderByRelationAggregateInput
   }
 
   export type TenantWhereUniqueInput = Prisma.AtLeast<{
@@ -23876,6 +25113,7 @@ export namespace Prisma {
     businessHours?: JsonNullableFilter<"Tenant">
     createdAt?: DateTimeFilter<"Tenant"> | Date | string
     updatedAt?: DateTimeFilter<"Tenant"> | Date | string
+    isPilot?: BoolFilter<"Tenant"> | boolean
     gstin?: StringNullableFilter<"Tenant"> | string | null
     fssai?: StringNullableFilter<"Tenant"> | string | null
     users?: UserListRelationFilter
@@ -23890,6 +25128,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteListRelationFilter
     analytics?: DailyAnalyticsListRelationFilter
     bills?: BillListRelationFilter
+    orderAuditLogs?: OrderAuditLogListRelationFilter
   }, "id" | "slug">
 
   export type TenantOrderByWithAggregationInput = {
@@ -23921,6 +25160,7 @@ export namespace Prisma {
     businessHours?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+    isPilot?: SortOrder
     gstin?: SortOrderInput | SortOrder
     fssai?: SortOrderInput | SortOrder
     _count?: TenantCountOrderByAggregateInput
@@ -23962,6 +25202,7 @@ export namespace Prisma {
     businessHours?: JsonNullableWithAggregatesFilter<"Tenant">
     createdAt?: DateTimeWithAggregatesFilter<"Tenant"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Tenant"> | Date | string
+    isPilot?: BoolWithAggregatesFilter<"Tenant"> | boolean
     gstin?: StringNullableWithAggregatesFilter<"Tenant"> | string | null
     fssai?: StringNullableWithAggregatesFilter<"Tenant"> | string | null
   }
@@ -25223,6 +26464,7 @@ export namespace Prisma {
     OR?: OrderWhereInput[]
     NOT?: OrderWhereInput | OrderWhereInput[]
     id?: StringFilter<"Order"> | string
+    version?: IntFilter<"Order"> | number
     tenantId?: StringFilter<"Order"> | string
     tableId?: StringNullableFilter<"Order"> | string | null
     diningSessionId?: StringNullableFilter<"Order"> | string | null
@@ -25253,10 +26495,12 @@ export namespace Prisma {
     diningSession?: XOR<DiningSessionNullableRelationFilter, DiningSessionWhereInput> | null
     items?: OrderItemListRelationFilter
     review?: XOR<ReviewNullableRelationFilter, ReviewWhereInput> | null
+    auditLogs?: OrderAuditLogListRelationFilter
   }
 
   export type OrderOrderByWithRelationInput = {
     id?: SortOrder
+    version?: SortOrder
     tenantId?: SortOrder
     tableId?: SortOrderInput | SortOrder
     diningSessionId?: SortOrderInput | SortOrder
@@ -25287,6 +26531,7 @@ export namespace Prisma {
     diningSession?: DiningSessionOrderByWithRelationInput
     items?: OrderItemOrderByRelationAggregateInput
     review?: ReviewOrderByWithRelationInput
+    auditLogs?: OrderAuditLogOrderByRelationAggregateInput
   }
 
   export type OrderWhereUniqueInput = Prisma.AtLeast<{
@@ -25294,6 +26539,7 @@ export namespace Prisma {
     AND?: OrderWhereInput | OrderWhereInput[]
     OR?: OrderWhereInput[]
     NOT?: OrderWhereInput | OrderWhereInput[]
+    version?: IntFilter<"Order"> | number
     tenantId?: StringFilter<"Order"> | string
     tableId?: StringNullableFilter<"Order"> | string | null
     diningSessionId?: StringNullableFilter<"Order"> | string | null
@@ -25324,10 +26570,12 @@ export namespace Prisma {
     diningSession?: XOR<DiningSessionNullableRelationFilter, DiningSessionWhereInput> | null
     items?: OrderItemListRelationFilter
     review?: XOR<ReviewNullableRelationFilter, ReviewWhereInput> | null
+    auditLogs?: OrderAuditLogListRelationFilter
   }, "id">
 
   export type OrderOrderByWithAggregationInput = {
     id?: SortOrder
+    version?: SortOrder
     tenantId?: SortOrder
     tableId?: SortOrderInput | SortOrder
     diningSessionId?: SortOrderInput | SortOrder
@@ -25365,6 +26613,7 @@ export namespace Prisma {
     OR?: OrderScalarWhereWithAggregatesInput[]
     NOT?: OrderScalarWhereWithAggregatesInput | OrderScalarWhereWithAggregatesInput[]
     id?: StringWithAggregatesFilter<"Order"> | string
+    version?: IntWithAggregatesFilter<"Order"> | number
     tenantId?: StringWithAggregatesFilter<"Order"> | string
     tableId?: StringNullableWithAggregatesFilter<"Order"> | string | null
     diningSessionId?: StringNullableWithAggregatesFilter<"Order"> | string | null
@@ -25724,6 +26973,94 @@ export namespace Prisma {
     updatedAt?: DateTimeWithAggregatesFilter<"DailyAnalytics"> | Date | string
   }
 
+  export type OrderAuditLogWhereInput = {
+    AND?: OrderAuditLogWhereInput | OrderAuditLogWhereInput[]
+    OR?: OrderAuditLogWhereInput[]
+    NOT?: OrderAuditLogWhereInput | OrderAuditLogWhereInput[]
+    id?: StringFilter<"OrderAuditLog"> | string
+    tenantId?: StringFilter<"OrderAuditLog"> | string
+    orderId?: StringFilter<"OrderAuditLog"> | string
+    actorType?: EnumAuditActorTypeFilter<"OrderAuditLog"> | $Enums.AuditActorType
+    actorId?: StringNullableFilter<"OrderAuditLog"> | string | null
+    deviceId?: StringNullableFilter<"OrderAuditLog"> | string | null
+    previousStatus?: EnumOrderStatusNullableFilter<"OrderAuditLog"> | $Enums.OrderStatus | null
+    newStatus?: EnumOrderStatusFilter<"OrderAuditLog"> | $Enums.OrderStatus
+    reasonCode?: StringNullableFilter<"OrderAuditLog"> | string | null
+    metadata?: JsonNullableFilter<"OrderAuditLog">
+    createdAt?: DateTimeFilter<"OrderAuditLog"> | Date | string
+    tenant?: XOR<TenantRelationFilter, TenantWhereInput>
+    order?: XOR<OrderRelationFilter, OrderWhereInput>
+  }
+
+  export type OrderAuditLogOrderByWithRelationInput = {
+    id?: SortOrder
+    tenantId?: SortOrder
+    orderId?: SortOrder
+    actorType?: SortOrder
+    actorId?: SortOrderInput | SortOrder
+    deviceId?: SortOrderInput | SortOrder
+    previousStatus?: SortOrderInput | SortOrder
+    newStatus?: SortOrder
+    reasonCode?: SortOrderInput | SortOrder
+    metadata?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    tenant?: TenantOrderByWithRelationInput
+    order?: OrderOrderByWithRelationInput
+  }
+
+  export type OrderAuditLogWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: OrderAuditLogWhereInput | OrderAuditLogWhereInput[]
+    OR?: OrderAuditLogWhereInput[]
+    NOT?: OrderAuditLogWhereInput | OrderAuditLogWhereInput[]
+    tenantId?: StringFilter<"OrderAuditLog"> | string
+    orderId?: StringFilter<"OrderAuditLog"> | string
+    actorType?: EnumAuditActorTypeFilter<"OrderAuditLog"> | $Enums.AuditActorType
+    actorId?: StringNullableFilter<"OrderAuditLog"> | string | null
+    deviceId?: StringNullableFilter<"OrderAuditLog"> | string | null
+    previousStatus?: EnumOrderStatusNullableFilter<"OrderAuditLog"> | $Enums.OrderStatus | null
+    newStatus?: EnumOrderStatusFilter<"OrderAuditLog"> | $Enums.OrderStatus
+    reasonCode?: StringNullableFilter<"OrderAuditLog"> | string | null
+    metadata?: JsonNullableFilter<"OrderAuditLog">
+    createdAt?: DateTimeFilter<"OrderAuditLog"> | Date | string
+    tenant?: XOR<TenantRelationFilter, TenantWhereInput>
+    order?: XOR<OrderRelationFilter, OrderWhereInput>
+  }, "id">
+
+  export type OrderAuditLogOrderByWithAggregationInput = {
+    id?: SortOrder
+    tenantId?: SortOrder
+    orderId?: SortOrder
+    actorType?: SortOrder
+    actorId?: SortOrderInput | SortOrder
+    deviceId?: SortOrderInput | SortOrder
+    previousStatus?: SortOrderInput | SortOrder
+    newStatus?: SortOrder
+    reasonCode?: SortOrderInput | SortOrder
+    metadata?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: OrderAuditLogCountOrderByAggregateInput
+    _max?: OrderAuditLogMaxOrderByAggregateInput
+    _min?: OrderAuditLogMinOrderByAggregateInput
+  }
+
+  export type OrderAuditLogScalarWhereWithAggregatesInput = {
+    AND?: OrderAuditLogScalarWhereWithAggregatesInput | OrderAuditLogScalarWhereWithAggregatesInput[]
+    OR?: OrderAuditLogScalarWhereWithAggregatesInput[]
+    NOT?: OrderAuditLogScalarWhereWithAggregatesInput | OrderAuditLogScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"OrderAuditLog"> | string
+    tenantId?: StringWithAggregatesFilter<"OrderAuditLog"> | string
+    orderId?: StringWithAggregatesFilter<"OrderAuditLog"> | string
+    actorType?: EnumAuditActorTypeWithAggregatesFilter<"OrderAuditLog"> | $Enums.AuditActorType
+    actorId?: StringNullableWithAggregatesFilter<"OrderAuditLog"> | string | null
+    deviceId?: StringNullableWithAggregatesFilter<"OrderAuditLog"> | string | null
+    previousStatus?: EnumOrderStatusNullableWithAggregatesFilter<"OrderAuditLog"> | $Enums.OrderStatus | null
+    newStatus?: EnumOrderStatusWithAggregatesFilter<"OrderAuditLog"> | $Enums.OrderStatus
+    reasonCode?: StringNullableWithAggregatesFilter<"OrderAuditLog"> | string | null
+    metadata?: JsonNullableWithAggregatesFilter<"OrderAuditLog">
+    createdAt?: DateTimeWithAggregatesFilter<"OrderAuditLog"> | Date | string
+  }
+
   export type TenantCreateInput = {
     id?: string
     slug: string
@@ -25753,6 +27090,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserCreateNestedManyWithoutTenantInput
@@ -25767,6 +27105,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsCreateNestedManyWithoutTenantInput
     bills?: BillCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogCreateNestedManyWithoutTenantInput
   }
 
   export type TenantUncheckedCreateInput = {
@@ -25798,6 +27137,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserUncheckedCreateNestedManyWithoutTenantInput
@@ -25812,6 +27152,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsUncheckedCreateNestedManyWithoutTenantInput
     bills?: BillUncheckedCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutTenantInput
   }
 
   export type TenantUpdateInput = {
@@ -25843,6 +27184,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUpdateManyWithoutTenantNestedInput
@@ -25857,6 +27199,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUpdateManyWithoutTenantNestedInput
     bills?: BillUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantUncheckedUpdateInput = {
@@ -25888,6 +27231,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUncheckedUpdateManyWithoutTenantNestedInput
@@ -25902,6 +27246,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUncheckedUpdateManyWithoutTenantNestedInput
     bills?: BillUncheckedUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUncheckedUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantCreateManyInput = {
@@ -25933,6 +27278,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
   }
@@ -25966,6 +27312,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
   }
@@ -25999,6 +27346,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
   }
@@ -27423,6 +28771,7 @@ export namespace Prisma {
 
   export type OrderCreateInput = {
     id?: string
+    version?: number
     orderNumber: string
     orderType?: $Enums.OrderType
     status?: $Enums.OrderStatus
@@ -27450,10 +28799,12 @@ export namespace Prisma {
     diningSession?: DiningSessionCreateNestedOneWithoutOrdersInput
     items?: OrderItemCreateNestedManyWithoutOrderInput
     review?: ReviewCreateNestedOneWithoutOrderInput
+    auditLogs?: OrderAuditLogCreateNestedManyWithoutOrderInput
   }
 
   export type OrderUncheckedCreateInput = {
     id?: string
+    version?: number
     tenantId: string
     tableId?: string | null
     diningSessionId?: string | null
@@ -27481,10 +28832,12 @@ export namespace Prisma {
     updatedAt?: Date | string
     items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
     review?: ReviewUncheckedCreateNestedOneWithoutOrderInput
+    auditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutOrderInput
   }
 
   export type OrderUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     orderNumber?: StringFieldUpdateOperationsInput | string
     orderType?: EnumOrderTypeFieldUpdateOperationsInput | $Enums.OrderType
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
@@ -27512,10 +28865,12 @@ export namespace Prisma {
     diningSession?: DiningSessionUpdateOneWithoutOrdersNestedInput
     items?: OrderItemUpdateManyWithoutOrderNestedInput
     review?: ReviewUpdateOneWithoutOrderNestedInput
+    auditLogs?: OrderAuditLogUpdateManyWithoutOrderNestedInput
   }
 
   export type OrderUncheckedUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     tenantId?: StringFieldUpdateOperationsInput | string
     tableId?: NullableStringFieldUpdateOperationsInput | string | null
     diningSessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -27543,10 +28898,12 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
     review?: ReviewUncheckedUpdateOneWithoutOrderNestedInput
+    auditLogs?: OrderAuditLogUncheckedUpdateManyWithoutOrderNestedInput
   }
 
   export type OrderCreateManyInput = {
     id?: string
+    version?: number
     tenantId: string
     tableId?: string | null
     diningSessionId?: string | null
@@ -27576,6 +28933,7 @@ export namespace Prisma {
 
   export type OrderUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     orderNumber?: StringFieldUpdateOperationsInput | string
     orderType?: EnumOrderTypeFieldUpdateOperationsInput | $Enums.OrderType
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
@@ -27602,6 +28960,7 @@ export namespace Prisma {
 
   export type OrderUncheckedUpdateManyInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     tenantId?: StringFieldUpdateOperationsInput | string
     tableId?: NullableStringFieldUpdateOperationsInput | string | null
     diningSessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -27992,6 +29351,102 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type OrderAuditLogCreateInput = {
+    id?: string
+    actorType: $Enums.AuditActorType
+    actorId?: string | null
+    deviceId?: string | null
+    previousStatus?: $Enums.OrderStatus | null
+    newStatus: $Enums.OrderStatus
+    reasonCode?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    tenant: TenantCreateNestedOneWithoutOrderAuditLogsInput
+    order: OrderCreateNestedOneWithoutAuditLogsInput
+  }
+
+  export type OrderAuditLogUncheckedCreateInput = {
+    id?: string
+    tenantId: string
+    orderId: string
+    actorType: $Enums.AuditActorType
+    actorId?: string | null
+    deviceId?: string | null
+    previousStatus?: $Enums.OrderStatus | null
+    newStatus: $Enums.OrderStatus
+    reasonCode?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+  }
+
+  export type OrderAuditLogUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    actorType?: EnumAuditActorTypeFieldUpdateOperationsInput | $Enums.AuditActorType
+    actorId?: NullableStringFieldUpdateOperationsInput | string | null
+    deviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    previousStatus?: NullableEnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus | null
+    newStatus?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    reasonCode?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    tenant?: TenantUpdateOneRequiredWithoutOrderAuditLogsNestedInput
+    order?: OrderUpdateOneRequiredWithoutAuditLogsNestedInput
+  }
+
+  export type OrderAuditLogUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tenantId?: StringFieldUpdateOperationsInput | string
+    orderId?: StringFieldUpdateOperationsInput | string
+    actorType?: EnumAuditActorTypeFieldUpdateOperationsInput | $Enums.AuditActorType
+    actorId?: NullableStringFieldUpdateOperationsInput | string | null
+    deviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    previousStatus?: NullableEnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus | null
+    newStatus?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    reasonCode?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OrderAuditLogCreateManyInput = {
+    id?: string
+    tenantId: string
+    orderId: string
+    actorType: $Enums.AuditActorType
+    actorId?: string | null
+    deviceId?: string | null
+    previousStatus?: $Enums.OrderStatus | null
+    newStatus: $Enums.OrderStatus
+    reasonCode?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+  }
+
+  export type OrderAuditLogUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    actorType?: EnumAuditActorTypeFieldUpdateOperationsInput | $Enums.AuditActorType
+    actorId?: NullableStringFieldUpdateOperationsInput | string | null
+    deviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    previousStatus?: NullableEnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus | null
+    newStatus?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    reasonCode?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OrderAuditLogUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tenantId?: StringFieldUpdateOperationsInput | string
+    orderId?: StringFieldUpdateOperationsInput | string
+    actorType?: EnumAuditActorTypeFieldUpdateOperationsInput | $Enums.AuditActorType
+    actorId?: NullableStringFieldUpdateOperationsInput | string | null
+    deviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    previousStatus?: NullableEnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus | null
+    newStatus?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    reasonCode?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type StringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[] | ListStringFieldRefInput<$PrismaModel>
@@ -28161,6 +29616,12 @@ export namespace Prisma {
     none?: BillWhereInput
   }
 
+  export type OrderAuditLogListRelationFilter = {
+    every?: OrderAuditLogWhereInput
+    some?: OrderAuditLogWhereInput
+    none?: OrderAuditLogWhereInput
+  }
+
   export type SortOrderInput = {
     sort: SortOrder
     nulls?: NullsOrder
@@ -28214,6 +29675,10 @@ export namespace Prisma {
     _count?: SortOrder
   }
 
+  export type OrderAuditLogOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
   export type TenantCountOrderByAggregateInput = {
     id?: SortOrder
     slug?: SortOrder
@@ -28243,6 +29708,7 @@ export namespace Prisma {
     businessHours?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+    isPilot?: SortOrder
     gstin?: SortOrder
     fssai?: SortOrder
   }
@@ -28279,6 +29745,7 @@ export namespace Prisma {
     trialEndsAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+    isPilot?: SortOrder
     gstin?: SortOrder
     fssai?: SortOrder
   }
@@ -28311,6 +29778,7 @@ export namespace Prisma {
     trialEndsAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+    isPilot?: SortOrder
     gstin?: SortOrder
     fssai?: SortOrder
   }
@@ -29432,6 +30900,7 @@ export namespace Prisma {
 
   export type OrderCountOrderByAggregateInput = {
     id?: SortOrder
+    version?: SortOrder
     tenantId?: SortOrder
     tableId?: SortOrder
     diningSessionId?: SortOrder
@@ -29460,6 +30929,7 @@ export namespace Prisma {
   }
 
   export type OrderAvgOrderByAggregateInput = {
+    version?: SortOrder
     subtotal?: SortOrder
     taxAmount?: SortOrder
     discountAmount?: SortOrder
@@ -29469,6 +30939,7 @@ export namespace Prisma {
 
   export type OrderMaxOrderByAggregateInput = {
     id?: SortOrder
+    version?: SortOrder
     tenantId?: SortOrder
     tableId?: SortOrder
     diningSessionId?: SortOrder
@@ -29498,6 +30969,7 @@ export namespace Prisma {
 
   export type OrderMinOrderByAggregateInput = {
     id?: SortOrder
+    version?: SortOrder
     tenantId?: SortOrder
     tableId?: SortOrder
     diningSessionId?: SortOrder
@@ -29526,6 +30998,7 @@ export namespace Prisma {
   }
 
   export type OrderSumOrderByAggregateInput = {
+    version?: SortOrder
     subtotal?: SortOrder
     taxAmount?: SortOrder
     discountAmount?: SortOrder
@@ -29839,6 +31312,80 @@ export namespace Prisma {
     topItemRevenue?: SortOrder
   }
 
+  export type EnumAuditActorTypeFilter<$PrismaModel = never> = {
+    equals?: $Enums.AuditActorType | EnumAuditActorTypeFieldRefInput<$PrismaModel>
+    in?: $Enums.AuditActorType[] | ListEnumAuditActorTypeFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AuditActorType[] | ListEnumAuditActorTypeFieldRefInput<$PrismaModel>
+    not?: NestedEnumAuditActorTypeFilter<$PrismaModel> | $Enums.AuditActorType
+  }
+
+  export type EnumOrderStatusNullableFilter<$PrismaModel = never> = {
+    equals?: $Enums.OrderStatus | EnumOrderStatusFieldRefInput<$PrismaModel> | null
+    in?: $Enums.OrderStatus[] | ListEnumOrderStatusFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.OrderStatus[] | ListEnumOrderStatusFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumOrderStatusNullableFilter<$PrismaModel> | $Enums.OrderStatus | null
+  }
+
+  export type OrderAuditLogCountOrderByAggregateInput = {
+    id?: SortOrder
+    tenantId?: SortOrder
+    orderId?: SortOrder
+    actorType?: SortOrder
+    actorId?: SortOrder
+    deviceId?: SortOrder
+    previousStatus?: SortOrder
+    newStatus?: SortOrder
+    reasonCode?: SortOrder
+    metadata?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type OrderAuditLogMaxOrderByAggregateInput = {
+    id?: SortOrder
+    tenantId?: SortOrder
+    orderId?: SortOrder
+    actorType?: SortOrder
+    actorId?: SortOrder
+    deviceId?: SortOrder
+    previousStatus?: SortOrder
+    newStatus?: SortOrder
+    reasonCode?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type OrderAuditLogMinOrderByAggregateInput = {
+    id?: SortOrder
+    tenantId?: SortOrder
+    orderId?: SortOrder
+    actorType?: SortOrder
+    actorId?: SortOrder
+    deviceId?: SortOrder
+    previousStatus?: SortOrder
+    newStatus?: SortOrder
+    reasonCode?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type EnumAuditActorTypeWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.AuditActorType | EnumAuditActorTypeFieldRefInput<$PrismaModel>
+    in?: $Enums.AuditActorType[] | ListEnumAuditActorTypeFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AuditActorType[] | ListEnumAuditActorTypeFieldRefInput<$PrismaModel>
+    not?: NestedEnumAuditActorTypeWithAggregatesFilter<$PrismaModel> | $Enums.AuditActorType
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumAuditActorTypeFilter<$PrismaModel>
+    _max?: NestedEnumAuditActorTypeFilter<$PrismaModel>
+  }
+
+  export type EnumOrderStatusNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.OrderStatus | EnumOrderStatusFieldRefInput<$PrismaModel> | null
+    in?: $Enums.OrderStatus[] | ListEnumOrderStatusFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.OrderStatus[] | ListEnumOrderStatusFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumOrderStatusNullableWithAggregatesFilter<$PrismaModel> | $Enums.OrderStatus | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedEnumOrderStatusNullableFilter<$PrismaModel>
+    _max?: NestedEnumOrderStatusNullableFilter<$PrismaModel>
+  }
+
   export type UserCreateNestedManyWithoutTenantInput = {
     create?: XOR<UserCreateWithoutTenantInput, UserUncheckedCreateWithoutTenantInput> | UserCreateWithoutTenantInput[] | UserUncheckedCreateWithoutTenantInput[]
     connectOrCreate?: UserCreateOrConnectWithoutTenantInput | UserCreateOrConnectWithoutTenantInput[]
@@ -29923,6 +31470,13 @@ export namespace Prisma {
     connect?: BillWhereUniqueInput | BillWhereUniqueInput[]
   }
 
+  export type OrderAuditLogCreateNestedManyWithoutTenantInput = {
+    create?: XOR<OrderAuditLogCreateWithoutTenantInput, OrderAuditLogUncheckedCreateWithoutTenantInput> | OrderAuditLogCreateWithoutTenantInput[] | OrderAuditLogUncheckedCreateWithoutTenantInput[]
+    connectOrCreate?: OrderAuditLogCreateOrConnectWithoutTenantInput | OrderAuditLogCreateOrConnectWithoutTenantInput[]
+    createMany?: OrderAuditLogCreateManyTenantInputEnvelope
+    connect?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+  }
+
   export type UserUncheckedCreateNestedManyWithoutTenantInput = {
     create?: XOR<UserCreateWithoutTenantInput, UserUncheckedCreateWithoutTenantInput> | UserCreateWithoutTenantInput[] | UserUncheckedCreateWithoutTenantInput[]
     connectOrCreate?: UserCreateOrConnectWithoutTenantInput | UserCreateOrConnectWithoutTenantInput[]
@@ -30005,6 +31559,13 @@ export namespace Prisma {
     connectOrCreate?: BillCreateOrConnectWithoutTenantInput | BillCreateOrConnectWithoutTenantInput[]
     createMany?: BillCreateManyTenantInputEnvelope
     connect?: BillWhereUniqueInput | BillWhereUniqueInput[]
+  }
+
+  export type OrderAuditLogUncheckedCreateNestedManyWithoutTenantInput = {
+    create?: XOR<OrderAuditLogCreateWithoutTenantInput, OrderAuditLogUncheckedCreateWithoutTenantInput> | OrderAuditLogCreateWithoutTenantInput[] | OrderAuditLogUncheckedCreateWithoutTenantInput[]
+    connectOrCreate?: OrderAuditLogCreateOrConnectWithoutTenantInput | OrderAuditLogCreateOrConnectWithoutTenantInput[]
+    createMany?: OrderAuditLogCreateManyTenantInputEnvelope
+    connect?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
   }
 
   export type StringFieldUpdateOperationsInput = {
@@ -30207,6 +31768,20 @@ export namespace Prisma {
     deleteMany?: BillScalarWhereInput | BillScalarWhereInput[]
   }
 
+  export type OrderAuditLogUpdateManyWithoutTenantNestedInput = {
+    create?: XOR<OrderAuditLogCreateWithoutTenantInput, OrderAuditLogUncheckedCreateWithoutTenantInput> | OrderAuditLogCreateWithoutTenantInput[] | OrderAuditLogUncheckedCreateWithoutTenantInput[]
+    connectOrCreate?: OrderAuditLogCreateOrConnectWithoutTenantInput | OrderAuditLogCreateOrConnectWithoutTenantInput[]
+    upsert?: OrderAuditLogUpsertWithWhereUniqueWithoutTenantInput | OrderAuditLogUpsertWithWhereUniqueWithoutTenantInput[]
+    createMany?: OrderAuditLogCreateManyTenantInputEnvelope
+    set?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    disconnect?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    delete?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    connect?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    update?: OrderAuditLogUpdateWithWhereUniqueWithoutTenantInput | OrderAuditLogUpdateWithWhereUniqueWithoutTenantInput[]
+    updateMany?: OrderAuditLogUpdateManyWithWhereWithoutTenantInput | OrderAuditLogUpdateManyWithWhereWithoutTenantInput[]
+    deleteMany?: OrderAuditLogScalarWhereInput | OrderAuditLogScalarWhereInput[]
+  }
+
   export type UserUncheckedUpdateManyWithoutTenantNestedInput = {
     create?: XOR<UserCreateWithoutTenantInput, UserUncheckedCreateWithoutTenantInput> | UserCreateWithoutTenantInput[] | UserUncheckedCreateWithoutTenantInput[]
     connectOrCreate?: UserCreateOrConnectWithoutTenantInput | UserCreateOrConnectWithoutTenantInput[]
@@ -30373,6 +31948,20 @@ export namespace Prisma {
     update?: BillUpdateWithWhereUniqueWithoutTenantInput | BillUpdateWithWhereUniqueWithoutTenantInput[]
     updateMany?: BillUpdateManyWithWhereWithoutTenantInput | BillUpdateManyWithWhereWithoutTenantInput[]
     deleteMany?: BillScalarWhereInput | BillScalarWhereInput[]
+  }
+
+  export type OrderAuditLogUncheckedUpdateManyWithoutTenantNestedInput = {
+    create?: XOR<OrderAuditLogCreateWithoutTenantInput, OrderAuditLogUncheckedCreateWithoutTenantInput> | OrderAuditLogCreateWithoutTenantInput[] | OrderAuditLogUncheckedCreateWithoutTenantInput[]
+    connectOrCreate?: OrderAuditLogCreateOrConnectWithoutTenantInput | OrderAuditLogCreateOrConnectWithoutTenantInput[]
+    upsert?: OrderAuditLogUpsertWithWhereUniqueWithoutTenantInput | OrderAuditLogUpsertWithWhereUniqueWithoutTenantInput[]
+    createMany?: OrderAuditLogCreateManyTenantInputEnvelope
+    set?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    disconnect?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    delete?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    connect?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    update?: OrderAuditLogUpdateWithWhereUniqueWithoutTenantInput | OrderAuditLogUpdateWithWhereUniqueWithoutTenantInput[]
+    updateMany?: OrderAuditLogUpdateManyWithWhereWithoutTenantInput | OrderAuditLogUpdateManyWithWhereWithoutTenantInput[]
+    deleteMany?: OrderAuditLogScalarWhereInput | OrderAuditLogScalarWhereInput[]
   }
 
   export type TenantCreateNestedOneWithoutUsersInput = {
@@ -31309,6 +32898,13 @@ export namespace Prisma {
     connect?: ReviewWhereUniqueInput
   }
 
+  export type OrderAuditLogCreateNestedManyWithoutOrderInput = {
+    create?: XOR<OrderAuditLogCreateWithoutOrderInput, OrderAuditLogUncheckedCreateWithoutOrderInput> | OrderAuditLogCreateWithoutOrderInput[] | OrderAuditLogUncheckedCreateWithoutOrderInput[]
+    connectOrCreate?: OrderAuditLogCreateOrConnectWithoutOrderInput | OrderAuditLogCreateOrConnectWithoutOrderInput[]
+    createMany?: OrderAuditLogCreateManyOrderInputEnvelope
+    connect?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+  }
+
   export type OrderItemUncheckedCreateNestedManyWithoutOrderInput = {
     create?: XOR<OrderItemCreateWithoutOrderInput, OrderItemUncheckedCreateWithoutOrderInput> | OrderItemCreateWithoutOrderInput[] | OrderItemUncheckedCreateWithoutOrderInput[]
     connectOrCreate?: OrderItemCreateOrConnectWithoutOrderInput | OrderItemCreateOrConnectWithoutOrderInput[]
@@ -31320,6 +32916,13 @@ export namespace Prisma {
     create?: XOR<ReviewCreateWithoutOrderInput, ReviewUncheckedCreateWithoutOrderInput>
     connectOrCreate?: ReviewCreateOrConnectWithoutOrderInput
     connect?: ReviewWhereUniqueInput
+  }
+
+  export type OrderAuditLogUncheckedCreateNestedManyWithoutOrderInput = {
+    create?: XOR<OrderAuditLogCreateWithoutOrderInput, OrderAuditLogUncheckedCreateWithoutOrderInput> | OrderAuditLogCreateWithoutOrderInput[] | OrderAuditLogUncheckedCreateWithoutOrderInput[]
+    connectOrCreate?: OrderAuditLogCreateOrConnectWithoutOrderInput | OrderAuditLogCreateOrConnectWithoutOrderInput[]
+    createMany?: OrderAuditLogCreateManyOrderInputEnvelope
+    connect?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
   }
 
   export type EnumOrderTypeFieldUpdateOperationsInput = {
@@ -31382,6 +32985,20 @@ export namespace Prisma {
     update?: XOR<XOR<ReviewUpdateToOneWithWhereWithoutOrderInput, ReviewUpdateWithoutOrderInput>, ReviewUncheckedUpdateWithoutOrderInput>
   }
 
+  export type OrderAuditLogUpdateManyWithoutOrderNestedInput = {
+    create?: XOR<OrderAuditLogCreateWithoutOrderInput, OrderAuditLogUncheckedCreateWithoutOrderInput> | OrderAuditLogCreateWithoutOrderInput[] | OrderAuditLogUncheckedCreateWithoutOrderInput[]
+    connectOrCreate?: OrderAuditLogCreateOrConnectWithoutOrderInput | OrderAuditLogCreateOrConnectWithoutOrderInput[]
+    upsert?: OrderAuditLogUpsertWithWhereUniqueWithoutOrderInput | OrderAuditLogUpsertWithWhereUniqueWithoutOrderInput[]
+    createMany?: OrderAuditLogCreateManyOrderInputEnvelope
+    set?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    disconnect?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    delete?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    connect?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    update?: OrderAuditLogUpdateWithWhereUniqueWithoutOrderInput | OrderAuditLogUpdateWithWhereUniqueWithoutOrderInput[]
+    updateMany?: OrderAuditLogUpdateManyWithWhereWithoutOrderInput | OrderAuditLogUpdateManyWithWhereWithoutOrderInput[]
+    deleteMany?: OrderAuditLogScalarWhereInput | OrderAuditLogScalarWhereInput[]
+  }
+
   export type OrderItemUncheckedUpdateManyWithoutOrderNestedInput = {
     create?: XOR<OrderItemCreateWithoutOrderInput, OrderItemUncheckedCreateWithoutOrderInput> | OrderItemCreateWithoutOrderInput[] | OrderItemUncheckedCreateWithoutOrderInput[]
     connectOrCreate?: OrderItemCreateOrConnectWithoutOrderInput | OrderItemCreateOrConnectWithoutOrderInput[]
@@ -31404,6 +33021,20 @@ export namespace Prisma {
     delete?: ReviewWhereInput | boolean
     connect?: ReviewWhereUniqueInput
     update?: XOR<XOR<ReviewUpdateToOneWithWhereWithoutOrderInput, ReviewUpdateWithoutOrderInput>, ReviewUncheckedUpdateWithoutOrderInput>
+  }
+
+  export type OrderAuditLogUncheckedUpdateManyWithoutOrderNestedInput = {
+    create?: XOR<OrderAuditLogCreateWithoutOrderInput, OrderAuditLogUncheckedCreateWithoutOrderInput> | OrderAuditLogCreateWithoutOrderInput[] | OrderAuditLogUncheckedCreateWithoutOrderInput[]
+    connectOrCreate?: OrderAuditLogCreateOrConnectWithoutOrderInput | OrderAuditLogCreateOrConnectWithoutOrderInput[]
+    upsert?: OrderAuditLogUpsertWithWhereUniqueWithoutOrderInput | OrderAuditLogUpsertWithWhereUniqueWithoutOrderInput[]
+    createMany?: OrderAuditLogCreateManyOrderInputEnvelope
+    set?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    disconnect?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    delete?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    connect?: OrderAuditLogWhereUniqueInput | OrderAuditLogWhereUniqueInput[]
+    update?: OrderAuditLogUpdateWithWhereUniqueWithoutOrderInput | OrderAuditLogUpdateWithWhereUniqueWithoutOrderInput[]
+    updateMany?: OrderAuditLogUpdateManyWithWhereWithoutOrderInput | OrderAuditLogUpdateManyWithWhereWithoutOrderInput[]
+    deleteMany?: OrderAuditLogScalarWhereInput | OrderAuditLogScalarWhereInput[]
   }
 
   export type OrderCreateNestedOneWithoutItemsInput = {
@@ -31526,6 +33157,42 @@ export namespace Prisma {
     upsert?: TenantUpsertWithoutAnalyticsInput
     connect?: TenantWhereUniqueInput
     update?: XOR<XOR<TenantUpdateToOneWithWhereWithoutAnalyticsInput, TenantUpdateWithoutAnalyticsInput>, TenantUncheckedUpdateWithoutAnalyticsInput>
+  }
+
+  export type TenantCreateNestedOneWithoutOrderAuditLogsInput = {
+    create?: XOR<TenantCreateWithoutOrderAuditLogsInput, TenantUncheckedCreateWithoutOrderAuditLogsInput>
+    connectOrCreate?: TenantCreateOrConnectWithoutOrderAuditLogsInput
+    connect?: TenantWhereUniqueInput
+  }
+
+  export type OrderCreateNestedOneWithoutAuditLogsInput = {
+    create?: XOR<OrderCreateWithoutAuditLogsInput, OrderUncheckedCreateWithoutAuditLogsInput>
+    connectOrCreate?: OrderCreateOrConnectWithoutAuditLogsInput
+    connect?: OrderWhereUniqueInput
+  }
+
+  export type EnumAuditActorTypeFieldUpdateOperationsInput = {
+    set?: $Enums.AuditActorType
+  }
+
+  export type NullableEnumOrderStatusFieldUpdateOperationsInput = {
+    set?: $Enums.OrderStatus | null
+  }
+
+  export type TenantUpdateOneRequiredWithoutOrderAuditLogsNestedInput = {
+    create?: XOR<TenantCreateWithoutOrderAuditLogsInput, TenantUncheckedCreateWithoutOrderAuditLogsInput>
+    connectOrCreate?: TenantCreateOrConnectWithoutOrderAuditLogsInput
+    upsert?: TenantUpsertWithoutOrderAuditLogsInput
+    connect?: TenantWhereUniqueInput
+    update?: XOR<XOR<TenantUpdateToOneWithWhereWithoutOrderAuditLogsInput, TenantUpdateWithoutOrderAuditLogsInput>, TenantUncheckedUpdateWithoutOrderAuditLogsInput>
+  }
+
+  export type OrderUpdateOneRequiredWithoutAuditLogsNestedInput = {
+    create?: XOR<OrderCreateWithoutAuditLogsInput, OrderUncheckedCreateWithoutAuditLogsInput>
+    connectOrCreate?: OrderCreateOrConnectWithoutAuditLogsInput
+    upsert?: OrderUpsertWithoutAuditLogsInput
+    connect?: OrderWhereUniqueInput
+    update?: XOR<XOR<OrderUpdateToOneWithWhereWithoutAuditLogsInput, OrderUpdateWithoutAuditLogsInput>, OrderUncheckedUpdateWithoutAuditLogsInput>
   }
 
   export type NestedStringFilter<$PrismaModel = never> = {
@@ -31954,6 +33621,40 @@ export namespace Prisma {
     not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
   }
 
+  export type NestedEnumAuditActorTypeFilter<$PrismaModel = never> = {
+    equals?: $Enums.AuditActorType | EnumAuditActorTypeFieldRefInput<$PrismaModel>
+    in?: $Enums.AuditActorType[] | ListEnumAuditActorTypeFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AuditActorType[] | ListEnumAuditActorTypeFieldRefInput<$PrismaModel>
+    not?: NestedEnumAuditActorTypeFilter<$PrismaModel> | $Enums.AuditActorType
+  }
+
+  export type NestedEnumOrderStatusNullableFilter<$PrismaModel = never> = {
+    equals?: $Enums.OrderStatus | EnumOrderStatusFieldRefInput<$PrismaModel> | null
+    in?: $Enums.OrderStatus[] | ListEnumOrderStatusFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.OrderStatus[] | ListEnumOrderStatusFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumOrderStatusNullableFilter<$PrismaModel> | $Enums.OrderStatus | null
+  }
+
+  export type NestedEnumAuditActorTypeWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.AuditActorType | EnumAuditActorTypeFieldRefInput<$PrismaModel>
+    in?: $Enums.AuditActorType[] | ListEnumAuditActorTypeFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AuditActorType[] | ListEnumAuditActorTypeFieldRefInput<$PrismaModel>
+    not?: NestedEnumAuditActorTypeWithAggregatesFilter<$PrismaModel> | $Enums.AuditActorType
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumAuditActorTypeFilter<$PrismaModel>
+    _max?: NestedEnumAuditActorTypeFilter<$PrismaModel>
+  }
+
+  export type NestedEnumOrderStatusNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.OrderStatus | EnumOrderStatusFieldRefInput<$PrismaModel> | null
+    in?: $Enums.OrderStatus[] | ListEnumOrderStatusFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.OrderStatus[] | ListEnumOrderStatusFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumOrderStatusNullableWithAggregatesFilter<$PrismaModel> | $Enums.OrderStatus | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedEnumOrderStatusNullableFilter<$PrismaModel>
+    _max?: NestedEnumOrderStatusNullableFilter<$PrismaModel>
+  }
+
   export type UserCreateWithoutTenantInput = {
     id?: string
     name: string
@@ -32196,6 +33897,7 @@ export namespace Prisma {
 
   export type OrderCreateWithoutTenantInput = {
     id?: string
+    version?: number
     orderNumber: string
     orderType?: $Enums.OrderType
     status?: $Enums.OrderStatus
@@ -32222,10 +33924,12 @@ export namespace Prisma {
     diningSession?: DiningSessionCreateNestedOneWithoutOrdersInput
     items?: OrderItemCreateNestedManyWithoutOrderInput
     review?: ReviewCreateNestedOneWithoutOrderInput
+    auditLogs?: OrderAuditLogCreateNestedManyWithoutOrderInput
   }
 
   export type OrderUncheckedCreateWithoutTenantInput = {
     id?: string
+    version?: number
     tableId?: string | null
     diningSessionId?: string | null
     orderNumber: string
@@ -32252,6 +33956,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
     review?: ReviewUncheckedCreateNestedOneWithoutOrderInput
+    auditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutOrderInput
   }
 
   export type OrderCreateOrConnectWithoutTenantInput = {
@@ -32522,6 +34227,42 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type OrderAuditLogCreateWithoutTenantInput = {
+    id?: string
+    actorType: $Enums.AuditActorType
+    actorId?: string | null
+    deviceId?: string | null
+    previousStatus?: $Enums.OrderStatus | null
+    newStatus: $Enums.OrderStatus
+    reasonCode?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    order: OrderCreateNestedOneWithoutAuditLogsInput
+  }
+
+  export type OrderAuditLogUncheckedCreateWithoutTenantInput = {
+    id?: string
+    orderId: string
+    actorType: $Enums.AuditActorType
+    actorId?: string | null
+    deviceId?: string | null
+    previousStatus?: $Enums.OrderStatus | null
+    newStatus: $Enums.OrderStatus
+    reasonCode?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+  }
+
+  export type OrderAuditLogCreateOrConnectWithoutTenantInput = {
+    where: OrderAuditLogWhereUniqueInput
+    create: XOR<OrderAuditLogCreateWithoutTenantInput, OrderAuditLogUncheckedCreateWithoutTenantInput>
+  }
+
+  export type OrderAuditLogCreateManyTenantInputEnvelope = {
+    data: OrderAuditLogCreateManyTenantInput | OrderAuditLogCreateManyTenantInput[]
+    skipDuplicates?: boolean
+  }
+
   export type UserUpsertWithWhereUniqueWithoutTenantInput = {
     where: UserWhereUniqueInput
     update: XOR<UserUpdateWithoutTenantInput, UserUncheckedUpdateWithoutTenantInput>
@@ -32730,6 +34471,7 @@ export namespace Prisma {
     OR?: OrderScalarWhereInput[]
     NOT?: OrderScalarWhereInput | OrderScalarWhereInput[]
     id?: StringFilter<"Order"> | string
+    version?: IntFilter<"Order"> | number
     tenantId?: StringFilter<"Order"> | string
     tableId?: StringNullableFilter<"Order"> | string | null
     diningSessionId?: StringNullableFilter<"Order"> | string | null
@@ -32973,6 +34715,39 @@ export namespace Prisma {
     fssai?: StringNullableFilter<"Bill"> | string | null
   }
 
+  export type OrderAuditLogUpsertWithWhereUniqueWithoutTenantInput = {
+    where: OrderAuditLogWhereUniqueInput
+    update: XOR<OrderAuditLogUpdateWithoutTenantInput, OrderAuditLogUncheckedUpdateWithoutTenantInput>
+    create: XOR<OrderAuditLogCreateWithoutTenantInput, OrderAuditLogUncheckedCreateWithoutTenantInput>
+  }
+
+  export type OrderAuditLogUpdateWithWhereUniqueWithoutTenantInput = {
+    where: OrderAuditLogWhereUniqueInput
+    data: XOR<OrderAuditLogUpdateWithoutTenantInput, OrderAuditLogUncheckedUpdateWithoutTenantInput>
+  }
+
+  export type OrderAuditLogUpdateManyWithWhereWithoutTenantInput = {
+    where: OrderAuditLogScalarWhereInput
+    data: XOR<OrderAuditLogUpdateManyMutationInput, OrderAuditLogUncheckedUpdateManyWithoutTenantInput>
+  }
+
+  export type OrderAuditLogScalarWhereInput = {
+    AND?: OrderAuditLogScalarWhereInput | OrderAuditLogScalarWhereInput[]
+    OR?: OrderAuditLogScalarWhereInput[]
+    NOT?: OrderAuditLogScalarWhereInput | OrderAuditLogScalarWhereInput[]
+    id?: StringFilter<"OrderAuditLog"> | string
+    tenantId?: StringFilter<"OrderAuditLog"> | string
+    orderId?: StringFilter<"OrderAuditLog"> | string
+    actorType?: EnumAuditActorTypeFilter<"OrderAuditLog"> | $Enums.AuditActorType
+    actorId?: StringNullableFilter<"OrderAuditLog"> | string | null
+    deviceId?: StringNullableFilter<"OrderAuditLog"> | string | null
+    previousStatus?: EnumOrderStatusNullableFilter<"OrderAuditLog"> | $Enums.OrderStatus | null
+    newStatus?: EnumOrderStatusFilter<"OrderAuditLog"> | $Enums.OrderStatus
+    reasonCode?: StringNullableFilter<"OrderAuditLog"> | string | null
+    metadata?: JsonNullableFilter<"OrderAuditLog">
+    createdAt?: DateTimeFilter<"OrderAuditLog"> | Date | string
+  }
+
   export type TenantCreateWithoutUsersInput = {
     id?: string
     slug: string
@@ -33002,6 +34777,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     categories?: CategoryCreateNestedManyWithoutTenantInput
@@ -33015,6 +34791,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsCreateNestedManyWithoutTenantInput
     bills?: BillCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogCreateNestedManyWithoutTenantInput
   }
 
   export type TenantUncheckedCreateWithoutUsersInput = {
@@ -33046,6 +34823,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     categories?: CategoryUncheckedCreateNestedManyWithoutTenantInput
@@ -33059,6 +34837,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsUncheckedCreateNestedManyWithoutTenantInput
     bills?: BillUncheckedCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutTenantInput
   }
 
   export type TenantCreateOrConnectWithoutUsersInput = {
@@ -33172,6 +34951,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     categories?: CategoryUpdateManyWithoutTenantNestedInput
@@ -33185,6 +34965,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUpdateManyWithoutTenantNestedInput
     bills?: BillUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantUncheckedUpdateWithoutUsersInput = {
@@ -33216,6 +34997,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     categories?: CategoryUncheckedUpdateManyWithoutTenantNestedInput
@@ -33229,6 +35011,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUncheckedUpdateManyWithoutTenantNestedInput
     bills?: BillUncheckedUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUncheckedUpdateManyWithoutTenantNestedInput
   }
 
   export type RefreshTokenUpsertWithWhereUniqueWithoutUserInput = {
@@ -33403,6 +35186,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserCreateNestedManyWithoutTenantInput
@@ -33416,6 +35200,7 @@ export namespace Prisma {
     reviews?: ReviewCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsCreateNestedManyWithoutTenantInput
     bills?: BillCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogCreateNestedManyWithoutTenantInput
   }
 
   export type TenantUncheckedCreateWithoutStaffInvitesInput = {
@@ -33447,6 +35232,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserUncheckedCreateNestedManyWithoutTenantInput
@@ -33460,6 +35246,7 @@ export namespace Prisma {
     reviews?: ReviewUncheckedCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsUncheckedCreateNestedManyWithoutTenantInput
     bills?: BillUncheckedCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutTenantInput
   }
 
   export type TenantCreateOrConnectWithoutStaffInvitesInput = {
@@ -33507,6 +35294,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUpdateManyWithoutTenantNestedInput
@@ -33520,6 +35308,7 @@ export namespace Prisma {
     reviews?: ReviewUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUpdateManyWithoutTenantNestedInput
     bills?: BillUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantUncheckedUpdateWithoutStaffInvitesInput = {
@@ -33551,6 +35340,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUncheckedUpdateManyWithoutTenantNestedInput
@@ -33564,6 +35354,7 @@ export namespace Prisma {
     reviews?: ReviewUncheckedUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUncheckedUpdateManyWithoutTenantNestedInput
     bills?: BillUncheckedUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUncheckedUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantCreateWithoutCategoriesInput = {
@@ -33595,6 +35386,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserCreateNestedManyWithoutTenantInput
@@ -33608,6 +35400,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsCreateNestedManyWithoutTenantInput
     bills?: BillCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogCreateNestedManyWithoutTenantInput
   }
 
   export type TenantUncheckedCreateWithoutCategoriesInput = {
@@ -33639,6 +35432,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserUncheckedCreateNestedManyWithoutTenantInput
@@ -33652,6 +35446,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsUncheckedCreateNestedManyWithoutTenantInput
     bills?: BillUncheckedCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutTenantInput
   }
 
   export type TenantCreateOrConnectWithoutCategoriesInput = {
@@ -33765,6 +35560,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUpdateManyWithoutTenantNestedInput
@@ -33778,6 +35574,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUpdateManyWithoutTenantNestedInput
     bills?: BillUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantUncheckedUpdateWithoutCategoriesInput = {
@@ -33809,6 +35606,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUncheckedUpdateManyWithoutTenantNestedInput
@@ -33822,6 +35620,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUncheckedUpdateManyWithoutTenantNestedInput
     bills?: BillUncheckedUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUncheckedUpdateManyWithoutTenantNestedInput
   }
 
   export type MenuItemUpsertWithWhereUniqueWithoutCategoryInput = {
@@ -33869,6 +35668,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserCreateNestedManyWithoutTenantInput
@@ -33882,6 +35682,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsCreateNestedManyWithoutTenantInput
     bills?: BillCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogCreateNestedManyWithoutTenantInput
   }
 
   export type TenantUncheckedCreateWithoutMenuItemsInput = {
@@ -33913,6 +35714,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserUncheckedCreateNestedManyWithoutTenantInput
@@ -33926,6 +35728,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsUncheckedCreateNestedManyWithoutTenantInput
     bills?: BillUncheckedCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutTenantInput
   }
 
   export type TenantCreateOrConnectWithoutMenuItemsInput = {
@@ -34078,6 +35881,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUpdateManyWithoutTenantNestedInput
@@ -34091,6 +35895,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUpdateManyWithoutTenantNestedInput
     bills?: BillUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantUncheckedUpdateWithoutMenuItemsInput = {
@@ -34122,6 +35927,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUncheckedUpdateManyWithoutTenantNestedInput
@@ -34135,6 +35941,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUncheckedUpdateManyWithoutTenantNestedInput
     bills?: BillUncheckedUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUncheckedUpdateManyWithoutTenantNestedInput
   }
 
   export type CategoryUpsertWithoutMenuItemsInput = {
@@ -34512,6 +36319,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserCreateNestedManyWithoutTenantInput
@@ -34525,6 +36333,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsCreateNestedManyWithoutTenantInput
     bills?: BillCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogCreateNestedManyWithoutTenantInput
   }
 
   export type TenantUncheckedCreateWithoutOffersInput = {
@@ -34556,6 +36365,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserUncheckedCreateNestedManyWithoutTenantInput
@@ -34569,6 +36379,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsUncheckedCreateNestedManyWithoutTenantInput
     bills?: BillUncheckedCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutTenantInput
   }
 
   export type TenantCreateOrConnectWithoutOffersInput = {
@@ -34616,6 +36427,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUpdateManyWithoutTenantNestedInput
@@ -34629,6 +36441,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUpdateManyWithoutTenantNestedInput
     bills?: BillUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantUncheckedUpdateWithoutOffersInput = {
@@ -34660,6 +36473,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUncheckedUpdateManyWithoutTenantNestedInput
@@ -34673,6 +36487,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUncheckedUpdateManyWithoutTenantNestedInput
     bills?: BillUncheckedUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUncheckedUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantCreateWithoutZonesInput = {
@@ -34704,6 +36519,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserCreateNestedManyWithoutTenantInput
@@ -34717,6 +36533,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsCreateNestedManyWithoutTenantInput
     bills?: BillCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogCreateNestedManyWithoutTenantInput
   }
 
   export type TenantUncheckedCreateWithoutZonesInput = {
@@ -34748,6 +36565,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserUncheckedCreateNestedManyWithoutTenantInput
@@ -34761,6 +36579,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsUncheckedCreateNestedManyWithoutTenantInput
     bills?: BillUncheckedCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutTenantInput
   }
 
   export type TenantCreateOrConnectWithoutZonesInput = {
@@ -34864,6 +36683,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUpdateManyWithoutTenantNestedInput
@@ -34877,6 +36697,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUpdateManyWithoutTenantNestedInput
     bills?: BillUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantUncheckedUpdateWithoutZonesInput = {
@@ -34908,6 +36729,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUncheckedUpdateManyWithoutTenantNestedInput
@@ -34921,6 +36743,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUncheckedUpdateManyWithoutTenantNestedInput
     bills?: BillUncheckedUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUncheckedUpdateManyWithoutTenantNestedInput
   }
 
   export type TableUpsertWithWhereUniqueWithoutZoneInput = {
@@ -34968,6 +36791,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserCreateNestedManyWithoutTenantInput
@@ -34981,6 +36805,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsCreateNestedManyWithoutTenantInput
     bills?: BillCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogCreateNestedManyWithoutTenantInput
   }
 
   export type TenantUncheckedCreateWithoutTablesInput = {
@@ -35012,6 +36837,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserUncheckedCreateNestedManyWithoutTenantInput
@@ -35025,6 +36851,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsUncheckedCreateNestedManyWithoutTenantInput
     bills?: BillUncheckedCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutTenantInput
   }
 
   export type TenantCreateOrConnectWithoutTablesInput = {
@@ -35055,6 +36882,7 @@ export namespace Prisma {
 
   export type OrderCreateWithoutTableInput = {
     id?: string
+    version?: number
     orderNumber: string
     orderType?: $Enums.OrderType
     status?: $Enums.OrderStatus
@@ -35081,10 +36909,12 @@ export namespace Prisma {
     diningSession?: DiningSessionCreateNestedOneWithoutOrdersInput
     items?: OrderItemCreateNestedManyWithoutOrderInput
     review?: ReviewCreateNestedOneWithoutOrderInput
+    auditLogs?: OrderAuditLogCreateNestedManyWithoutOrderInput
   }
 
   export type OrderUncheckedCreateWithoutTableInput = {
     id?: string
+    version?: number
     tenantId: string
     diningSessionId?: string | null
     orderNumber: string
@@ -35111,6 +36941,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
     review?: ReviewUncheckedCreateNestedOneWithoutOrderInput
+    auditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutOrderInput
   }
 
   export type OrderCreateOrConnectWithoutTableInput = {
@@ -35209,6 +37040,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUpdateManyWithoutTenantNestedInput
@@ -35222,6 +37054,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUpdateManyWithoutTenantNestedInput
     bills?: BillUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantUncheckedUpdateWithoutTablesInput = {
@@ -35253,6 +37086,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUncheckedUpdateManyWithoutTenantNestedInput
@@ -35266,6 +37100,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUncheckedUpdateManyWithoutTenantNestedInput
     bills?: BillUncheckedUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUncheckedUpdateManyWithoutTenantNestedInput
   }
 
   export type ZoneUpsertWithoutTablesInput = {
@@ -35476,6 +37311,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserCreateNestedManyWithoutTenantInput
@@ -35489,6 +37325,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsCreateNestedManyWithoutTenantInput
     bills?: BillCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogCreateNestedManyWithoutTenantInput
   }
 
   export type TenantUncheckedCreateWithoutDiningSessionsInput = {
@@ -35520,6 +37357,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserUncheckedCreateNestedManyWithoutTenantInput
@@ -35533,6 +37371,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsUncheckedCreateNestedManyWithoutTenantInput
     bills?: BillUncheckedCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutTenantInput
   }
 
   export type TenantCreateOrConnectWithoutDiningSessionsInput = {
@@ -35624,6 +37463,7 @@ export namespace Prisma {
 
   export type OrderCreateWithoutDiningSessionInput = {
     id?: string
+    version?: number
     orderNumber: string
     orderType?: $Enums.OrderType
     status?: $Enums.OrderStatus
@@ -35650,10 +37490,12 @@ export namespace Prisma {
     table?: TableCreateNestedOneWithoutOrdersInput
     items?: OrderItemCreateNestedManyWithoutOrderInput
     review?: ReviewCreateNestedOneWithoutOrderInput
+    auditLogs?: OrderAuditLogCreateNestedManyWithoutOrderInput
   }
 
   export type OrderUncheckedCreateWithoutDiningSessionInput = {
     id?: string
+    version?: number
     tenantId: string
     tableId?: string | null
     orderNumber: string
@@ -35680,6 +37522,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
     review?: ReviewUncheckedCreateNestedOneWithoutOrderInput
+    auditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutOrderInput
   }
 
   export type OrderCreateOrConnectWithoutDiningSessionInput = {
@@ -35810,6 +37653,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUpdateManyWithoutTenantNestedInput
@@ -35823,6 +37667,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUpdateManyWithoutTenantNestedInput
     bills?: BillUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantUncheckedUpdateWithoutDiningSessionsInput = {
@@ -35854,6 +37699,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUncheckedUpdateManyWithoutTenantNestedInput
@@ -35867,6 +37713,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUncheckedUpdateManyWithoutTenantNestedInput
     bills?: BillUncheckedUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUncheckedUpdateManyWithoutTenantNestedInput
   }
 
   export type TableUpsertWithoutDiningSessionsInput = {
@@ -36098,6 +37945,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserCreateNestedManyWithoutTenantInput
@@ -36111,6 +37959,7 @@ export namespace Prisma {
     reviews?: ReviewCreateNestedManyWithoutTenantInput
     staffInvites?: StaffInviteCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogCreateNestedManyWithoutTenantInput
   }
 
   export type TenantUncheckedCreateWithoutBillsInput = {
@@ -36142,6 +37991,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserUncheckedCreateNestedManyWithoutTenantInput
@@ -36155,6 +38005,7 @@ export namespace Prisma {
     reviews?: ReviewUncheckedCreateNestedManyWithoutTenantInput
     staffInvites?: StaffInviteUncheckedCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsUncheckedCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutTenantInput
   }
 
   export type TenantCreateOrConnectWithoutBillsInput = {
@@ -36243,6 +38094,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUpdateManyWithoutTenantNestedInput
@@ -36256,6 +38108,7 @@ export namespace Prisma {
     reviews?: ReviewUpdateManyWithoutTenantNestedInput
     staffInvites?: StaffInviteUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantUncheckedUpdateWithoutBillsInput = {
@@ -36287,6 +38140,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUncheckedUpdateManyWithoutTenantNestedInput
@@ -36300,6 +38154,7 @@ export namespace Prisma {
     reviews?: ReviewUncheckedUpdateManyWithoutTenantNestedInput
     staffInvites?: StaffInviteUncheckedUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUncheckedUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUncheckedUpdateManyWithoutTenantNestedInput
   }
 
   export type DiningSessionUpsertWithoutBillInput = {
@@ -36378,6 +38233,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserCreateNestedManyWithoutTenantInput
@@ -36391,6 +38247,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsCreateNestedManyWithoutTenantInput
     bills?: BillCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogCreateNestedManyWithoutTenantInput
   }
 
   export type TenantUncheckedCreateWithoutOrdersInput = {
@@ -36422,6 +38279,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserUncheckedCreateNestedManyWithoutTenantInput
@@ -36435,6 +38293,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsUncheckedCreateNestedManyWithoutTenantInput
     bills?: BillUncheckedCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutTenantInput
   }
 
   export type TenantCreateOrConnectWithoutOrdersInput = {
@@ -36611,6 +38470,42 @@ export namespace Prisma {
     create: XOR<ReviewCreateWithoutOrderInput, ReviewUncheckedCreateWithoutOrderInput>
   }
 
+  export type OrderAuditLogCreateWithoutOrderInput = {
+    id?: string
+    actorType: $Enums.AuditActorType
+    actorId?: string | null
+    deviceId?: string | null
+    previousStatus?: $Enums.OrderStatus | null
+    newStatus: $Enums.OrderStatus
+    reasonCode?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    tenant: TenantCreateNestedOneWithoutOrderAuditLogsInput
+  }
+
+  export type OrderAuditLogUncheckedCreateWithoutOrderInput = {
+    id?: string
+    tenantId: string
+    actorType: $Enums.AuditActorType
+    actorId?: string | null
+    deviceId?: string | null
+    previousStatus?: $Enums.OrderStatus | null
+    newStatus: $Enums.OrderStatus
+    reasonCode?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+  }
+
+  export type OrderAuditLogCreateOrConnectWithoutOrderInput = {
+    where: OrderAuditLogWhereUniqueInput
+    create: XOR<OrderAuditLogCreateWithoutOrderInput, OrderAuditLogUncheckedCreateWithoutOrderInput>
+  }
+
+  export type OrderAuditLogCreateManyOrderInputEnvelope = {
+    data: OrderAuditLogCreateManyOrderInput | OrderAuditLogCreateManyOrderInput[]
+    skipDuplicates?: boolean
+  }
+
   export type TenantUpsertWithoutOrdersInput = {
     update: XOR<TenantUpdateWithoutOrdersInput, TenantUncheckedUpdateWithoutOrdersInput>
     create: XOR<TenantCreateWithoutOrdersInput, TenantUncheckedCreateWithoutOrdersInput>
@@ -36651,6 +38546,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUpdateManyWithoutTenantNestedInput
@@ -36664,6 +38560,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUpdateManyWithoutTenantNestedInput
     bills?: BillUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantUncheckedUpdateWithoutOrdersInput = {
@@ -36695,6 +38592,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUncheckedUpdateManyWithoutTenantNestedInput
@@ -36708,6 +38606,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUncheckedUpdateManyWithoutTenantNestedInput
     bills?: BillUncheckedUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUncheckedUpdateManyWithoutTenantNestedInput
   }
 
   export type TableUpsertWithoutOrdersInput = {
@@ -36873,8 +38772,25 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type OrderAuditLogUpsertWithWhereUniqueWithoutOrderInput = {
+    where: OrderAuditLogWhereUniqueInput
+    update: XOR<OrderAuditLogUpdateWithoutOrderInput, OrderAuditLogUncheckedUpdateWithoutOrderInput>
+    create: XOR<OrderAuditLogCreateWithoutOrderInput, OrderAuditLogUncheckedCreateWithoutOrderInput>
+  }
+
+  export type OrderAuditLogUpdateWithWhereUniqueWithoutOrderInput = {
+    where: OrderAuditLogWhereUniqueInput
+    data: XOR<OrderAuditLogUpdateWithoutOrderInput, OrderAuditLogUncheckedUpdateWithoutOrderInput>
+  }
+
+  export type OrderAuditLogUpdateManyWithWhereWithoutOrderInput = {
+    where: OrderAuditLogScalarWhereInput
+    data: XOR<OrderAuditLogUpdateManyMutationInput, OrderAuditLogUncheckedUpdateManyWithoutOrderInput>
+  }
+
   export type OrderCreateWithoutItemsInput = {
     id?: string
+    version?: number
     orderNumber: string
     orderType?: $Enums.OrderType
     status?: $Enums.OrderStatus
@@ -36901,10 +38817,12 @@ export namespace Prisma {
     table?: TableCreateNestedOneWithoutOrdersInput
     diningSession?: DiningSessionCreateNestedOneWithoutOrdersInput
     review?: ReviewCreateNestedOneWithoutOrderInput
+    auditLogs?: OrderAuditLogCreateNestedManyWithoutOrderInput
   }
 
   export type OrderUncheckedCreateWithoutItemsInput = {
     id?: string
+    version?: number
     tenantId: string
     tableId?: string | null
     diningSessionId?: string | null
@@ -36931,6 +38849,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     review?: ReviewUncheckedCreateNestedOneWithoutOrderInput
+    auditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutOrderInput
   }
 
   export type OrderCreateOrConnectWithoutItemsInput = {
@@ -37012,6 +38931,7 @@ export namespace Prisma {
 
   export type OrderUpdateWithoutItemsInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     orderNumber?: StringFieldUpdateOperationsInput | string
     orderType?: EnumOrderTypeFieldUpdateOperationsInput | $Enums.OrderType
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
@@ -37038,10 +38958,12 @@ export namespace Prisma {
     table?: TableUpdateOneWithoutOrdersNestedInput
     diningSession?: DiningSessionUpdateOneWithoutOrdersNestedInput
     review?: ReviewUpdateOneWithoutOrderNestedInput
+    auditLogs?: OrderAuditLogUpdateManyWithoutOrderNestedInput
   }
 
   export type OrderUncheckedUpdateWithoutItemsInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     tenantId?: StringFieldUpdateOperationsInput | string
     tableId?: NullableStringFieldUpdateOperationsInput | string | null
     diningSessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -37068,6 +38990,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     review?: ReviewUncheckedUpdateOneWithoutOrderNestedInput
+    auditLogs?: OrderAuditLogUncheckedUpdateManyWithoutOrderNestedInput
   }
 
   export type MenuItemUpsertWithoutOrderItemsInput = {
@@ -37166,6 +39089,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserCreateNestedManyWithoutTenantInput
@@ -37179,6 +39103,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsCreateNestedManyWithoutTenantInput
     bills?: BillCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogCreateNestedManyWithoutTenantInput
   }
 
   export type TenantUncheckedCreateWithoutReviewsInput = {
@@ -37210,6 +39135,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserUncheckedCreateNestedManyWithoutTenantInput
@@ -37223,6 +39149,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedCreateNestedManyWithoutTenantInput
     analytics?: DailyAnalyticsUncheckedCreateNestedManyWithoutTenantInput
     bills?: BillUncheckedCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutTenantInput
   }
 
   export type TenantCreateOrConnectWithoutReviewsInput = {
@@ -37232,6 +39159,7 @@ export namespace Prisma {
 
   export type OrderCreateWithoutReviewInput = {
     id?: string
+    version?: number
     orderNumber: string
     orderType?: $Enums.OrderType
     status?: $Enums.OrderStatus
@@ -37258,10 +39186,12 @@ export namespace Prisma {
     table?: TableCreateNestedOneWithoutOrdersInput
     diningSession?: DiningSessionCreateNestedOneWithoutOrdersInput
     items?: OrderItemCreateNestedManyWithoutOrderInput
+    auditLogs?: OrderAuditLogCreateNestedManyWithoutOrderInput
   }
 
   export type OrderUncheckedCreateWithoutReviewInput = {
     id?: string
+    version?: number
     tenantId: string
     tableId?: string | null
     diningSessionId?: string | null
@@ -37288,6 +39218,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
+    auditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutOrderInput
   }
 
   export type OrderCreateOrConnectWithoutReviewInput = {
@@ -37454,6 +39385,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUpdateManyWithoutTenantNestedInput
@@ -37467,6 +39399,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUpdateManyWithoutTenantNestedInput
     bills?: BillUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantUncheckedUpdateWithoutReviewsInput = {
@@ -37498,6 +39431,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUncheckedUpdateManyWithoutTenantNestedInput
@@ -37511,6 +39445,7 @@ export namespace Prisma {
     staffInvites?: StaffInviteUncheckedUpdateManyWithoutTenantNestedInput
     analytics?: DailyAnalyticsUncheckedUpdateManyWithoutTenantNestedInput
     bills?: BillUncheckedUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUncheckedUpdateManyWithoutTenantNestedInput
   }
 
   export type OrderUpsertWithoutReviewInput = {
@@ -37526,6 +39461,7 @@ export namespace Prisma {
 
   export type OrderUpdateWithoutReviewInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     orderNumber?: StringFieldUpdateOperationsInput | string
     orderType?: EnumOrderTypeFieldUpdateOperationsInput | $Enums.OrderType
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
@@ -37552,10 +39488,12 @@ export namespace Prisma {
     table?: TableUpdateOneWithoutOrdersNestedInput
     diningSession?: DiningSessionUpdateOneWithoutOrdersNestedInput
     items?: OrderItemUpdateManyWithoutOrderNestedInput
+    auditLogs?: OrderAuditLogUpdateManyWithoutOrderNestedInput
   }
 
   export type OrderUncheckedUpdateWithoutReviewInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     tenantId?: StringFieldUpdateOperationsInput | string
     tableId?: NullableStringFieldUpdateOperationsInput | string | null
     diningSessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -37582,6 +39520,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
+    auditLogs?: OrderAuditLogUncheckedUpdateManyWithoutOrderNestedInput
   }
 
   export type DiningSessionUpsertWithoutReviewInput = {
@@ -37750,6 +39689,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserCreateNestedManyWithoutTenantInput
@@ -37763,6 +39703,7 @@ export namespace Prisma {
     reviews?: ReviewCreateNestedManyWithoutTenantInput
     staffInvites?: StaffInviteCreateNestedManyWithoutTenantInput
     bills?: BillCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogCreateNestedManyWithoutTenantInput
   }
 
   export type TenantUncheckedCreateWithoutAnalyticsInput = {
@@ -37794,6 +39735,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
+    isPilot?: boolean
     gstin?: string | null
     fssai?: string | null
     users?: UserUncheckedCreateNestedManyWithoutTenantInput
@@ -37807,6 +39749,7 @@ export namespace Prisma {
     reviews?: ReviewUncheckedCreateNestedManyWithoutTenantInput
     staffInvites?: StaffInviteUncheckedCreateNestedManyWithoutTenantInput
     bills?: BillUncheckedCreateNestedManyWithoutTenantInput
+    orderAuditLogs?: OrderAuditLogUncheckedCreateNestedManyWithoutTenantInput
   }
 
   export type TenantCreateOrConnectWithoutAnalyticsInput = {
@@ -37854,6 +39797,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUpdateManyWithoutTenantNestedInput
@@ -37867,6 +39811,7 @@ export namespace Prisma {
     reviews?: ReviewUpdateManyWithoutTenantNestedInput
     staffInvites?: StaffInviteUpdateManyWithoutTenantNestedInput
     bills?: BillUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUpdateManyWithoutTenantNestedInput
   }
 
   export type TenantUncheckedUpdateWithoutAnalyticsInput = {
@@ -37898,6 +39843,7 @@ export namespace Prisma {
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
     users?: UserUncheckedUpdateManyWithoutTenantNestedInput
@@ -37911,6 +39857,351 @@ export namespace Prisma {
     reviews?: ReviewUncheckedUpdateManyWithoutTenantNestedInput
     staffInvites?: StaffInviteUncheckedUpdateManyWithoutTenantNestedInput
     bills?: BillUncheckedUpdateManyWithoutTenantNestedInput
+    orderAuditLogs?: OrderAuditLogUncheckedUpdateManyWithoutTenantNestedInput
+  }
+
+  export type TenantCreateWithoutOrderAuditLogsInput = {
+    id?: string
+    slug: string
+    businessName: string
+    description?: string | null
+    logoUrl?: string | null
+    coverImageUrl?: string | null
+    primaryColor?: string
+    accentColor?: string
+    cuisineType?: string | null
+    businessType?: string
+    address?: string | null
+    city?: string | null
+    phone?: string | null
+    email: string
+    website?: string | null
+    instagramUrl?: string | null
+    currency?: string
+    currencySymbol?: string
+    taxRate?: number
+    timezone?: string
+    isActive?: boolean
+    plan?: $Enums.Plan
+    planStartedAt?: Date | string | null
+    planExpiresAt?: Date | string | null
+    trialEndsAt?: Date | string | null
+    businessHours?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    isPilot?: boolean
+    gstin?: string | null
+    fssai?: string | null
+    users?: UserCreateNestedManyWithoutTenantInput
+    categories?: CategoryCreateNestedManyWithoutTenantInput
+    menuItems?: MenuItemCreateNestedManyWithoutTenantInput
+    tables?: TableCreateNestedManyWithoutTenantInput
+    zones?: ZoneCreateNestedManyWithoutTenantInput
+    orders?: OrderCreateNestedManyWithoutTenantInput
+    diningSessions?: DiningSessionCreateNestedManyWithoutTenantInput
+    offers?: OfferCreateNestedManyWithoutTenantInput
+    reviews?: ReviewCreateNestedManyWithoutTenantInput
+    staffInvites?: StaffInviteCreateNestedManyWithoutTenantInput
+    analytics?: DailyAnalyticsCreateNestedManyWithoutTenantInput
+    bills?: BillCreateNestedManyWithoutTenantInput
+  }
+
+  export type TenantUncheckedCreateWithoutOrderAuditLogsInput = {
+    id?: string
+    slug: string
+    businessName: string
+    description?: string | null
+    logoUrl?: string | null
+    coverImageUrl?: string | null
+    primaryColor?: string
+    accentColor?: string
+    cuisineType?: string | null
+    businessType?: string
+    address?: string | null
+    city?: string | null
+    phone?: string | null
+    email: string
+    website?: string | null
+    instagramUrl?: string | null
+    currency?: string
+    currencySymbol?: string
+    taxRate?: number
+    timezone?: string
+    isActive?: boolean
+    plan?: $Enums.Plan
+    planStartedAt?: Date | string | null
+    planExpiresAt?: Date | string | null
+    trialEndsAt?: Date | string | null
+    businessHours?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    isPilot?: boolean
+    gstin?: string | null
+    fssai?: string | null
+    users?: UserUncheckedCreateNestedManyWithoutTenantInput
+    categories?: CategoryUncheckedCreateNestedManyWithoutTenantInput
+    menuItems?: MenuItemUncheckedCreateNestedManyWithoutTenantInput
+    tables?: TableUncheckedCreateNestedManyWithoutTenantInput
+    zones?: ZoneUncheckedCreateNestedManyWithoutTenantInput
+    orders?: OrderUncheckedCreateNestedManyWithoutTenantInput
+    diningSessions?: DiningSessionUncheckedCreateNestedManyWithoutTenantInput
+    offers?: OfferUncheckedCreateNestedManyWithoutTenantInput
+    reviews?: ReviewUncheckedCreateNestedManyWithoutTenantInput
+    staffInvites?: StaffInviteUncheckedCreateNestedManyWithoutTenantInput
+    analytics?: DailyAnalyticsUncheckedCreateNestedManyWithoutTenantInput
+    bills?: BillUncheckedCreateNestedManyWithoutTenantInput
+  }
+
+  export type TenantCreateOrConnectWithoutOrderAuditLogsInput = {
+    where: TenantWhereUniqueInput
+    create: XOR<TenantCreateWithoutOrderAuditLogsInput, TenantUncheckedCreateWithoutOrderAuditLogsInput>
+  }
+
+  export type OrderCreateWithoutAuditLogsInput = {
+    id?: string
+    version?: number
+    orderNumber: string
+    orderType?: $Enums.OrderType
+    status?: $Enums.OrderStatus
+    placedBy?: string
+    subtotal: number
+    taxAmount?: number
+    discountAmount?: number
+    totalAmount: number
+    customerName?: string | null
+    customerPhone?: string | null
+    specialInstructions?: string | null
+    estimatedPrepMins?: number | null
+    acceptedAt?: Date | string | null
+    preparingAt?: Date | string | null
+    readyAt?: Date | string | null
+    servedAt?: Date | string | null
+    completedAt?: Date | string | null
+    cancelledAt?: Date | string | null
+    cancellationReason?: string | null
+    hasReview?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    tenant: TenantCreateNestedOneWithoutOrdersInput
+    table?: TableCreateNestedOneWithoutOrdersInput
+    diningSession?: DiningSessionCreateNestedOneWithoutOrdersInput
+    items?: OrderItemCreateNestedManyWithoutOrderInput
+    review?: ReviewCreateNestedOneWithoutOrderInput
+  }
+
+  export type OrderUncheckedCreateWithoutAuditLogsInput = {
+    id?: string
+    version?: number
+    tenantId: string
+    tableId?: string | null
+    diningSessionId?: string | null
+    orderNumber: string
+    orderType?: $Enums.OrderType
+    status?: $Enums.OrderStatus
+    placedBy?: string
+    subtotal: number
+    taxAmount?: number
+    discountAmount?: number
+    totalAmount: number
+    customerName?: string | null
+    customerPhone?: string | null
+    specialInstructions?: string | null
+    estimatedPrepMins?: number | null
+    acceptedAt?: Date | string | null
+    preparingAt?: Date | string | null
+    readyAt?: Date | string | null
+    servedAt?: Date | string | null
+    completedAt?: Date | string | null
+    cancelledAt?: Date | string | null
+    cancellationReason?: string | null
+    hasReview?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
+    review?: ReviewUncheckedCreateNestedOneWithoutOrderInput
+  }
+
+  export type OrderCreateOrConnectWithoutAuditLogsInput = {
+    where: OrderWhereUniqueInput
+    create: XOR<OrderCreateWithoutAuditLogsInput, OrderUncheckedCreateWithoutAuditLogsInput>
+  }
+
+  export type TenantUpsertWithoutOrderAuditLogsInput = {
+    update: XOR<TenantUpdateWithoutOrderAuditLogsInput, TenantUncheckedUpdateWithoutOrderAuditLogsInput>
+    create: XOR<TenantCreateWithoutOrderAuditLogsInput, TenantUncheckedCreateWithoutOrderAuditLogsInput>
+    where?: TenantWhereInput
+  }
+
+  export type TenantUpdateToOneWithWhereWithoutOrderAuditLogsInput = {
+    where?: TenantWhereInput
+    data: XOR<TenantUpdateWithoutOrderAuditLogsInput, TenantUncheckedUpdateWithoutOrderAuditLogsInput>
+  }
+
+  export type TenantUpdateWithoutOrderAuditLogsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    slug?: StringFieldUpdateOperationsInput | string
+    businessName?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    coverImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    primaryColor?: StringFieldUpdateOperationsInput | string
+    accentColor?: StringFieldUpdateOperationsInput | string
+    cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
+    businessType?: StringFieldUpdateOperationsInput | string
+    address?: NullableStringFieldUpdateOperationsInput | string | null
+    city?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: StringFieldUpdateOperationsInput | string
+    website?: NullableStringFieldUpdateOperationsInput | string | null
+    instagramUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    currency?: StringFieldUpdateOperationsInput | string
+    currencySymbol?: StringFieldUpdateOperationsInput | string
+    taxRate?: FloatFieldUpdateOperationsInput | number
+    timezone?: StringFieldUpdateOperationsInput | string
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
+    planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    businessHours?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
+    gstin?: NullableStringFieldUpdateOperationsInput | string | null
+    fssai?: NullableStringFieldUpdateOperationsInput | string | null
+    users?: UserUpdateManyWithoutTenantNestedInput
+    categories?: CategoryUpdateManyWithoutTenantNestedInput
+    menuItems?: MenuItemUpdateManyWithoutTenantNestedInput
+    tables?: TableUpdateManyWithoutTenantNestedInput
+    zones?: ZoneUpdateManyWithoutTenantNestedInput
+    orders?: OrderUpdateManyWithoutTenantNestedInput
+    diningSessions?: DiningSessionUpdateManyWithoutTenantNestedInput
+    offers?: OfferUpdateManyWithoutTenantNestedInput
+    reviews?: ReviewUpdateManyWithoutTenantNestedInput
+    staffInvites?: StaffInviteUpdateManyWithoutTenantNestedInput
+    analytics?: DailyAnalyticsUpdateManyWithoutTenantNestedInput
+    bills?: BillUpdateManyWithoutTenantNestedInput
+  }
+
+  export type TenantUncheckedUpdateWithoutOrderAuditLogsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    slug?: StringFieldUpdateOperationsInput | string
+    businessName?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    logoUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    coverImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    primaryColor?: StringFieldUpdateOperationsInput | string
+    accentColor?: StringFieldUpdateOperationsInput | string
+    cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
+    businessType?: StringFieldUpdateOperationsInput | string
+    address?: NullableStringFieldUpdateOperationsInput | string | null
+    city?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: StringFieldUpdateOperationsInput | string
+    website?: NullableStringFieldUpdateOperationsInput | string | null
+    instagramUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    currency?: StringFieldUpdateOperationsInput | string
+    currencySymbol?: StringFieldUpdateOperationsInput | string
+    taxRate?: FloatFieldUpdateOperationsInput | number
+    timezone?: StringFieldUpdateOperationsInput | string
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
+    planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    businessHours?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    isPilot?: BoolFieldUpdateOperationsInput | boolean
+    gstin?: NullableStringFieldUpdateOperationsInput | string | null
+    fssai?: NullableStringFieldUpdateOperationsInput | string | null
+    users?: UserUncheckedUpdateManyWithoutTenantNestedInput
+    categories?: CategoryUncheckedUpdateManyWithoutTenantNestedInput
+    menuItems?: MenuItemUncheckedUpdateManyWithoutTenantNestedInput
+    tables?: TableUncheckedUpdateManyWithoutTenantNestedInput
+    zones?: ZoneUncheckedUpdateManyWithoutTenantNestedInput
+    orders?: OrderUncheckedUpdateManyWithoutTenantNestedInput
+    diningSessions?: DiningSessionUncheckedUpdateManyWithoutTenantNestedInput
+    offers?: OfferUncheckedUpdateManyWithoutTenantNestedInput
+    reviews?: ReviewUncheckedUpdateManyWithoutTenantNestedInput
+    staffInvites?: StaffInviteUncheckedUpdateManyWithoutTenantNestedInput
+    analytics?: DailyAnalyticsUncheckedUpdateManyWithoutTenantNestedInput
+    bills?: BillUncheckedUpdateManyWithoutTenantNestedInput
+  }
+
+  export type OrderUpsertWithoutAuditLogsInput = {
+    update: XOR<OrderUpdateWithoutAuditLogsInput, OrderUncheckedUpdateWithoutAuditLogsInput>
+    create: XOR<OrderCreateWithoutAuditLogsInput, OrderUncheckedCreateWithoutAuditLogsInput>
+    where?: OrderWhereInput
+  }
+
+  export type OrderUpdateToOneWithWhereWithoutAuditLogsInput = {
+    where?: OrderWhereInput
+    data: XOR<OrderUpdateWithoutAuditLogsInput, OrderUncheckedUpdateWithoutAuditLogsInput>
+  }
+
+  export type OrderUpdateWithoutAuditLogsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
+    orderNumber?: StringFieldUpdateOperationsInput | string
+    orderType?: EnumOrderTypeFieldUpdateOperationsInput | $Enums.OrderType
+    status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    placedBy?: StringFieldUpdateOperationsInput | string
+    subtotal?: FloatFieldUpdateOperationsInput | number
+    taxAmount?: FloatFieldUpdateOperationsInput | number
+    discountAmount?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
+    customerName?: NullableStringFieldUpdateOperationsInput | string | null
+    customerPhone?: NullableStringFieldUpdateOperationsInput | string | null
+    specialInstructions?: NullableStringFieldUpdateOperationsInput | string | null
+    estimatedPrepMins?: NullableIntFieldUpdateOperationsInput | number | null
+    acceptedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    preparingAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    readyAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    servedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
+    hasReview?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    tenant?: TenantUpdateOneRequiredWithoutOrdersNestedInput
+    table?: TableUpdateOneWithoutOrdersNestedInput
+    diningSession?: DiningSessionUpdateOneWithoutOrdersNestedInput
+    items?: OrderItemUpdateManyWithoutOrderNestedInput
+    review?: ReviewUpdateOneWithoutOrderNestedInput
+  }
+
+  export type OrderUncheckedUpdateWithoutAuditLogsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
+    tenantId?: StringFieldUpdateOperationsInput | string
+    tableId?: NullableStringFieldUpdateOperationsInput | string | null
+    diningSessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    orderNumber?: StringFieldUpdateOperationsInput | string
+    orderType?: EnumOrderTypeFieldUpdateOperationsInput | $Enums.OrderType
+    status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    placedBy?: StringFieldUpdateOperationsInput | string
+    subtotal?: FloatFieldUpdateOperationsInput | number
+    taxAmount?: FloatFieldUpdateOperationsInput | number
+    discountAmount?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
+    customerName?: NullableStringFieldUpdateOperationsInput | string | null
+    customerPhone?: NullableStringFieldUpdateOperationsInput | string | null
+    specialInstructions?: NullableStringFieldUpdateOperationsInput | string | null
+    estimatedPrepMins?: NullableIntFieldUpdateOperationsInput | number | null
+    acceptedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    preparingAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    readyAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    servedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancellationReason?: NullableStringFieldUpdateOperationsInput | string | null
+    hasReview?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
+    review?: ReviewUncheckedUpdateOneWithoutOrderNestedInput
   }
 
   export type UserCreateManyTenantInput = {
@@ -38002,6 +40293,7 @@ export namespace Prisma {
 
   export type OrderCreateManyTenantInput = {
     id?: string
+    version?: number
     tableId?: string | null
     diningSessionId?: string | null
     orderNumber: string
@@ -38122,6 +40414,19 @@ export namespace Prisma {
     businessAddress?: string | null
     gstin?: string | null
     fssai?: string | null
+  }
+
+  export type OrderAuditLogCreateManyTenantInput = {
+    id?: string
+    orderId: string
+    actorType: $Enums.AuditActorType
+    actorId?: string | null
+    deviceId?: string | null
+    previousStatus?: $Enums.OrderStatus | null
+    newStatus: $Enums.OrderStatus
+    reasonCode?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
   }
 
   export type UserUpdateWithoutTenantInput = {
@@ -38403,6 +40708,7 @@ export namespace Prisma {
 
   export type OrderUpdateWithoutTenantInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     orderNumber?: StringFieldUpdateOperationsInput | string
     orderType?: EnumOrderTypeFieldUpdateOperationsInput | $Enums.OrderType
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
@@ -38429,10 +40735,12 @@ export namespace Prisma {
     diningSession?: DiningSessionUpdateOneWithoutOrdersNestedInput
     items?: OrderItemUpdateManyWithoutOrderNestedInput
     review?: ReviewUpdateOneWithoutOrderNestedInput
+    auditLogs?: OrderAuditLogUpdateManyWithoutOrderNestedInput
   }
 
   export type OrderUncheckedUpdateWithoutTenantInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     tableId?: NullableStringFieldUpdateOperationsInput | string | null
     diningSessionId?: NullableStringFieldUpdateOperationsInput | string | null
     orderNumber?: StringFieldUpdateOperationsInput | string
@@ -38459,10 +40767,12 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
     review?: ReviewUncheckedUpdateOneWithoutOrderNestedInput
+    auditLogs?: OrderAuditLogUncheckedUpdateManyWithoutOrderNestedInput
   }
 
   export type OrderUncheckedUpdateManyWithoutTenantInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     tableId?: NullableStringFieldUpdateOperationsInput | string | null
     diningSessionId?: NullableStringFieldUpdateOperationsInput | string | null
     orderNumber?: StringFieldUpdateOperationsInput | string
@@ -38781,6 +41091,45 @@ export namespace Prisma {
     businessAddress?: NullableStringFieldUpdateOperationsInput | string | null
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     fssai?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type OrderAuditLogUpdateWithoutTenantInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    actorType?: EnumAuditActorTypeFieldUpdateOperationsInput | $Enums.AuditActorType
+    actorId?: NullableStringFieldUpdateOperationsInput | string | null
+    deviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    previousStatus?: NullableEnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus | null
+    newStatus?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    reasonCode?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    order?: OrderUpdateOneRequiredWithoutAuditLogsNestedInput
+  }
+
+  export type OrderAuditLogUncheckedUpdateWithoutTenantInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    orderId?: StringFieldUpdateOperationsInput | string
+    actorType?: EnumAuditActorTypeFieldUpdateOperationsInput | $Enums.AuditActorType
+    actorId?: NullableStringFieldUpdateOperationsInput | string | null
+    deviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    previousStatus?: NullableEnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus | null
+    newStatus?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    reasonCode?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OrderAuditLogUncheckedUpdateManyWithoutTenantInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    orderId?: StringFieldUpdateOperationsInput | string
+    actorType?: EnumAuditActorTypeFieldUpdateOperationsInput | $Enums.AuditActorType
+    actorId?: NullableStringFieldUpdateOperationsInput | string | null
+    deviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    previousStatus?: NullableEnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus | null
+    newStatus?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    reasonCode?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type RefreshTokenCreateManyUserInput = {
@@ -39207,6 +41556,7 @@ export namespace Prisma {
 
   export type OrderCreateManyTableInput = {
     id?: string
+    version?: number
     tenantId: string
     diningSessionId?: string | null
     orderNumber: string
@@ -39250,6 +41600,7 @@ export namespace Prisma {
 
   export type OrderUpdateWithoutTableInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     orderNumber?: StringFieldUpdateOperationsInput | string
     orderType?: EnumOrderTypeFieldUpdateOperationsInput | $Enums.OrderType
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
@@ -39276,10 +41627,12 @@ export namespace Prisma {
     diningSession?: DiningSessionUpdateOneWithoutOrdersNestedInput
     items?: OrderItemUpdateManyWithoutOrderNestedInput
     review?: ReviewUpdateOneWithoutOrderNestedInput
+    auditLogs?: OrderAuditLogUpdateManyWithoutOrderNestedInput
   }
 
   export type OrderUncheckedUpdateWithoutTableInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     tenantId?: StringFieldUpdateOperationsInput | string
     diningSessionId?: NullableStringFieldUpdateOperationsInput | string | null
     orderNumber?: StringFieldUpdateOperationsInput | string
@@ -39306,10 +41659,12 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
     review?: ReviewUncheckedUpdateOneWithoutOrderNestedInput
+    auditLogs?: OrderAuditLogUncheckedUpdateManyWithoutOrderNestedInput
   }
 
   export type OrderUncheckedUpdateManyWithoutTableInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     tenantId?: StringFieldUpdateOperationsInput | string
     diningSessionId?: NullableStringFieldUpdateOperationsInput | string | null
     orderNumber?: StringFieldUpdateOperationsInput | string
@@ -39519,6 +41874,7 @@ export namespace Prisma {
 
   export type OrderCreateManyDiningSessionInput = {
     id?: string
+    version?: number
     tenantId: string
     tableId?: string | null
     orderNumber: string
@@ -39547,6 +41903,7 @@ export namespace Prisma {
 
   export type OrderUpdateWithoutDiningSessionInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     orderNumber?: StringFieldUpdateOperationsInput | string
     orderType?: EnumOrderTypeFieldUpdateOperationsInput | $Enums.OrderType
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
@@ -39573,10 +41930,12 @@ export namespace Prisma {
     table?: TableUpdateOneWithoutOrdersNestedInput
     items?: OrderItemUpdateManyWithoutOrderNestedInput
     review?: ReviewUpdateOneWithoutOrderNestedInput
+    auditLogs?: OrderAuditLogUpdateManyWithoutOrderNestedInput
   }
 
   export type OrderUncheckedUpdateWithoutDiningSessionInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     tenantId?: StringFieldUpdateOperationsInput | string
     tableId?: NullableStringFieldUpdateOperationsInput | string | null
     orderNumber?: StringFieldUpdateOperationsInput | string
@@ -39603,10 +41962,12 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
     review?: ReviewUncheckedUpdateOneWithoutOrderNestedInput
+    auditLogs?: OrderAuditLogUncheckedUpdateManyWithoutOrderNestedInput
   }
 
   export type OrderUncheckedUpdateManyWithoutDiningSessionInput = {
     id?: StringFieldUpdateOperationsInput | string
+    version?: IntFieldUpdateOperationsInput | number
     tenantId?: StringFieldUpdateOperationsInput | string
     tableId?: NullableStringFieldUpdateOperationsInput | string | null
     orderNumber?: StringFieldUpdateOperationsInput | string
@@ -39645,6 +42006,19 @@ export namespace Prisma {
     selectedModifiers: JsonNullValueInput | InputJsonValue
     specialNote?: string | null
     isVeg?: boolean | null
+    createdAt?: Date | string
+  }
+
+  export type OrderAuditLogCreateManyOrderInput = {
+    id?: string
+    tenantId: string
+    actorType: $Enums.AuditActorType
+    actorId?: string | null
+    deviceId?: string | null
+    previousStatus?: $Enums.OrderStatus | null
+    newStatus: $Enums.OrderStatus
+    reasonCode?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
   }
 
@@ -39690,6 +42064,45 @@ export namespace Prisma {
     selectedModifiers?: JsonNullValueInput | InputJsonValue
     specialNote?: NullableStringFieldUpdateOperationsInput | string | null
     isVeg?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OrderAuditLogUpdateWithoutOrderInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    actorType?: EnumAuditActorTypeFieldUpdateOperationsInput | $Enums.AuditActorType
+    actorId?: NullableStringFieldUpdateOperationsInput | string | null
+    deviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    previousStatus?: NullableEnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus | null
+    newStatus?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    reasonCode?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    tenant?: TenantUpdateOneRequiredWithoutOrderAuditLogsNestedInput
+  }
+
+  export type OrderAuditLogUncheckedUpdateWithoutOrderInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tenantId?: StringFieldUpdateOperationsInput | string
+    actorType?: EnumAuditActorTypeFieldUpdateOperationsInput | $Enums.AuditActorType
+    actorId?: NullableStringFieldUpdateOperationsInput | string | null
+    deviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    previousStatus?: NullableEnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus | null
+    newStatus?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    reasonCode?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OrderAuditLogUncheckedUpdateManyWithoutOrderInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tenantId?: StringFieldUpdateOperationsInput | string
+    actorType?: EnumAuditActorTypeFieldUpdateOperationsInput | $Enums.AuditActorType
+    actorId?: NullableStringFieldUpdateOperationsInput | string | null
+    deviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    previousStatus?: NullableEnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus | null
+    newStatus?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    reasonCode?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -39810,6 +42223,10 @@ export namespace Prisma {
      * @deprecated Use DailyAnalyticsDefaultArgs instead
      */
     export type DailyAnalyticsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = DailyAnalyticsDefaultArgs<ExtArgs>
+    /**
+     * @deprecated Use OrderAuditLogDefaultArgs instead
+     */
+    export type OrderAuditLogArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = OrderAuditLogDefaultArgs<ExtArgs>
 
   /**
    * Batch Payload for updateMany & deleteMany & createMany

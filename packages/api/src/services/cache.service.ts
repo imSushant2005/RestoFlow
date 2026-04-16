@@ -163,12 +163,18 @@ export const deleteCache = async (pattern: string) => {
       return;
     }
 
-    // Direct key deletion is safer for single keys, keys(*) for patterns
     if (pattern.includes('*')) {
-      const keys = await redisCache.keys(pattern);
-      if (keys.length > 0) {
-        await redisCache.del(...keys);
-      }
+      // Use SCAN instead of KEYS to avoid blocking the Redis event loop.
+      // KEYS is O(N) and freezes all Redis operations during the scan.
+      // SCAN iterates in batches of 100 without holding a global lock.
+      let cursor = '0';
+      do {
+        const [nextCursor, keys] = await redisCache.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        cursor = nextCursor;
+        if (keys.length > 0) {
+          await redisCache.del(...keys);
+        }
+      } while (cursor !== '0');
     } else {
       await redisCache.del(pattern);
     }
@@ -197,3 +203,5 @@ export async function withCache<T>(
   await setCache(key, fresh, ttlSeconds);
   return fresh;
 }
+
+export const getRedisClient = () => redisCache;

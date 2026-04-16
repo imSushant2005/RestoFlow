@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteCache = exports.setCache = exports.getCache = void 0;
+exports.getRedisClient = exports.deleteCache = exports.setCache = exports.getCache = void 0;
 exports.withCache = withCache;
 const ioredis_1 = __importDefault(require("ioredis"));
 const env_1 = require("../config/env");
@@ -158,12 +158,18 @@ const deleteCache = async (pattern) => {
             deleteMemoryValue(pattern);
             return;
         }
-        // Direct key deletion is safer for single keys, keys(*) for patterns
         if (pattern.includes('*')) {
-            const keys = await redisCache.keys(pattern);
-            if (keys.length > 0) {
-                await redisCache.del(...keys);
-            }
+            // Use SCAN instead of KEYS to avoid blocking the Redis event loop.
+            // KEYS is O(N) and freezes all Redis operations during the scan.
+            // SCAN iterates in batches of 100 without holding a global lock.
+            let cursor = '0';
+            do {
+                const [nextCursor, keys] = await redisCache.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+                cursor = nextCursor;
+                if (keys.length > 0) {
+                    await redisCache.del(...keys);
+                }
+            } while (cursor !== '0');
         }
         else {
             await redisCache.del(pattern);
@@ -189,4 +195,6 @@ async function withCache(key, fallback, ttlSeconds = 3600) {
     await (0, exports.setCache)(key, fresh, ttlSeconds);
     return fresh;
 }
+const getRedisClient = () => redisCache;
+exports.getRedisClient = getRedisClient;
 //# sourceMappingURL=cache.service.js.map

@@ -151,6 +151,7 @@ exports.Prisma.TenantScalarFieldEnum = {
   businessHours: 'businessHours',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
+  isPilot: 'isPilot',
   gstin: 'gstin',
   fssai: 'fssai'
 };
@@ -354,6 +355,7 @@ exports.Prisma.BillScalarFieldEnum = {
 
 exports.Prisma.OrderScalarFieldEnum = {
   id: 'id',
+  version: 'version',
   tenantId: 'tenantId',
   tableId: 'tableId',
   diningSessionId: 'diningSessionId',
@@ -432,6 +434,20 @@ exports.Prisma.DailyAnalyticsScalarFieldEnum = {
   topItemRevenue: 'topItemRevenue',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.OrderAuditLogScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  orderId: 'orderId',
+  actorType: 'actorType',
+  actorId: 'actorId',
+  deviceId: 'deviceId',
+  previousStatus: 'previousStatus',
+  newStatus: 'newStatus',
+  reasonCode: 'reasonCode',
+  metadata: 'metadata',
+  createdAt: 'createdAt'
 };
 
 exports.Prisma.SortOrder = {
@@ -526,6 +542,12 @@ exports.OrderStatus = exports.$Enums.OrderStatus = {
   CANCELLED: 'CANCELLED'
 };
 
+exports.AuditActorType = exports.$Enums.AuditActorType = {
+  USER: 'USER',
+  CUSTOMER: 'CUSTOMER',
+  SYSTEM: 'SYSTEM'
+};
+
 exports.Prisma.ModelName = {
   Tenant: 'Tenant',
   User: 'User',
@@ -544,7 +566,8 @@ exports.Prisma.ModelName = {
   Order: 'Order',
   OrderItem: 'OrderItem',
   Review: 'Review',
-  DailyAnalytics: 'DailyAnalytics'
+  DailyAnalytics: 'DailyAnalytics',
+  OrderAuditLog: 'OrderAuditLog'
 };
 
 /**

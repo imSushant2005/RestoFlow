@@ -21,6 +21,20 @@ services:
     volumes:
       - redis_data:/data
 
+  pgbouncer:
+    image: edoburu/pgbouncer:1.20.1
+    restart: always
+    environment:
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/dineflow"
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "1000"
+      DEFAULT_POOL_SIZE: "15"
+      IGNORE_STARTUP_PARAMETERS: "extra_float_digits"
+    ports:
+      - '6432:5432'
+    depends_on:
+      - postgres
+
   api:
     build:
       context: ../../
@@ -28,10 +42,10 @@ services:
     ports:
       - '4000:4000'
     depends_on:
-      - postgres
+      - pgbouncer
       - redis
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/dineflow?schema=public
+      - DATABASE_URL=postgresql://postgres:postgres@pgbouncer:5432/dineflow?schema=public&pgbouncer=true
       - REDIS_URL=redis://redis:6379
       - PORT=4000
       - JWT_SECRET=super-secret-jwt-key-change-in-production

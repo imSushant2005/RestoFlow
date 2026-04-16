@@ -80,6 +80,16 @@ const createMenuItem = async (req, res) => {
         const tenant = await prisma_1.prisma.tenant.findUnique({ where: { id: req.tenantId } });
         if (!tenant)
             return res.status(404).json({ error: 'Tenant not found' });
+        const category = await prisma_1.prisma.category.findFirst({
+            where: {
+                id: categoryId,
+                tenantId: req.tenantId,
+            },
+            select: { id: true },
+        });
+        if (!category) {
+            return res.status(404).json({ error: 'Category not found for this tenant' });
+        }
         const count = await prisma_1.prisma.menuItem.count({ where: { tenantId: req.tenantId } });
         const planLimits = (0, plans_1.getPlanLimits)(tenant.plan);
         if (count >= planLimits.items) {
@@ -94,7 +104,7 @@ const createMenuItem = async (req, res) => {
                 name,
                 description,
                 price,
-                categoryId,
+                categoryId: category.id,
                 isVeg,
                 isVegan,
                 isGlutenFree,

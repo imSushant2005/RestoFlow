@@ -1,5 +1,6 @@
 import { env } from './config/env';
-
+import * as Sentry from '@sentry/node';
+import { nodeProfilingIntegration } from '@sentry/profiling-node';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -17,6 +18,7 @@ import analyticsRoutes from './routes/analytics.routes';
 import settingsRoutes from './routes/settings.routes';
 import billingRoutes from './routes/billing.routes';
 import paymentRoutes from './routes/payment.routes';
+import * as PaymentController from './controllers/payment.controller';
 import aiRoutes from './routes/ai.routes';
 import notificationRoutes from './routes/notification.routes';
 import customerRoutes from './routes/customer.routes';
@@ -25,6 +27,17 @@ import { checkPrismaReadiness } from './db/prisma';
 import { globalErrorHandler } from './middlewares/error.middleware';
 import { initSocket, getSocketMetrics } from './socket';
 import { logger } from './utils/logger';
+import { tracingMiddleware } from './middlewares/tracing.middleware';
+import { tenantRateLimitMiddleware } from './middlewares/tenant-rate-limit.middleware';
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || 'https://public@sentry.example.com/1',
+  integrations: [
+    nodeProfilingIntegration(),
+  ],
+  tracesSampleRate: env.NODE_ENV === 'production' ? 0.2 : 1.0,
+  profilesSampleRate: env.NODE_ENV === 'production' ? 0.2 : 1.0,
+});
 
 const app = express();
 const httpServer = createServer(app);
@@ -58,6 +71,9 @@ if (env.TRUST_PROXY) {
   app.set('trust proxy', env.TRUST_PROXY);
 }
 
+// Observability and Tracing bounds
+app.use(tracingMiddleware);
+
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -86,6 +102,7 @@ app.use(
     credentials: true,
   }),
 );
+app.post('/payments/webhook', express.raw({ type: 'application/json' }), PaymentController.handleWebhook);
 app.use(express.json({ limit: env.JSON_BODY_LIMIT }));
 app.use(cookieParser());
 
@@ -130,16 +147,17 @@ app.use('/auth', authRoutes);
 app.use('/menus', menuRoutes);
 app.use('/venue', tableRoutes);
 app.use('/public', publicRoutes);
-app.use('/orders', orderRoutes);
-app.use('/analytics', analyticsRoutes);
-app.use('/settings', settingsRoutes);
-app.use('/billing', billingRoutes);
+app.use('/orders', tenantRateLimitMiddleware, orderRoutes);
+app.use('/analytics', tenantRateLimitMiddleware, analyticsRoutes);
+app.use('/settings', tenantRateLimitMiddleware, settingsRoutes);
+app.use('/billing', tenantRateLimitMiddleware, billingRoutes);
 app.use('/payments', paymentRoutes);
 app.use('/ai', aiRoutes);
 app.use('/notifications', notificationRoutes);
 app.use('/customer', customerRoutes);
 app.use('/public', sessionRoutes);
 
+Sentry.setupExpressErrorHandler(app);
 app.use(globalErrorHandler);
 
 httpServer.on('error', (error: any) => {

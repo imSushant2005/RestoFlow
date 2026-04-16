@@ -3,7 +3,7 @@ import { UserRole } from '@dineflow/prisma';
 import { prisma, withPrismaRetry } from '../db/prisma';
 import { getIO, getRoleRoom, getSessionRoom, getTenantRoom } from '../socket';
 import { deleteCache, withCache } from '../services/cache.service';
-import { sendWhatsAppNotification } from '../services/notification.service';
+import { transitionOrderStatus, ConflictError } from '../services/order.service';
 
 const VALID_ORDER_STATUSES = new Set([
   'NEW',
@@ -27,7 +27,7 @@ const ROLE_ALLOWED_STATUS_UPDATES: Record<UserRole, Set<string>> = {
   WAITER: new Set(['SERVED']),
 };
 
-const orderItemSelect = {
+const leanOrderItemSelect = {
   id: true,
   name: true,
   quantity: true,
@@ -35,11 +35,77 @@ const orderItemSelect = {
   totalPrice: true,
   specialNote: true,
   selectedModifiers: true,
+} as const;
+
+const orderItemSelect = {
+  ...leanOrderItemSelect,
   menuItem: {
     select: {
       id: true,
       name: true,
       price: true,
+    },
+  },
+} as const;
+
+const LIVE_ORDERS_SELECT = {
+  id: true,
+  tenantId: true,
+  tableId: true,
+  diningSessionId: true,
+  orderNumber: true,
+  orderType: true,
+  status: true,
+  placedBy: true,
+  customerName: true,
+  customerPhone: true,
+  specialInstructions: true,
+  estimatedPrepMins: true,
+  acceptedAt: true,
+  preparingAt: true,
+  readyAt: true,
+  version: true,
+  createdAt: true,
+  updatedAt: true,
+  table: {
+    select: {
+      id: true,
+      name: true,
+      zone: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  },
+  diningSession: {
+    select: {
+      id: true,
+      openedAt: true,
+      sessionStatus: true,
+    },
+  },
+  items: {
+    select: leanOrderItemSelect,
+  },
+} as const;
+
+const HISTORY_ORDERS_SELECT = {
+  id: true,
+  orderNumber: true,
+  status: true,
+  totalAmount: true,
+  customerName: true,
+  diningSessionId: true,
+  version: true,
+  createdAt: true,
+  completedAt: true,
+  cancelledAt: true,
+  table: {
+    select: {
+      id: true,
+      name: true,
     },
   },
 } as const;
@@ -71,6 +137,7 @@ const orderSelect = {
   hasReview: true,
   createdAt: true,
   updatedAt: true,
+  version: true,
   table: {
     select: {
       id: true,
@@ -155,23 +222,23 @@ function normalizePhone(value: unknown) {
   return String(value || '').replace(/\s+/g, '').trim();
 }
 
-async function resolveStaffName(userId?: string) {
+async function resolveStaffName(db: any, userId?: string) {
   if (!userId) return 'Staff';
-  const user = await prisma.user.findUnique({
+  const user = await db.user.findUnique({
     where: { id: userId },
     select: { name: true },
   });
   return user?.name?.trim() || 'Staff';
 }
 
-async function generateOrderNumberForTenant(tx: any, tenantId: string) {
+async function generateOrderNumberForTenant(tenantId: string) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let orderNumber = '';
   let exists = true;
 
   while (exists) {
     orderNumber = `#${Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')}`;
-    const existing = await tx.order.findFirst({
+    const existing = await prisma.order.findFirst({
       where: { tenantId, orderNumber },
       select: { id: true },
     });
@@ -181,7 +248,7 @@ async function generateOrderNumberForTenant(tx: any, tenantId: string) {
   return orderNumber;
 }
 
-async function buildServerPricedOrderPayload(tx: any, tenantId: string, items: any[]) {
+async function buildServerPricedOrderPayload(db: any, tenantId: string, items: any[]) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error('ORDER_ITEMS_REQUIRED');
   }
@@ -210,7 +277,7 @@ async function buildServerPricedOrderPayload(tx: any, tenantId: string, items: a
     throw new Error('ORDER_ITEMS_INVALID');
   }
 
-  const menuItems: any[] = await tx.menuItem.findMany({
+  const menuItems: any[] = await db.menuItem.findMany({
     where: {
       tenantId,
       isAvailable: true,
@@ -339,7 +406,7 @@ export const getOrders = async (req: Request, res: Response) => {
                 tenantId,
                 status: { notIn: ['RECEIVED' as any, 'CANCELLED' as any] },
               },
-              select: orderSelect,
+              select: LIVE_ORDERS_SELECT,
               orderBy: { createdAt: 'asc' },
             }),
           `dashboard-live-orders:${tenantId}`,
@@ -381,7 +448,7 @@ export const getOrderHistory = async (req: Request, res: Response) => {
             () =>
               prisma.order.findMany({
                 where: whereClause,
-                select: orderSelect,
+                select: HISTORY_ORDERS_SELECT,
                 orderBy: { createdAt: 'desc' },
                 skip,
                 take: limit,
@@ -417,6 +484,31 @@ export const getOrderHistory = async (req: Request, res: Response) => {
   }
 };
 
+export const getOrder = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const tenantId = req.tenantId!;
+
+    const order = await withPrismaRetry(
+      () =>
+        prisma.order.findUnique({
+          where: { id, tenantId },
+          select: orderSelect,
+        }),
+      `dashboard-get-order:${id}`,
+    );
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    res.json(order);
+  } catch (error) {
+    console.error('getOrder error:', error);
+    res.status(500).json({ error: 'Failed to fetch order details' });
+  }
+};
+
 export const updateOrderStatus = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -446,6 +538,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
         customerPhone: true,
         customerName: true,
         orderNumber: true,
+        version: true,
       },
     });
 
@@ -459,14 +552,27 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
       });
     }
 
-    const dataToUpdate: any = { status: normalizedStatus };
-    if (cancelReason !== undefined) dataToUpdate.cancellationReason = cancelReason;
-    if (normalizedStatus === 'RECEIVED') dataToUpdate.completedAt = new Date();
-    if (normalizedStatus === 'CANCELLED') dataToUpdate.cancelledAt = new Date();
-    if (normalizedStatus === 'ACCEPTED') dataToUpdate.acceptedAt = new Date();
-    if (normalizedStatus === 'PREPARING') dataToUpdate.preparingAt = new Date();
-    if (normalizedStatus === 'READY') dataToUpdate.readyAt = new Date();
-    if (normalizedStatus === 'SERVED') dataToUpdate.servedAt = new Date();
+    const transitionAt = new Date();
+    const statusPatch: {
+      acceptedAt?: Date;
+      preparingAt?: Date;
+      readyAt?: Date;
+      servedAt?: Date;
+      completedAt?: Date;
+      cancelledAt?: Date;
+      cancellationReason?: string | null;
+    } = {};
+
+    if (normalizedStatus === 'RECEIVED') statusPatch.completedAt = transitionAt;
+    if (normalizedStatus === 'CANCELLED') {
+      statusPatch.cancelledAt = transitionAt;
+      statusPatch.cancellationReason =
+        typeof cancelReason === 'string' && cancelReason.trim().length > 0 ? cancelReason.trim() : null;
+    }
+    if (normalizedStatus === 'ACCEPTED') statusPatch.acceptedAt = transitionAt;
+    if (normalizedStatus === 'PREPARING') statusPatch.preparingAt = transitionAt;
+    if (normalizedStatus === 'READY') statusPatch.readyAt = transitionAt;
+    if (normalizedStatus === 'SERVED') statusPatch.servedAt = transitionAt;
 
     const attendingStaffName =
       normalizedStatus === 'SERVED' && existingOrder.diningSessionId && req.user?.id
@@ -478,15 +584,31 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
           )?.name?.trim() || 'Service Staff'
         : null;
 
-    const order = await prisma.$transaction(async (tx) => {
-      const updatedOrder = await tx.order.update({
-        where: { id: existingOrder.id },
-        data: dataToUpdate,
-        select: orderSelect,
+    // Use the OCC state machine transition service
+    let order;
+    try {
+      const expectedVersion = typeof req.body.version === 'number' ? req.body.version : existingOrder.version;
+      const metadata = {
+        sourceIp: req.ip,
+        userAgent: req.get('user-agent'),
+      };
+      
+      order = await transitionOrderStatus({
+        orderId: existingOrder.id,
+        tenantId: req.tenantId!,
+        expectedVersion,
+        newStatus: normalizedStatus as any,
+        actorId: req.user!.id,
+        actorType: 'USER',
+        deviceId: req.headers['x-device-id'] as string | undefined,
+        reasonCode: cancelReason,
+        metadata,
+        statusPatch,
       });
-
+      
+      // Secondary update for DiningSession if SERVED
       if (normalizedStatus === 'SERVED' && existingOrder.diningSessionId && req.user?.id) {
-        await tx.diningSession.update({
+        await prisma.diningSession.update({
           where: { id: existingOrder.diningSessionId },
           data: {
             attendedByUserId: req.user.id,
@@ -494,9 +616,20 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
           },
         });
       }
-
-      return updatedOrder;
-    });
+    } catch (err: any) {
+      if (err instanceof ConflictError || err.message === 'OCC_COLLISION') {
+        const truth = await prisma.order.findFirst({
+          where: { id: existingOrder.id, tenantId: req.tenantId },
+          select: orderSelect
+        });
+        return res.status(409).json({
+          error: 'OCC_CONFLICT',
+          message: 'Order status was modified by another user. Syncing...',
+          recovery: { truth }
+        });
+      }
+      throw err;
+    }
 
     const tenantRoom = getTenantRoom(req.tenantId!);
     getIO().to(tenantRoom).emit('order:update', order);
@@ -512,27 +645,14 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
       getIO().to(getRoleRoom(req.tenantId!, 'WAITER')).emit('waiter:pickup_ready', buildWaiterPickupPayload(order));
     }
 
-    if (order.customerPhone) {
-      try {
-        if (normalizedStatus === 'ACCEPTED') {
-          await sendWhatsAppNotification(
-            order.customerPhone,
-            `Hi ${order.customerName || 'Customer'}! Your order ${order.orderNumber} has been accepted and is being prepared.`,
-          );
-        } else if (normalizedStatus === 'READY') {
-          await sendWhatsAppNotification(
-            order.customerPhone,
-            `Great news! Your order ${order.orderNumber} is ready. Please collect it or our staff will serve it shortly.`,
-          );
-        }
-      } catch (notifError) {
-        console.error('[NOTIF_ERROR] WhatsApp delivery failed:', notifError);
-      }
-    }
-
-    await invalidateDashboardOrderCaches(req.tenantId!);
-
+    // Respond immediately — cache invalidation runs async after response is flushed
     res.json(order);
+
+    setImmediate(() => {
+      invalidateDashboardOrderCaches(req.tenantId!).catch((err) =>
+        console.error('[CACHE_INVALIDATION_ERROR]', err)
+      );
+    });
   } catch (error) {
     console.error('updateOrderStatus error:', error);
     res.status(500).json({ error: 'Failed to update order status' });
@@ -679,13 +799,13 @@ export const createAssistedOrder = async (req: Request, res: Response) => {
       return res.status(409).json({ error: 'This table already has an active session. Choose another table or finish the open session first.' });
     }
 
-    const staffName = await resolveStaffName(req.user.id);
+    const staffName = await resolveStaffName(prisma, req.user!.id);
+    const { subtotal, orderItems } = await buildServerPricedOrderPayload(prisma, tenant.id, req.body?.items);
+
+    const taxAmount = subtotal * (Number(tenant.taxRate || 0) / 100);
+    const totalAmount = subtotal + taxAmount;
 
     const result = await prisma.$transaction(async (tx) => {
-      const { subtotal, orderItems } = await buildServerPricedOrderPayload(tx, tenant.id, req.body?.items);
-
-      const taxAmount = subtotal * (Number(tenant.taxRate || 0) / 100);
-      const totalAmount = subtotal + taxAmount;
       const normalizedPhone =
         customerPhone.length >= 10
           ? customerPhone
@@ -719,7 +839,7 @@ export const createAssistedOrder = async (req: Request, res: Response) => {
         });
       }
 
-      const orderNumber = await generateOrderNumberForTenant(tx, tenant.id);
+      const orderNumber = await generateOrderNumberForTenant(tenant.id);
       const isDirectBill = fulfillmentMode === 'DIRECT_BILL';
       const shouldSettleImmediately = isDirectBill && (markPaid || Boolean(paymentMethod));
       const sessionStatus = isDirectBill

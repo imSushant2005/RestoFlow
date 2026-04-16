@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 // ─── TENANTS (Businesses) ──────────────────────────────────
@@ -40,6 +41,7 @@ model Tenant {
   businessHours  Json? // { monday: { open: "09:00", close: "22:00", isOpen: true }, ... }
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  isPilot        Boolean   @default(false)
 
   // Relations
   users          User[]
@@ -54,6 +56,7 @@ model Tenant {
   staffInvites   StaffInvite[]
   analytics      DailyAnalytics[]
   bills          Bill[]
+  orderAuditLogs OrderAuditLog[]
   gstin          String?
   fssai          String?
 }
@@ -339,6 +342,7 @@ model Bill {
 // ─── ORDERS ───────────────────────────────────────────────
 model Order {
   id              String         @id @default(cuid())
+  version         Int            @default(0)
   tenantId        String
   tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   tableId         String?
@@ -379,8 +383,9 @@ model Order {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  items  OrderItem[]
-  review Review?
+  items     OrderItem[]
+  review    Review?
+  auditLogs OrderAuditLog[]
 
   @@index([tenantId, status, createdAt])
   @@index([tenantId, tableId, status])
@@ -532,4 +537,32 @@ enum OfferType {
   FIXED
   COMBO
   BOGO
+}
+
+enum AuditActorType {
+  USER
+  CUSTOMER
+  SYSTEM
+}
+
+model OrderAuditLog {
+  id             String         @id @default(cuid())
+  tenantId       String
+  orderId        String
+  actorType      AuditActorType
+  actorId        String?
+  deviceId       String?
+  previousStatus OrderStatus?
+  newStatus      OrderStatus
+  reasonCode     String?
+  metadata       Json?
+  createdAt      DateTime       @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt(sort: Desc)])
+  @@index([tenantId, actorId, createdAt])
+  @@index([tenantId, newStatus, createdAt])
+  @@index([actorType, createdAt])
 }

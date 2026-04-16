@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger';
 import { ZodError } from 'zod';
+import * as Sentry from '@sentry/node';
 
 interface StandardError extends Error {
   statusCode?: number;
@@ -15,6 +16,17 @@ export const globalErrorHandler = (
 ): void => {
   const statusCode = err.statusCode || 500;
   const isDevelopment = process.env.NODE_ENV !== 'production';
+
+  Sentry.setContext("Request Context", {
+    requestId: req.id,
+    tenantId: (req as any).tenantId,
+    userId: (req as any).user?.id,
+    role: (req as any).user?.role,
+    deviceId: req.headers['x-device-id'],
+    orderId: req.params.id,
+    sessionId: req.params.sessionId,
+    idempotencyKey: req.headers['x-idempotency-key']
+  });
 
   // Automatically Catch Zod validation errors
   if (err instanceof ZodError) {

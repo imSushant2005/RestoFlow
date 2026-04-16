@@ -12,6 +12,12 @@ router.get('/:tenantSlug/sessions/:sessionId', SessionController.getSession);
 router.post('/:tenantSlug/sessions/:sessionId/orders', SessionController.addOrderToSession);
 router.post('/:tenantSlug/sessions/:sessionId/finish', SessionController.finishSession);
 router.post(
+  '/:tenantSlug/sessions/:sessionId/admin-finish',
+  requireAuth,
+  requireRoles(BILLING_VIEW_ROLES),
+  SessionController.adminFinishSession,
+);
+router.post(
   '/:tenantSlug/sessions/:sessionId/complete',
   requireAuth,
   requireRoles(BILLING_VIEW_ROLES),

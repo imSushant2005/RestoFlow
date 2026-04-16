@@ -93,6 +93,19 @@ class BoundedTTLCache {
     }
 }
 const tenantSlugCache = new BoundedTTLCache(TENANT_SLUG_CACHE_MAX, TENANT_SLUG_CACHE_TTL_MS);
+// Cache validated user IDs for 5 minutes to prevent DB hit on every reconnect
+const socketUserAuthCache = new BoundedTTLCache(10_000, 5 * 60 * 1000);
+// Debounce presence broadcasts per tenant to prevent reconnect-storm fan-out
+const presenceDebounceTimers = new Map();
+function emitTenantPresenceDebounced(tenantId) {
+    const existing = presenceDebounceTimers.get(tenantId);
+    if (existing)
+        clearTimeout(existing);
+    presenceDebounceTimers.set(tenantId, setTimeout(() => {
+        presenceDebounceTimers.delete(tenantId);
+        emitTenantPresence(tenantId);
+    }, 300));
+}
 class TokenBucketRateLimiter {
     buckets = new Map();
     consume(socketId) {
@@ -259,12 +272,17 @@ async function authMiddleware(socket, next) {
                 tenantId: decoded.tenantId,
                 role: decoded.role,
             };
-            const user = await prisma_1.prisma.user.findUnique({
-                where: { id: verifiedToken.userId },
-                select: { id: true, isActive: true },
-            });
-            if (!user || !user.isActive) {
-                return rejectAuth(socket, next, 'user_missing_or_inactive');
+            const cacheKey = `auth_user_${verifiedToken.userId}`;
+            const isCached = socketUserAuthCache.get(cacheKey);
+            if (!isCached) {
+                const user = await prisma_1.prisma.user.findUnique({
+                    where: { id: verifiedToken.userId },
+                    select: { id: true, isActive: true },
+                });
+                if (!user || !user.isActive) {
+                    return rejectAuth(socket, next, 'user_missing_or_inactive');
+                }
+                socketUserAuthCache.set(cacheKey, true);
             }
             socket.data.user = verifiedToken;
             socket.data.connectedAt = Date.now();
@@ -346,7 +364,7 @@ function onConnection(socket) {
     });
     if (isStaff && tenantId) {
         presenceTracker.add(tenantId, socket.id);
-        emitTenantPresence(tenantId);
+        emitTenantPresenceDebounced(tenantId);
     }
     socketMetrics.activeConnections += 1;
     socketMetrics.totalConnections += 1;
@@ -391,7 +409,7 @@ function onConnection(socket) {
     socket.on('disconnect', (reason) => {
         if (isStaff && tenantId) {
             presenceTracker.remove(tenantId, socket.id);
-            emitTenantPresence(tenantId);
+            emitTenantPresenceDebounced(tenantId);
         }
         rateLimiter.remove(socket.id);
         socketMetrics.activeConnections = Math.max(0, socketMetrics.activeConnections - 1);

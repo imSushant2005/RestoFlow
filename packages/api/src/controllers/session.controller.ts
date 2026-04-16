@@ -191,9 +191,14 @@ export const createSession = async (req: Request, res: Response) => {
       openedAt: session.openedAt,
     });
 
-    await invalidateSessionCaches(tenant.id, session.id);
-
+    // Respond immediately — cache cleanup runs after response is flushed
     res.status(201).json(session);
+
+    setImmediate(() => {
+      invalidateSessionCaches(tenant.id, session.id).catch((err) =>
+        console.error('[SESSION_CACHE_INVALIDATION_ERROR]', err),
+      );
+    });
   } catch (error) {
     console.error('createSession error:', error);
     if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
@@ -482,32 +487,29 @@ export const finishSession = async (req: Request, res: Response) => {
 
     const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
 
-    // Check if bill already exists to prevent duplicate key error
-    const existingBill = await prisma.bill.findUnique({
-      where: { sessionId },
-    });
-
     let result;
     try {
       result = await prisma.$transaction(async (tx) => {
-      // Create bill only if it doesn't exist
-      if (!existingBill) {
-        await tx.bill.create({
-          data: {
-            tenantId: tenant.id,
-            sessionId,
-            subtotal,
-            taxAmount,
-            discountAmount,
-            totalAmount,
-            invoiceNumber,
-            businessName: tenant.businessName,
-            businessAddress: tenant.address,
-            gstin: (tenant as any).gstin,
-            fssai: (tenant as any).fssai,
-          } as any,
-        });
-      }
+      const bill = await tx.bill.upsert({
+        where: { sessionId },
+        update: {},
+        create: {
+          tenantId: tenant.id,
+          sessionId,
+          subtotal,
+          taxAmount,
+          discountAmount,
+          totalAmount,
+          invoiceNumber,
+          businessName: tenant.businessName,
+          businessAddress: tenant.address,
+          gstin: (tenant as any).gstin,
+          fssai: (tenant as any).fssai,
+        } as any,
+        select: {
+          generatedAt: true,
+        },
+      });
 
       // Update session status to AWAITING_BILL regardless
       const updatedSession = await tx.diningSession.update({
@@ -515,7 +517,7 @@ export const finishSession = async (req: Request, res: Response) => {
         data: {
           sessionStatus: 'AWAITING_BILL' as any,
           isBillGenerated: true,
-          billGeneratedAt: existingBill ? undefined : new Date(),
+          billGeneratedAt: bill.generatedAt,
         },
         include: {
           tenant: { select: { businessName: true, currencySymbol: true } },
@@ -797,5 +799,136 @@ export const getActiveSession = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('getActiveSession error:', error);
     res.status(500).json({ error: 'Failed to check active session' });
+  }
+};
+
+/**
+ * POST /:tenantSlug/sessions/:sessionId/admin-finish
+ * Vendor forcibly finishes the session → generates bill bypassing unserved orders/minimum orders count.
+ */
+export const adminFinishSession = async (req: Request, res: Response) => {
+  try {
+    const { sessionId } = req.params;
+    const tenantId = req.tenantId; // From auth middleware
+
+    if (!tenantId) {
+      return res.status(401).json({ error: 'Unauthorized: Missing tenant context' });
+    }
+
+    const session = await prisma.diningSession.findFirst({
+      where: { id: sessionId, tenantId },
+      include: {
+        tenant: true,
+        orders: {
+          where: { status: { notIn: ['CANCELLED'] } },
+          include: { items: true },
+        },
+      },
+    });
+
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (['CLOSED', 'CANCELLED', 'AWAITING_BILL'].includes(session.sessionStatus)) {
+      return res.status(400).json({ error: 'Session is already closed or awaiting payment' });
+    }
+
+    // AUTHORITY: Vendors can finish sessions even if unserved orders exist or if 0 orders exist.
+    const subtotal = session.orders.reduce((sum: number, o: any) => sum + o.subtotal, 0);
+    const taxAmount = session.orders.reduce((sum: number, o: any) => sum + o.taxAmount, 0);
+    const totalAmount = subtotal + taxAmount; // No discount for now
+
+    const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
+
+    let result;
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        const bill = await tx.bill.upsert({
+          where: { sessionId },
+          update: {},
+          create: {
+            tenantId: session.tenantId,
+            sessionId,
+            subtotal,
+            taxAmount,
+            discountAmount: 0,
+            totalAmount,
+            invoiceNumber,
+            businessName: session.tenant.businessName,
+            businessAddress: session.tenant.address,
+            gstin: (session.tenant as any).gstin,
+            fssai: (session.tenant as any).fssai,
+          } as any,
+          select: {
+            generatedAt: true,
+          },
+        });
+
+        const updatedSession = await tx.diningSession.update({
+          where: { id: sessionId },
+          data: {
+            sessionStatus: 'AWAITING_BILL' as any,
+            isBillGenerated: true,
+            billGeneratedAt: bill.generatedAt,
+          },
+          include: {
+            tenant: { select: { businessName: true, currencySymbol: true } },
+            table: { select: { name: true } },
+            customer: { select: { name: true, phone: true } },
+            orders: { include: { items: true }, orderBy: { createdAt: 'asc' } },
+            bill: true,
+          },
+        });
+
+        if (session.tableId) {
+          await tx.table.update({
+            where: { id: session.tableId },
+            data: { status: 'AWAITING_BILL' },
+          });
+        }
+
+        return updatedSession;
+      });
+    } catch (err) {
+      console.error('adminFinishSession prisma.$transaction failed', err);
+      throw err;
+    }
+
+    // Notify vendors
+    const tenantRoom = getTenantRoom(session.tenantId);
+    const sessionRoom = getSessionRoom(session.tenantId, result.id);
+
+    const finishedPayload = {
+      sessionId: result.id,
+      tableName: (result as any).table?.name,
+      totalAmount: (result as any).bill?.totalAmount,
+    };
+
+    const sessionUpdatePayload = {
+      sessionId: result.id,
+      status: 'AWAITING_BILL',
+      updatedAt: new Date().toISOString(),
+    };
+
+    getIO().to(tenantRoom).emit('session:finished', finishedPayload);
+    getIO().to(sessionRoom).emit('session:finished', finishedPayload);
+    getIO().to(tenantRoom).emit('session:update', sessionUpdatePayload);
+    getIO().to(sessionRoom).emit('session:update', sessionUpdatePayload);
+    
+    if (result.tableId) {
+      getIO().to(tenantRoom).emit('table:status_change', {
+        tableId: result.tableId,
+        status: 'AWAITING_BILL',
+      });
+    }
+
+    setImmediate(() => {
+      invalidateSessionCaches(session.tenantId, result.id).catch(err => 
+        console.error('[ADMIN_FINISH_CACHE_ERROR]', err)
+      );
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('adminFinishSession error:', error);
+    res.status(500).json({ error: 'Failed to finish session via admin authority' });
   }
 };

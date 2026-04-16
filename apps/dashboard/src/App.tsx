@@ -382,14 +382,51 @@ function DashboardShell() {
 
   const realtimeHandlers = useMemo(
     () => ({
-      'order:new': () => {
-        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+      'order:new': (newOrder: any) => {
+        // For new orders we may not have the full shape in the event payload,
+        // so we append if we have data, otherwise fall back to a targeted invalidate.
+        if (newOrder?.id) {
+          queryClient.setQueryData(['live-orders'], (old: any[]) => {
+            if (!Array.isArray(old)) return old;
+            // Avoid duplicates on socket replay after reconnect
+            if (old.some((o) => o.id === newOrder.id)) return old;
+            return [newOrder, ...old];
+          });
+        } else {
+          queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+        }
         void refreshLiveOrderCount();
       },
-      'order:update': () => {
-        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
-        queryClient.invalidateQueries({ queryKey: ['order-history'] });
-        queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
+      'order:update': (updatedOrder: any) => {
+        if (updatedOrder?.id) {
+          // Patch the cache in-place — no HTTP request fired.
+          // Version guard: only apply if this event is NEWER than what is in cache.
+          // Prevents stale socket replay events from regressing the board during reconnect.
+          queryClient.setQueryData(['live-orders'], (old: any[]) => {
+            if (!Array.isArray(old)) return old;
+            const exists = old.some((o) => o.id === updatedOrder.id);
+            if (!exists) {
+              // Order not in live board (e.g. moved to history) — no action needed
+              return old;
+            }
+            return old.map((o) => {
+              if (o.id !== updatedOrder.id) return o;
+              // Only apply if this event version is strictly newer
+              if (typeof o.version === 'number' && typeof updatedOrder.version === 'number' && updatedOrder.version <= o.version) {
+                return o;
+              }
+              return updatedOrder;
+            });
+          });
+          // Also invalidate history and billing counter (these are lighter — they don't block the board)
+          queryClient.invalidateQueries({ queryKey: ['order-history'] });
+          queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
+        } else {
+          // Fallback: no ID in payload — full refetch
+          queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+          queryClient.invalidateQueries({ queryKey: ['order-history'] });
+          queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
+        }
         void refreshLiveOrderCount();
       },
       'orders:bulk_status': () => {

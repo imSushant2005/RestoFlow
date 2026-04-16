@@ -159,30 +159,46 @@ const getPublicMenu = async (req, res) => {
         const publicData = await (0, cache_service_1.withCache)(cacheKey, async () => (0, prisma_1.withPrismaRetry)(async () => {
             const tenant = await prisma_1.prisma.tenant.findUnique({
                 where: { slug: tenantSlug },
-                include: {
-                    categories: {
-                        where: { isVisible: true },
-                        orderBy: { sortOrder: 'asc' },
-                        include: {
-                            menuItems: {
-                                where: { isAvailable: true },
-                                orderBy: { sortOrder: 'asc' },
-                                include: {
-                                    modifierGroups: {
-                                        include: {
-                                            modifiers: {
-                                                where: { isAvailable: true }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                select: {
+                    id: true,
+                    businessName: true,
+                    description: true,
+                    slug: true,
+                    logoUrl: true,
+                    coverImageUrl: true,
+                    primaryColor: true,
+                    accentColor: true,
+                    taxRate: true,
+                    businessHours: true,
+                },
             });
             if (!tenant)
                 throw new Error('Vendor not found');
+            const categories = await prisma_1.prisma.category.findMany({
+                where: {
+                    tenantId: tenant.id,
+                    isVisible: true,
+                },
+                orderBy: { sortOrder: 'asc' },
+                include: {
+                    menuItems: {
+                        where: {
+                            tenantId: tenant.id,
+                            isAvailable: true,
+                        },
+                        orderBy: { sortOrder: 'asc' },
+                        include: {
+                            modifierGroups: {
+                                include: {
+                                    modifiers: {
+                                        where: { isAvailable: true },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            });
             return {
                 tenantId: tenant.id,
                 name: tenant.businessName, // alias used by customer frontend
@@ -191,7 +207,7 @@ const getPublicMenu = async (req, res) => {
                 slug: tenant.slug,
                 logoUrl: tenant.logoUrl || null,
                 coverImageUrl: tenant.coverImageUrl || null,
-                categories: tenant.categories,
+                categories,
                 primaryColor: tenant.primaryColor,
                 accentColor: tenant.accentColor,
                 taxRate: tenant.taxRate,

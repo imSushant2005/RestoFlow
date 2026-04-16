@@ -22,7 +22,24 @@ import { CSS } from '@dnd-kit/utilities';
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER';
 type BillWorkflowAction = 'AWAITING_BILL' | 'PAID_CASH' | 'PAID_ONLINE';
 
-const TERMINAL_STATUSES = new Set(['RECEIVED', 'CANCELLED']);
+// Removed TERMINAL_STATUSES
+// --- ISOLATED TIME TICKER (Avoids global order re-renders) ---
+const TimeElapsedBadge = memo(({ createdAtMs, isUrgentThreshold = 15, isUrgentCallback }: any) => {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(id);
+  }, []);
+  const elapsedMin = createdAtMs > 0 ? Math.max(0, Math.floor((now - createdAtMs) / 60000)) : 0;
+  const isUrgent = elapsedMin >= isUrgentThreshold;
+
+  useEffect(() => {
+    if (isUrgentCallback) isUrgentCallback(isUrgent);
+  }, [isUrgent, isUrgentCallback]);
+
+  if (elapsedMin <= 0) return null;
+  return <span>({formatElapsedLabel(elapsedMin)})</span>;
+});
 
 function readRestaurantSlugFromStorage() {
   try {
@@ -135,7 +152,6 @@ const TicketCard = memo(({
   const outstandingBatches = activeBatches.filter(
     (order: any) => !['SERVED', 'RECEIVED'].includes(String(order?.status || '').toUpperCase()),
   );
-  const canGenerateBill = ticket.isSession && canCloseSession && ticket.sessionId && sessionStatus !== 'AWAITING_BILL' && sessionStatus !== 'CLOSED' && activeBatches.length > 0 && outstandingBatches.length === 0;
   const canCapturePayment = ticket.isSession && canCloseSession && ticket.sessionId && sessionStatus === 'AWAITING_BILL';
   const isUrgent = elapsedMin >= 15 && activeBatches.some((o: any) => ['NEW', 'ACCEPTED', 'PREPARING'].includes(String(o.status).toUpperCase()));
 
@@ -166,7 +182,7 @@ const TicketCard = memo(({
                {formatTimeValue(ticket?.createdAt)}
                {elapsedMin > 0 && (
                  <span className={isUrgent ? 'text-red-400' : 'text-slate-400'}>
-                   ({formatElapsedLabel(elapsedMin)})
+                   <TimeElapsedBadge createdAtMs={createdAtMs} isUrgentThreshold={15} />
                  </span>
                )}
              </span>
@@ -246,11 +262,18 @@ const TicketCard = memo(({
                     onClick={() => {
                         if (!ticket.sessionId) return;
                         if (selectedBillAction === 'AWAITING_BILL') {
-                          if (!canGenerateBill && sessionStatus !== 'AWAITING_BILL') {
-                            window.alert('Serve every active batch first.');
-                            return;
-                          }
                           if (sessionStatus === 'AWAITING_BILL') return;
+
+                          if (outstandingBatches.length > 0) {
+                            if (!window.confirm(`There are ${outstandingBatches.length} unserved batches. Force generate bill anyway?`)) {
+                              return;
+                            }
+                          } else if (activeBatches.length === 0) {
+                            if (!window.confirm("This session has 0 orders. Close it anyway?")) {
+                              return;
+                            }
+                          }
+                          
                           onFinishSession(ticket.sessionId);
                           return;
                         }
@@ -502,7 +525,6 @@ const PipelineCard = memo(({
 export function Orders({ role }: { role?: string }) {
   const queryClient = useQueryClient();
   const effectiveRole = resolveRole(role || localStorage.getItem('userRole'));
-  const onlyPipeline = effectiveRole === 'KITCHEN';
   const canViewSessions = effectiveRole !== 'KITCHEN';
   const canViewHistory = effectiveRole !== 'KITCHEN';
   const canCloseSession = effectiveRole === 'OWNER' || effectiveRole === 'MANAGER' || effectiveRole === 'CASHIER';
@@ -512,19 +534,20 @@ export function Orders({ role }: { role?: string }) {
   const canSetServiceStages = ['OWNER', 'MANAGER', 'CASHIER', 'WAITER'].includes(effectiveRole);
   const [activeTab, setActiveTab] = useState<'PIPELINE' | 'SESSIONS' | 'HISTORY'>('PIPELINE');
   const [busyMode, setBusyMode] = useState(false);
-  const [overviewNow, setOverviewNow] = useState(() => new Date());
-  const [billSelections, setBillSelections] = useState<Record<string, BillWorkflowAction>>({});
-
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  
   useEffect(() => {
-    if (onlyPipeline && activeTab !== 'PIPELINE') {
-      setActiveTab('PIPELINE');
-    }
-  }, [activeTab, onlyPipeline]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => setOverviewNow(new Date()), 30000);
-    return () => window.clearInterval(id);
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
+
+  const [billSelections, setBillSelections] = useState<Record<string, BillWorkflowAction>>({});
 
   const { data: businessSettings } = useQuery<{ slug?: string }>({
     queryKey: ['settings-business'],
@@ -566,6 +589,9 @@ export function Orders({ role }: { role?: string }) {
       return res.data;
     },
     staleTime: 1000 * 10,
+    refetchInterval: 60000,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
   });
 
   const { data: historyResponse } = useQuery<any>({
@@ -579,22 +605,44 @@ export function Orders({ role }: { role?: string }) {
   const historyOrders = historyResponse?.data || [];
 
   const statusMutation = useMutation({
-    mutationFn: async ({ id, status, cancelReason }: any) => {
-      const res = await api.patch(`/orders/${id}/status`, { status, cancelReason });
+    mutationFn: async ({ id, status, cancelReason, expectedVersion }: any) => {
+      const res = await api.patch(`/orders/${id}/status`, { status, cancelReason, version: expectedVersion });
       return res.data;
     },
-    onSuccess: (updatedOrder: any) => {
-      if (TERMINAL_STATUSES.has(updatedOrder.status)) {
-        queryClient.setQueryData(['live-orders'], (old: any[] = []) =>
-          old.filter((order) => order.id !== updatedOrder.id),
-        );
-        queryClient.invalidateQueries({ queryKey: ['order-history'] });
-        queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
+    onMutate: async (newUpdate: any) => {
+      await queryClient.cancelQueries({ queryKey: ['live-orders'] });
+      const previousState = queryClient.getQueryData(['live-orders']);
+
+      // Optimistically move ticket
+      queryClient.setQueryData(['live-orders'], (old: any) => {
+        if (!old) return [];
+        return old.map((order: any) => {
+          if (order.id === newUpdate.id) {
+            return { ...order, status: newUpdate.status, version: (order.version || 0) + 1 };
+          }
+          return order;
+        });
+      });
+
+      return { previousState };
+    },
+    onError: (err: any, _variables: any, context: any) => {
+      // 409 Rollback UX
+      if (err.response?.status === 409 || err.response?.data?.error === 'OCC_CONFLICT') {
+        const actualStatus = err.response?.data?.recovery?.truth?.status || 'its true state';
+        alert(`Update rejected: The ticket was modified elsewhere. Syncing back to ${actualStatus}...`);
+      } else if (!navigator.onLine) {
+        alert("You are offline. Cannot change order status.");
       } else {
-        queryClient.setQueryData(['live-orders'], (old: any[] = []) =>
-          old.map((order) => (order.id === updatedOrder.id ? updatedOrder : order)),
-        );
+        alert("Failed to update status. Snapping back.");
       }
+      // Snap back to truth
+      queryClient.setQueryData(['live-orders'], context?.previousState);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['order-history'] });
+      queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
     },
   });
 
@@ -604,7 +652,7 @@ export function Orders({ role }: { role?: string }) {
       if (!slug) {
         throw new Error('Tenant slug missing. Complete Business Profile setup first.');
       }
-      return api.post(`/public/${slug}/sessions/${sessionId}/finish`);
+      return api.post(`/public/${slug}/sessions/${sessionId}/admin-finish`);
     },
     onSuccess: refreshOperationalData,
     onError: (error: any) => {
@@ -704,7 +752,7 @@ export function Orders({ role }: { role?: string }) {
     label: 'Synced',
     className: 'bg-blue-100 text-blue-700 border-blue-200',
   };
-  const overviewTimestamp = format(overviewNow, 'MMM d, yyyy | h:mm a');
+  const overviewTimestamp = format(new Date(), 'MMM d, yyyy | h:mm a');
   const readyOrders = liveOrders.filter((order: any) => order.status === 'READY');
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -730,10 +778,8 @@ export function Orders({ role }: { role?: string }) {
     const orderId = active.id as string;
     const targetColId = over.id as string;
     const order = active.data.current?.order;
-
     if (!order) return;
 
-    // Logic for transition based on column
     let newStatus = '';
     if (targetColId === 'col-kitchen') {
       if (order.status === 'NEW') newStatus = 'ACCEPTED';
@@ -745,7 +791,7 @@ export function Orders({ role }: { role?: string }) {
     }
 
     if (newStatus && newStatus !== order.status) {
-      statusMutation.mutate({ id: orderId, status: newStatus });
+      statusMutation.mutate({ id: orderId, status: newStatus, expectedVersion: order.version || 0 });
     }
   };
 
@@ -765,8 +811,9 @@ export function Orders({ role }: { role?: string }) {
   }, [completeSessionMutation]);
 
   const handleUpdateStatus = useCallback((id: string, status: string, cancelReason?: string) => {
-    statusMutation.mutate({ id, status, cancelReason });
-  }, [statusMutation]);
+    const order = liveOrders.find((o: any) => o.id === id);
+    statusMutation.mutate({ id, status, cancelReason, expectedVersion: order?.version || 0 });
+  }, [liveOrders, statusMutation]);
 
 
 
@@ -865,8 +912,19 @@ export function Orders({ role }: { role?: string }) {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
+          {isOffline && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded-3xl m-4">
+               <div className="bg-red-500/20 border border-red-500 text-red-50 font-bold px-6 py-4 rounded-xl flex items-center gap-3 shadow-2xl">
+                 <XCircle size={24} className="text-red-400" />
+                 <div>
+                   <p className="text-lg">You are offline</p>
+                   <p className="text-xs text-red-200">Reconnecting to server... changes disabled.</p>
+                 </div>
+               </div>
+            </div>
+          )}
           <div
-            className="flex flex-1 flex-col gap-4 overflow-y-auto custom-scrollbar p-3 sm:p-4 lg:h-full lg:flex-row lg:gap-6 lg:overflow-x-auto lg:overflow-y-hidden lg:p-6"
+            className={`flex flex-1 flex-col gap-4 overflow-y-auto custom-scrollbar p-3 sm:p-4 lg:h-full lg:flex-row lg:gap-6 lg:overflow-x-auto lg:overflow-y-hidden lg:p-6 relative ${isOffline ? 'opacity-40 pointer-events-none' : ''}`}
             style={{ background: 'var(--kanban-bg)' }}
           >
             {[
