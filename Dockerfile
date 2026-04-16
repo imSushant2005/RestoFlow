@@ -9,7 +9,7 @@ COPY packages ./packages
 COPY infrastructure ./infrastructure
 COPY apps ./apps
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Generate Prisma client BEFORE building (required for @prisma/client types)
 WORKDIR /app/infrastructure/prisma
