@@ -117,7 +117,11 @@ export namespace $Enums {
   FREE: 'FREE',
   STARTER: 'STARTER',
   GOLD: 'GOLD',
-  PLATINUM: 'PLATINUM'
+  PLATINUM: 'PLATINUM',
+  MINI: 'MINI',
+  CAFE: 'CAFE',
+  DINEPRO: 'DINEPRO',
+  PREMIUM: 'PREMIUM'
 };
 
 export type Plan = (typeof Plan)[keyof typeof Plan]

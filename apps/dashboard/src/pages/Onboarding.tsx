@@ -52,7 +52,18 @@ const onboardingReasons = [
 export function Onboarding({ nextPath }: OnboardingProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<'welcome' | 'identity' | 'done'>('identity');
+  const [step, setStep] = useState<'welcome' | 'identity' | 'survey' | 'done'>('identity');
+  
+  // Questionnaire state
+  const [businessType, setBusinessType] = useState<'kiosk' | 'cafe' | 'resto' | 'chain'>('cafe');
+  const [tableCount, setTableCount] = useState(5);
+  
+  const recommendedPlan = useMemo(() => {
+    if (businessType === 'chain' || tableCount > 18) return 'PREMIUM';
+    if (businessType === 'resto' || tableCount > 9) return 'DINEPRO';
+    if (businessType === 'cafe' || tableCount > 3) return 'CAFE';
+    return 'MINI';
+  }, [businessType, tableCount]);
 
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -148,11 +159,24 @@ export function Onboarding({ nextPath }: OnboardingProps) {
       setErrorMessage('');
       localStorage.removeItem(draftKey);
       await queryClient.invalidateQueries({ queryKey: ['settings-business'] });
-      setStep('done');
+      setStep('survey');
     },
     onError: (err: any) => {
       const apiError = typeof err?.response?.data?.error === 'string' ? err.response.data.error : err?.message || 'Unable to save workspace setup.';
       setErrorMessage(apiError);
+    },
+  });
+
+  const planMutation = useMutation({
+    mutationFn: async ({ plan, trialEndsAt }: { plan: string; trialEndsAt: string }) => {
+      return api.patch('/settings/business', { plan, trialEndsAt });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['settings-business'] });
+      setStep('done');
+    },
+    onError: () => {
+      setErrorMessage('Unable to activate trial. Please try again.');
     },
   });
 
@@ -193,6 +217,8 @@ export function Onboarding({ nextPath }: OnboardingProps) {
               <span className="mx-2 text-slate-600">/</span>
               <span className={step === 'identity' ? 'text-white' : 'text-slate-500'}>Identity</span>
               <span className="mx-2 text-slate-600">/</span>
+              <span className={step === 'survey' ? 'text-white' : 'text-slate-500'}>Personalize</span>
+              <span className="mx-2 text-slate-600">/</span>
               <span className={step === 'done' ? 'text-white' : 'text-slate-500'}>Launch</span>
             </div>
           </div>
@@ -202,7 +228,7 @@ export function Onboarding({ nextPath }: OnboardingProps) {
               {step === 'welcome' && (
                 <div className="space-y-6">
                   <div className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-100">
-                    Step 1 of 3
+                    Step 1 of 4
                   </div>
 
                   <div>
@@ -242,7 +268,7 @@ export function Onboarding({ nextPath }: OnboardingProps) {
               {step === 'identity' && (
                 <form onSubmit={handleSubmit} className="space-y-5">
                   <div className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-100">
-                    Step 2 of 3
+                    Step 2 of 4
                   </div>
 
                   {errorMessage ? (
@@ -319,10 +345,90 @@ export function Onboarding({ nextPath }: OnboardingProps) {
                 </form>
               )}
 
+              {step === 'survey' && (
+                <div className="space-y-6">
+                  <div className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-100">
+                    Step 3 of 4
+                  </div>
+
+                  <div>
+                    <h2 className="text-3xl font-black tracking-tight text-white" style={{ fontFamily: 'Space Grotesk, Inter, sans-serif' }}>
+                      Tell us about your service style.
+                    </h2>
+                    <p className="mt-2 text-base text-slate-400">
+                      We'll tailor your dashboard and recommendation based on how you serve guests.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {[
+                      { id: 'kiosk', title: 'Street Food / Kiosk', sub: 'Orders are self-pickup' },
+                      { id: 'cafe', title: 'Cafe / Quick Service', sub: 'Counter or scan-to-order' },
+                      { id: 'resto', title: 'Full Restaurant', sub: 'Full waiter service' },
+                      { id: 'chain', title: 'Large Multi-branch', sub: 'Multiple outlets' },
+                    ].map((type) => (
+                      <button
+                        key={type.id}
+                        type="button"
+                        onClick={() => setBusinessType(type.id as any)}
+                        className={`text-left p-4 rounded-2xl border transition-all ${
+                          businessType === type.id 
+                            ? 'bg-blue-600 border-blue-500 shadow-lg shadow-blue-900/40 text-white' 
+                            : 'bg-white/[0.03] border-white/10 text-slate-300 hover:border-white/20'
+                        }`}
+                      >
+                        <p className="font-black text-sm">{type.title}</p>
+                        <p className={`text-[10px] mt-1 ${businessType === type.id ? 'text-blue-100' : 'text-slate-500'}`}>{type.sub}</p>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-bold text-white">Number of Tables</p>
+                        <p className="text-xs text-slate-400 mt-1">Include outdoor and indoor seating</p>
+                      </div>
+                      <input 
+                        type="number" 
+                        value={tableCount}
+                        onChange={(e) => setTableCount(Number(e.target.value))}
+                        className="w-16 h-10 bg-slate-800 border-slate-700 rounded-xl px-3 text-white font-black text-center"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-6 rounded-3xl bg-gradient-to-br from-blue-600/10 to-indigo-600/10 border border-blue-500/20 shadow-2xl">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-2">Our Recommendation</p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-2xl font-black text-white">{recommendedPlan} Plan</h4>
+                        <p className="text-xs text-slate-400 mt-1">Includes 30 days of full Pro access.</p>
+                      </div>
+                      <button
+                        disabled={planMutation.isPending}
+                        onClick={() => {
+                          const trialEndsAt = new Date();
+                          trialEndsAt.setDate(trialEndsAt.getDate() + 30);
+                          
+                          planMutation.mutate({
+                            plan: recommendedPlan,
+                            trialEndsAt: trialEndsAt.toISOString(),
+                          });
+                        }}
+                        className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-full font-black text-sm shadow-xl shadow-blue-900/40 transition-all disabled:opacity-50"
+                      >
+                        {planMutation.isPending ? 'Activating...' : 'Start 30-Day Free Trial'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {step === 'done' && (
                 <div className="space-y-6">
                   <div className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200">
-                    Step 3 of 3
+                    Step 4 of 4
                   </div>
 
                   <div>

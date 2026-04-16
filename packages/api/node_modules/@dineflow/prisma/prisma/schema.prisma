@@ -34,7 +34,7 @@ model Tenant {
   taxRate         Float    @default(5.0) // GST percentage
   timezone        String   @default("Asia/Kolkata")
   isActive        Boolean  @default(true)
-  plan            Plan     @default(FREE)
+  plan            Plan     @default(MINI)
   planStartedAt   DateTime?
   planExpiresAt   DateTime?
   trialEndsAt     DateTime?  // 1-month free trial
@@ -479,9 +479,13 @@ model DailyAnalytics {
 // ─── ENUMS ────────────────────────────────────────────────
 enum Plan {
   FREE
-  STARTER     // ₹499/mo
-  GOLD        // ₹999/mo
-  PLATINUM    // ₹1599/mo
+  STARTER
+  GOLD
+  PLATINUM
+  MINI
+  CAFE
+  DINEPRO
+  PREMIUM
 }
 
 enum UserRole {

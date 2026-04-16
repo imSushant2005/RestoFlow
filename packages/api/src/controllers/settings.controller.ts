@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
 import { getPlanLimits } from '../config/plans';
-import { UserRole } from '@dineflow/prisma';
+import { UserRole, Plan } from '@dineflow/prisma';
 import { hashPassword } from '../utils/hash';
 import { z } from 'zod';
 import { deleteCache, withCache } from '../services/cache.service';
@@ -58,6 +58,8 @@ const updateBusinessSettingsSchema = z.object({
   phone: z.string().trim().min(7).max(20).optional(),
   gstin: z.string().trim().min(8).max(20).optional(),
   isActive: z.boolean().optional(),
+  plan: z.nativeEnum(Plan).optional(),
+  trialEndsAt: z.string().pipe(z.coerce.date()).optional().nullable(),
 });
 
 function sanitizeSegment(value: string) {
@@ -129,6 +131,8 @@ export const getBusinessSettings = async (req: Request, res: Response) => {
             primaryColor: true,
             accentColor: true,
             isActive: true,
+            plan: true,
+            trialEndsAt: true,
           },
         }),
       20,
@@ -154,6 +158,8 @@ export const updateBusinessSettings = async (req: Request, res: Response) => {
       phone,
       gstin,
       isActive,
+      plan,
+      trialEndsAt,
     } = payload;
 
     const normalizedSlug = slug?.trim().toLowerCase();
@@ -197,6 +203,8 @@ export const updateBusinessSettings = async (req: Request, res: Response) => {
         phone,
         gstin: gstin === undefined ? undefined : normalizedGstin || null,
         isActive,
+        plan,
+        trialEndsAt,
       },
       select: {
         id: true,
@@ -212,6 +220,8 @@ export const updateBusinessSettings = async (req: Request, res: Response) => {
         primaryColor: true,
         accentColor: true,
         isActive: true,
+        plan: true,
+        trialEndsAt: true,
       }
     });
     await Promise.all([

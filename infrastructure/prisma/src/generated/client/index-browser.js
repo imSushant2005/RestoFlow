@@ -483,7 +483,11 @@ exports.Plan = exports.$Enums.Plan = {
   FREE: 'FREE',
   STARTER: 'STARTER',
   GOLD: 'GOLD',
-  PLATINUM: 'PLATINUM'
+  PLATINUM: 'PLATINUM',
+  MINI: 'MINI',
+  CAFE: 'CAFE',
+  DINEPRO: 'DINEPRO',
+  PREMIUM: 'PREMIUM'
 };
 
 exports.UserRole = exports.$Enums.UserRole = {

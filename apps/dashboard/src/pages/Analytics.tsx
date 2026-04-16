@@ -23,6 +23,10 @@ export function Analytics() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
 
+  // Plan logic
+  const activePlan = localStorage.getItem('rf_active_plan');
+  const isBasicsOnly = activePlan === 'MINI' || activePlan === 'CAFE';
+
   const queryParams = useMemo(() => {
     if (range === '7d') return '?days=7';
     if (range === '30d') return '?days=30';
@@ -120,7 +124,12 @@ export function Analytics() {
   return (
     <div className="flex-1 p-8 overflow-y-auto w-full" style={{ background: 'var(--bg)' }}>
       <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
-        <h2 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text-1)' }}>Analytics Insights</h2>
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text-1)' }}>{isBasicsOnly ? 'Basic Analytics' : 'Pro Insights'}</h2>
+          <p className="text-xs font-bold text-slate-500 mt-1 uppercase tracking-widest">
+            {activePlan || 'Trial'} Plan Performance
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setRange('7d')} className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${range === '7d' ? 'bg-blue-600 text-white' : 'bg-transparent border'}`} style={range === '7d' ? {} : { color: 'var(--text-2)', borderColor: 'var(--border)' }}>7d</button>
           <button onClick={() => setRange('30d')} className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${range === '30d' ? 'bg-blue-600 text-white' : 'bg-transparent border'}`} style={range === '30d' ? {} : { color: 'var(--text-2)', borderColor: 'var(--border)' }}>30d</button>
@@ -166,9 +175,16 @@ export function Analytics() {
 
       {insights.length > 0 && (
         <div className="mb-8 rounded-2xl p-6" style={{ background: 'linear-gradient(to right, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1))', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
-          <h3 className="font-black text-lg mb-4 flex items-center gap-2" style={{ color: 'var(--text-1)' }}>
-            <Lightbulb size={20} className="text-indigo-400" />
-            Smart Insights
+          <h3 className="font-black text-lg mb-4 flex items-center justify-between" style={{ color: 'var(--text-1)' }}>
+            <div className="flex items-center gap-2">
+              <Lightbulb size={20} className="text-indigo-400" />
+              Smart Insights
+            </div>
+            {isBasicsOnly && (
+              <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-widest border border-indigo-500/20">
+                 Limited in {activePlan}
+              </span>
+            )}
           </h3>
           <div className="space-y-3">
             {insights.map((insight, idx) => (
