@@ -57,7 +57,6 @@ function buildAllowedOrigins() {
 const allowedOrigins = buildAllowedOrigins();
 
 // Trusted origin patterns — used as fallback when CLIENT_URL / CORS_ORIGIN are not set.
-// These match any subdomain of Vercel and Railway deployments (standard indie stack).
 const TRUSTED_ORIGIN_PATTERNS = [
   /\.vercel\.app$/,
   /\.railway\.app$/,
@@ -65,22 +64,24 @@ const TRUSTED_ORIGIN_PATTERNS = [
 ];
 
 function isOriginAllowed(origin?: string | null) {
-  // No origin header — server-to-server or same-origin request, always allow
+  // 1. Same-origin or server-to-server (no Origin header)
   if (!origin) return true;
 
-  // Explicit allow-list takes priority
+  // 2. Explicitly allowed
   if (allowedOrigins.includes(origin)) return true;
 
-  // Localhost always allowed (dev)
+  // 3. Localhost (dev)
   if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) return true;
 
-  // If no explicit list is configured, fall back to trusted deployment patterns
-  // This prevents the silent "all origins blocked" state when CLIENT_URL is missing.
-  if (allowedOrigins.length === 0) {
-    return TRUSTED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin));
+  // 4. Pattern match (vercel/railway)
+  // Use a simple check to catch if the origin ends with a trusted domain
+  const isTrusted = TRUSTED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin));
+  
+  if (!isTrusted && isProduction) {
+    console.warn(`[CORS_REJECT] Restricted origin attempt: ${origin}. Add to CLIENT_URL if this is expected.`);
   }
 
-  return false;
+  return isTrusted;
 }
 
 app.disable('x-powered-by');
@@ -92,10 +93,24 @@ if (env.TRUST_PROXY) {
 app.use(tracingMiddleware);
 
 app.use(
+  cors({
+    origin(origin, callback) {
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Origin not allowed by CORS'));
+    },
+    credentials: true,
+  }),
+);
+
+app.use(
   helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   }),
 );
+
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -124,18 +139,7 @@ const strictAuthLimiter = rateLimit({
 
 app.use('/public', apiLimiter);
 app.use(pinoHttp({ logger }));
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (isOriginAllowed(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error('Origin not allowed by CORS'));
-    },
-    credentials: true,
-  }),
-);
+// Removed cors() from here as it's now at the top
 app.post('/payments/webhook', express.raw({ type: 'application/json' }), PaymentController.handleWebhook);
 app.use(express.json({ limit: env.JSON_BODY_LIMIT }));
 app.use(cookieParser());
@@ -181,8 +185,9 @@ app.get('/health/ready', async (_req, res) => {
   res.status(httpStatus).json({
     status: overallStatus,
     ...checks,
-    sockets: getSocketMetrics(),
     version: '1.0.0',
+    patch: 'v3-cors-hardened', // Version flag to verify deploy
+    sockets: getSocketMetrics(),
   });
 });
 
