@@ -36,9 +36,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+require("./instrumentation");
 const env_1 = require("./config/env");
 const Sentry = __importStar(require("@sentry/node"));
-const profiling_node_1 = require("@sentry/profiling-node");
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
@@ -62,19 +62,13 @@ const notification_routes_1 = __importDefault(require("./routes/notification.rou
 const customer_routes_1 = __importDefault(require("./routes/customer.routes"));
 const session_routes_1 = __importDefault(require("./routes/session.routes"));
 const prisma_1 = require("./db/prisma");
+const session_cleanup_service_1 = require("./services/session-cleanup.service");
 const error_middleware_1 = require("./middlewares/error.middleware");
 const socket_1 = require("./socket");
 const logger_1 = require("./utils/logger");
 const tracing_middleware_1 = require("./middlewares/tracing.middleware");
 const tenant_rate_limit_middleware_1 = require("./middlewares/tenant-rate-limit.middleware");
-Sentry.init({
-    dsn: process.env.SENTRY_DSN || 'https://public@sentry.example.com/1',
-    integrations: [
-        (0, profiling_node_1.nodeProfilingIntegration)(),
-    ],
-    tracesSampleRate: env_1.env.NODE_ENV === 'production' ? 0.2 : 1.0,
-    profilesSampleRate: env_1.env.NODE_ENV === 'production' ? 0.2 : 1.0,
-});
+// Instrumentation handled by ./instrumentation
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
 const port = env_1.env.PORT || 4000;
@@ -169,6 +163,7 @@ app.get('/health', async (_req, res) => {
 app.use('/auth', auth_routes_1.default);
 app.use('/menus', menu_routes_1.default);
 app.use('/venue', table_routes_1.default);
+app.use('/public', session_routes_1.default);
 app.use('/public', public_routes_1.default);
 app.use('/orders', tenant_rate_limit_middleware_1.tenantRateLimitMiddleware, order_routes_1.default);
 app.use('/analytics', tenant_rate_limit_middleware_1.tenantRateLimitMiddleware, analytics_routes_1.default);
@@ -178,7 +173,6 @@ app.use('/payments', payment_routes_1.default);
 app.use('/ai', ai_routes_1.default);
 app.use('/notifications', notification_routes_1.default);
 app.use('/customer', customer_routes_1.default);
-app.use('/public', session_routes_1.default);
 Sentry.setupExpressErrorHandler(app);
 app.use(error_middleware_1.globalErrorHandler);
 httpServer.on('error', (error) => {
@@ -191,5 +185,7 @@ httpServer.on('error', (error) => {
 });
 httpServer.listen(port, () => {
     logger_1.logger.info(`RESTOFLOW API (V3 Enterprise) running on port ${port}`);
+    // Start background maintenance jobs
+    (0, session_cleanup_service_1.startSessionCleanupJob)();
 });
 //# sourceMappingURL=index.js.map

@@ -51,16 +51,28 @@ export const createZone = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Zone name is required' });
     }
 
-    const existingZone = await prisma.zone.findFirst({
-      where: {
-        tenantId: req.tenantId,
-        name: { equals: name, mode: 'insensitive' },
-      },
-      select: { id: true },
-    });
+    const [tenant, existingZone, zoneCount] = await Promise.all([
+      prisma.tenant.findUnique({ where: { id: req.tenantId }, select: { plan: true } }),
+      prisma.zone.findFirst({
+        where: {
+          tenantId: req.tenantId,
+          name: { equals: name, mode: 'insensitive' },
+        },
+        select: { id: true },
+      }),
+      prisma.zone.count({ where: { tenantId: req.tenantId } }),
+    ]);
 
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
     if (existingZone) {
       return res.status(409).json({ error: `Zone '${name}' already exists.` });
+    }
+
+    const planLimits = getPlanLimits(tenant.plan);
+    if (zoneCount >= planLimits.maxFloors) {
+      return res.status(403).json({ 
+        error: `Plan limit reached. Your ${planLimits.name} plan allows up to ${planLimits.maxFloors} floor(s)/zone(s).` 
+      });
     }
 
     const zone = await prisma.zone.create({
@@ -132,7 +144,7 @@ export const createTable = async (req: Request, res: Response) => {
 
     const planLimits = getPlanLimits(tenant.plan);
     if (count >= planLimits.tables) {
-      return res.status(403).json({ error: `Plan limit reached. Your ${tenant.plan} plan allows up to ${planLimits.tables} tables.` });
+      return res.status(403).json({ error: `Plan limit reached. Your ${planLimits.name} plan allows up to ${planLimits.tables} tables.` });
     }
 
     const table = await prisma.table.create({

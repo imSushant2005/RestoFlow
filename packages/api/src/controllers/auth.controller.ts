@@ -128,6 +128,7 @@ async function issueSessionForUser(res: Response, user: {
     id: user.id,
     tenantId: user.tenantId,
     role: user.role,
+    email: user.email,
   });
 
   const expiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS);
@@ -260,6 +261,9 @@ export const register = async (req: Request, res: Response) => {
           businessName: finalTenantName,
           slug,
           email: normalizedEmail,
+          trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day free trial on signup
+          plan: 'MINI',
+          planStartedAt: new Date(),
         },
       });
 
@@ -398,6 +402,9 @@ export const clerkSync = async (req: Request, res: Response) => {
           businessName: finalTenantName,
           slug: tenantSlug,
           email: normalizedEmail,
+          trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day free trial on signup
+          plan: 'MINI',
+          planStartedAt: new Date(),
         },
       });
 
@@ -912,6 +919,7 @@ export const refresh = async (req: Request, res: Response) => {
       id: dbToken.user.id,
       tenantId: dbToken.user.tenantId,
       role: dbToken.user.role,
+      email: dbToken.user.email,
     });
 
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS);

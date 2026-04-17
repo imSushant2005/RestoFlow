@@ -6,59 +6,74 @@ exports.normalizePlan = normalizePlan;
 exports.getPlanLimits = getPlanLimits;
 exports.getAvailablePlans = getAvailablePlans;
 const CANONICAL_PLAN_LIMITS = {
-    FREE: {
-        items: 10,
-        tables: 5,
-        staff: 2,
-        price: 0,
-        name: 'Free',
-    },
-    STARTER: {
+    MINI: {
         items: 50,
-        tables: 20,
-        staff: 5,
-        price: 49,
-        name: 'Starter',
+        tables: 3,
+        staff: 1, // Only Owner
+        price: 599,
+        name: 'Mini',
+        hasKDS: false,
+        hasWaiterRole: false,
+        hasWaiterApp: false,
+        hasAdvancedAnalytics: false,
+        maxFloors: 1,
     },
-    GOLD: {
+    CAFE: {
         items: 200,
-        tables: 50,
-        staff: 20,
-        price: 99,
-        name: 'Gold',
+        tables: 9,
+        staff: 5,
+        price: 1299,
+        name: 'Café',
+        hasKDS: true,
+        hasWaiterRole: true,
+        hasWaiterApp: false, // Waiter role supported, but not the full app
+        hasAdvancedAnalytics: false,
+        maxFloors: 1,
     },
-    PLATINUM: {
-        items: 999999,
-        tables: 999999,
-        staff: 999999,
-        price: 199,
-        name: 'Platinum',
+    DINEPRO: {
+        items: 9999,
+        tables: 18,
+        staff: 20,
+        price: 2999,
+        name: 'DinePro',
+        hasKDS: true,
+        hasWaiterRole: true,
+        hasWaiterApp: true,
+        hasAdvancedAnalytics: true,
+        maxFloors: 2,
+    },
+    PREMIUM: {
+        items: 99999,
+        tables: 9999,
+        staff: 9999,
+        price: 6999,
+        name: 'Premium',
+        hasKDS: true,
+        hasWaiterRole: true,
+        hasWaiterApp: true,
+        hasAdvancedAnalytics: true,
+        maxFloors: 10,
     },
 };
 const PLAN_ALIASES = {
-    FREE: 'FREE',
-    STARTER: 'STARTER',
-    PRO: 'STARTER',
-    GROWTH: 'GOLD',
-    GOLD: 'GOLD',
-    SCALE: 'PLATINUM',
-    PREMIUM: 'PLATINUM',
-    PLATINUM: 'PLATINUM',
+    MINI: 'MINI',
+    FREE: 'MINI',
+    STARTER: 'MINI',
+    CAFE: 'CAFE',
+    GROWTH: 'CAFE',
+    DINEPRO: 'DINEPRO',
+    PREMIUM: 'PREMIUM',
+    PLATINUM: 'PREMIUM',
 };
-// Backward-compatible map that accepts legacy keys as well.
 exports.PLAN_LIMITS = {
     ...CANONICAL_PLAN_LIMITS,
-    PRO: CANONICAL_PLAN_LIMITS.STARTER,
-    GROWTH: CANONICAL_PLAN_LIMITS.GOLD,
-    SCALE: CANONICAL_PLAN_LIMITS.PLATINUM,
-    PREMIUM: CANONICAL_PLAN_LIMITS.PLATINUM,
 };
 function parsePlan(plan) {
     const key = String(plan || '').trim().toUpperCase();
     return PLAN_ALIASES[key] ?? null;
 }
 function normalizePlan(plan) {
-    return parsePlan(plan) || 'FREE';
+    return parsePlan(plan) || 'MINI';
 }
 function getPlanLimits(plan) {
     return CANONICAL_PLAN_LIMITS[normalizePlan(plan)];

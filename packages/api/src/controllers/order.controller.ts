@@ -23,7 +23,7 @@ const ROLE_ALLOWED_STATUS_UPDATES: Record<UserRole, Set<string>> = {
   OWNER: new Set(VALID_ORDER_STATUSES),
   MANAGER: new Set(VALID_ORDER_STATUSES),
   KITCHEN: new Set(['ACCEPTED', 'PREPARING', 'READY']),
-  CASHIER: new Set(['SERVED', 'RECEIVED', 'CANCELLED']),
+  CASHIER: new Set(VALID_ORDER_STATUSES),
   WAITER: new Set(['SERVED']),
 };
 
@@ -84,6 +84,17 @@ const LIVE_ORDERS_SELECT = {
       id: true,
       openedAt: true,
       sessionStatus: true,
+      isBillGenerated: true,
+      bill: {
+        select: {
+          id: true,
+          invoiceNumber: true,
+          totalAmount: true,
+          paymentStatus: true,
+          paymentMethod: true,
+          paidAt: true,
+        },
+      },
     },
   },
   items: {
@@ -107,6 +118,26 @@ const HISTORY_ORDERS_SELECT = {
       id: true,
       name: true,
     },
+  },
+  diningSession: {
+    select: {
+      id: true,
+      sessionStatus: true,
+      isBillGenerated: true,
+      bill: {
+        select: {
+          id: true,
+          invoiceNumber: true,
+          totalAmount: true,
+          paymentStatus: true,
+          paymentMethod: true,
+          paidAt: true,
+        },
+      },
+    },
+  },
+  items: {
+    select: orderItemSelect,
   },
 } as const;
 
@@ -231,21 +262,26 @@ async function resolveStaffName(db: any, userId?: string) {
   return user?.name?.trim() || 'Staff';
 }
 
-async function generateOrderNumberForTenant(tenantId: string) {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let orderNumber = '';
-  let exists = true;
+async function generateOrderNumberForTenant(tenantId: string, orderType?: string) {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
 
-  while (exists) {
-    orderNumber = `#${Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')}`;
-    const existing = await prisma.order.findFirst({
-      where: { tenantId, orderNumber },
-      select: { id: true },
-    });
-    exists = Boolean(existing);
-  }
+  const countForDay = await prisma.order.count({
+    where: {
+      tenantId,
+      createdAt: { gte: startOfDay },
+    },
+  });
 
-  return orderNumber;
+  const nextNumber = countForDay + 1;
+  const uppercaseType = String(orderType || '').toUpperCase();
+  
+  let prefix = 'T-'; // Default Takeaway
+  if (uppercaseType === 'DINE_IN') prefix = 'D-';
+  else if (uppercaseType === 'ZOMATO') prefix = 'Z-';
+  else if (uppercaseType === 'SWIGGY') prefix = 'S-';
+
+  return `${prefix}${nextNumber}`;
 }
 
 async function buildServerPricedOrderPayload(db: any, tenantId: string, items: any[]) {
@@ -839,7 +875,7 @@ export const createAssistedOrder = async (req: Request, res: Response) => {
         });
       }
 
-      const orderNumber = await generateOrderNumberForTenant(tenant.id);
+      const orderNumber = await generateOrderNumberForTenant(tenant.id, orderType);
       const isDirectBill = fulfillmentMode === 'DIRECT_BILL';
       const shouldSettleImmediately = isDirectBill && (markPaid || Boolean(paymentMethod));
       const sessionStatus = isDirectBill

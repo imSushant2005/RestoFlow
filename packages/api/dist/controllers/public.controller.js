@@ -1,9 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.acknowledgeWaiterCall = exports.waiterCall = exports.submitFeedback = exports.getSessionOrders = exports.getOrderInfo = exports.createOrder = exports.resolveCustomDomain = exports.getPublicMenu = void 0;
+exports.updateOrderStatusPublic = exports.acknowledgeWaiterCall = exports.waiterCall = exports.submitFeedback = exports.getSessionOrders = exports.getOrderInfo = exports.createOrder = exports.resolveCustomDomain = exports.getPublicMenu = void 0;
 const prisma_1 = require("../db/prisma");
 const socket_1 = require("../socket");
 const cache_service_1 = require("../services/cache.service");
+const order_service_1 = require("../services/order.service");
 const WAITER_CALL_TYPES = new Set(['WAITER', 'BILL', 'WATER', 'EXTRA', 'HELP']);
 const ORDERABLE_SESSION_STATUSES = ['OPEN', 'PARTIALLY_SENT', 'ACTIVE'];
 const publicOrderSelect = {
@@ -451,15 +452,18 @@ const createOrder = async (req, res) => {
         });
         const taxAmount = subtotal * (tenant.taxRate / 100);
         const totalAmount = subtotal + taxAmount;
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const countForDay = await prisma_1.prisma.order.count({
+            where: {
+                tenantId: tenant.id,
+                createdAt: { gte: startOfDay },
+            },
+        });
+        const nextNumber = countForDay + 1;
         const orderType = safeTableId ? 'DINE_IN' : 'TAKEAWAY';
-        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-        let orderNumber = '';
-        let exists = true;
-        while (exists) {
-            orderNumber = `#${Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')}`;
-            const check = await prisma_1.prisma.order.findFirst({ where: { tenantId: tenant.id, orderNumber } });
-            exists = !!check;
-        }
+        const prefix = orderType === 'DINE_IN' ? 'D-' : 'T-';
+        const orderNumber = `${prefix}${nextNumber}`;
         let order;
         try {
             order = await prisma_1.prisma.$transaction(async (tx) => {
@@ -797,4 +801,45 @@ const acknowledgeWaiterCall = async (req, res) => {
     }
 };
 exports.acknowledgeWaiterCall = acknowledgeWaiterCall;
+const updateOrderStatusPublic = async (req, res) => {
+    try {
+        const { tenantSlug, id } = req.params;
+        const { status, sessionToken, version } = req.body;
+        if (status !== 'SERVED') {
+            return res.status(400).json({ error: 'Customers can only mark orders as served (received).' });
+        }
+        if (!sessionToken) {
+            return res.status(401).json({ error: 'Session token is required to update order status.' });
+        }
+        const tenantId = await resolveTenantIdBySlug(tenantSlug);
+        // Verify order belongs to this session
+        const order = await prisma_1.prisma.order.findFirst({
+            where: { id, tenantId, diningSessionId: sessionToken },
+            select: { id: true, version: true }
+        });
+        if (!order) {
+            return res.status(404).json({ error: 'Order not found in this session.' });
+        }
+        const updatedOrder = await (0, order_service_1.transitionOrderStatus)({
+            orderId: id,
+            tenantId,
+            expectedVersion: version || order.version,
+            newStatus: 'SERVED',
+            actorId: sessionToken,
+            actorType: 'CUSTOMER',
+        });
+        // Notify Vendor Socket
+        (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(tenantId)).emit('order:update', updatedOrder);
+        // Notify Session Socket
+        (0, socket_1.getIO)().to((0, socket_1.getSessionRoom)(tenantId, sessionToken)).emit('order:update', updatedOrder);
+        await invalidateOperationalCaches(tenantId, sessionToken);
+        res.json(updatedOrder);
+    }
+    catch (error) {
+        console.error('updateOrderStatusPublic error:', error);
+        const message = error instanceof Error ? error.message : 'Failed to update order status';
+        res.status(500).json({ error: message });
+    }
+};
+exports.updateOrderStatusPublic = updateOrderStatusPublic;
 //# sourceMappingURL=public.controller.js.map

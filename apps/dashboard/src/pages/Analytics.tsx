@@ -16,16 +16,19 @@ import {
 import { Download, TrendingUp, Lightbulb, TrendingDown, Clock, AlertTriangle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { formatINR } from '../lib/currency';
 
+import { usePlanFeatures } from '../hooks/usePlanFeatures';
+import { useNavigate } from 'react-router-dom';
+
 type RangeType = '7d' | '30d' | 'custom';
 
 export function Analytics() {
   const [range, setRange] = useState<RangeType>('30d');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const navigate = useNavigate();
 
-  // Plan logic
-  const activePlan = localStorage.getItem('rf_active_plan');
-  const isBasicsOnly = activePlan === 'MINI' || activePlan === 'CAFE';
+  const { features } = usePlanFeatures();
+  const isBasicsOnly = !features.hasAdvancedAnalytics;
 
   const queryParams = useMemo(() => {
     if (range === '7d') return '?days=7';
@@ -125,9 +128,9 @@ export function Analytics() {
     <div className="flex-1 p-8 overflow-y-auto w-full" style={{ background: 'var(--bg)' }}>
       <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text-1)' }}>{isBasicsOnly ? 'Basic Analytics' : 'Pro Insights'}</h2>
+          <h2 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text-1)' }}>{isBasicsOnly ? 'Standard Tracking' : 'Advanced Analytics'}</h2>
           <p className="text-xs font-bold text-slate-500 mt-1 uppercase tracking-widest">
-            {activePlan || 'Trial'} Plan Performance
+            {features.name} Tier Active
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -174,20 +177,23 @@ export function Analytics() {
       </div>
 
       {insights.length > 0 && (
-        <div className="mb-8 rounded-2xl p-6" style={{ background: 'linear-gradient(to right, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1))', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+        <div className="mb-8 rounded-2xl p-6 relative overflow-hidden" style={{ background: 'linear-gradient(to right, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1))', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
           <h3 className="font-black text-lg mb-4 flex items-center justify-between" style={{ color: 'var(--text-1)' }}>
             <div className="flex items-center gap-2">
               <Lightbulb size={20} className="text-indigo-400" />
               Smart Insights
             </div>
             {isBasicsOnly && (
-              <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-widest border border-indigo-500/20">
-                 Limited in {activePlan}
-              </span>
+              <button 
+                onClick={() => navigate('/app/subscription')}
+                className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-widest border border-indigo-500/20 hover:bg-indigo-500/20 transition-all cursor-pointer"
+              >
+                 Upgrade to Unlock All
+              </button>
             )}
           </h3>
           <div className="space-y-3">
-            {insights.map((insight, idx) => (
+            {insights.slice(0, isBasicsOnly ? 2 : undefined).map((insight, idx) => (
               <div
                 key={idx}
                 className={`flex items-start gap-3 p-3 rounded-xl ${
@@ -198,13 +204,30 @@ export function Analytics() {
                 <p className="text-sm font-semibold">{insight.text}</p>
               </div>
             ))}
+            {isBasicsOnly && (
+               <div className="p-3 text-xs font-bold text-slate-500 italic opacity-50">
+                 + {insights.length - 2} more insights locked for {features.name} users
+               </div>
+            )}
           </div>
         </div>
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
-        <div className="p-8 rounded-2xl shadow-sm" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}>
+        <div className="p-8 rounded-2xl shadow-sm relative group" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}>
           <h3 className="font-bold text-2xl mb-8" style={{ color: 'var(--text-1)' }}>Revenue Growth</h3>
+          {isBasicsOnly && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center backdrop-blur-[6px] bg-slate-950/40 rounded-2xl transition-all group-hover:bg-slate-950/50">
+               <div className="bg-slate-900/80 p-5 rounded-2xl border border-blue-500/30 text-center shadow-2xl">
+                  <div className="w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <TrendingUp size={24} className="text-blue-500" />
+                  </div>
+                  <h4 className="text-white font-black text-sm uppercase tracking-tighter">Pro Revenue Analytics</h4>
+                  <p className="text-slate-400 text-[10px] font-bold mt-1">Unlock growth trends and custom range insights</p>
+                  <button onClick={() => navigate('/app/subscription')} className="mt-4 w-full py-2 bg-blue-600 rounded-lg text-xs font-black text-white hover:bg-blue-500 transition-all">UPGRADE NOW</button>
+               </div>
+            </div>
+          )}
           <div className="h-80 select-none">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data.revenueChart}>
@@ -223,8 +246,20 @@ export function Analytics() {
           </div>
         </div>
 
-        <div className="p-8 rounded-2xl shadow-sm" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}>
+        <div className="p-8 rounded-2xl shadow-sm relative group" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}>
           <h3 className="font-bold text-2xl mb-8" style={{ color: 'var(--text-1)' }}>Peak Dining Hours</h3>
+          {isBasicsOnly && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center backdrop-blur-[6px] bg-slate-950/40 rounded-2xl transition-all group-hover:bg-slate-950/50">
+               <div className="bg-slate-900/80 p-5 rounded-2xl border border-orange-500/30 text-center shadow-2xl">
+                  <div className="w-12 h-12 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Clock size={24} className="text-orange-500" />
+                  </div>
+                  <h4 className="text-white font-black text-sm uppercase tracking-tighter">Peak Hour Tracking</h4>
+                  <p className="text-slate-400 text-[10px] font-bold mt-1">Analyze when your restaurant is busiest</p>
+                  <button onClick={() => navigate('/app/subscription')} className="mt-4 w-full py-2 bg-orange-600 rounded-lg text-xs font-black text-white hover:bg-orange-500 transition-all">UPGRADE NOW</button>
+               </div>
+            </div>
+          )}
           <div className="h-80 select-none">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.peakHours}>

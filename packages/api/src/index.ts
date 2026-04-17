@@ -1,6 +1,6 @@
+import './instrumentation';
 import { env } from './config/env';
 import * as Sentry from '@sentry/node';
-import { nodeProfilingIntegration } from '@sentry/profiling-node';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -24,20 +24,14 @@ import notificationRoutes from './routes/notification.routes';
 import customerRoutes from './routes/customer.routes';
 import sessionRoutes from './routes/session.routes';
 import { checkPrismaReadiness } from './db/prisma';
+import { startSessionCleanupJob } from './services/session-cleanup.service';
 import { globalErrorHandler } from './middlewares/error.middleware';
 import { initSocket, getSocketMetrics } from './socket';
 import { logger } from './utils/logger';
 import { tracingMiddleware } from './middlewares/tracing.middleware';
 import { tenantRateLimitMiddleware } from './middlewares/tenant-rate-limit.middleware';
 
-Sentry.init({
-  dsn: process.env.SENTRY_DSN || 'https://public@sentry.example.com/1',
-  integrations: [
-    nodeProfilingIntegration(),
-  ],
-  tracesSampleRate: env.NODE_ENV === 'production' ? 0.2 : 1.0,
-  profilesSampleRate: env.NODE_ENV === 'production' ? 0.2 : 1.0,
-});
+// Instrumentation handled by ./instrumentation
 
 const app = express();
 const httpServer = createServer(app);
@@ -146,6 +140,7 @@ app.get('/health', async (_req, res) => {
 app.use('/auth', authRoutes);
 app.use('/menus', menuRoutes);
 app.use('/venue', tableRoutes);
+app.use('/public', sessionRoutes);
 app.use('/public', publicRoutes);
 app.use('/orders', tenantRateLimitMiddleware, orderRoutes);
 app.use('/analytics', tenantRateLimitMiddleware, analyticsRoutes);
@@ -155,7 +150,6 @@ app.use('/payments', paymentRoutes);
 app.use('/ai', aiRoutes);
 app.use('/notifications', notificationRoutes);
 app.use('/customer', customerRoutes);
-app.use('/public', sessionRoutes);
 
 Sentry.setupExpressErrorHandler(app);
 app.use(globalErrorHandler);
@@ -173,4 +167,7 @@ httpServer.on('error', (error: any) => {
 
 httpServer.listen(port, () => {
   logger.info(`RESTOFLOW API (V3 Enterprise) running on port ${port}`);
+  
+  // Start background maintenance jobs
+  startSessionCleanupJob();
 });

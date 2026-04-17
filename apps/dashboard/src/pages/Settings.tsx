@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { Save, Plus, Trash2 } from 'lucide-react';
+import { usePlanFeatures } from '../hooks/usePlanFeatures';
 
 function sanitizeSegment(value: string) {
   return value
@@ -25,6 +26,7 @@ function buildEmployeeCode(name: string, slug?: string) {
 
 export function Settings() {
   const queryClient = useQueryClient();
+  const { plan } = usePlanFeatures();
   const [activeTab, setActiveTab] = useState<'business' | 'staff' | 'qr'>('business');
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -205,7 +207,9 @@ export function Settings() {
       )}
       <div className="flex gap-4 mb-8" style={{ borderBottom: '1px solid var(--border)' }}>
         <button className={`pb-4 px-2 font-semibold transition-all ${activeTab === 'business' ? 'border-b-2 border-blue-600 text-blue-600' : ''}`} style={activeTab === 'business' ? {} : { color: 'var(--text-3)' }} onClick={() => setActiveTab('business')}>Business Profile</button>
-        <button className={`pb-4 px-2 font-semibold transition-all ${activeTab === 'staff' ? 'border-b-2 border-blue-600 text-blue-600' : ''}`} style={activeTab === 'staff' ? {} : { color: 'var(--text-3)' }} onClick={() => setActiveTab('staff')}>Staff Management</button>
+        {plan !== 'MINI' && (
+          <button className={`pb-4 px-2 font-semibold transition-all ${activeTab === 'staff' ? 'border-b-2 border-blue-600 text-blue-600' : ''}`} style={activeTab === 'staff' ? {} : { color: 'var(--text-3)' }} onClick={() => setActiveTab('staff')}>Staff Management</button>
+        )}
         <button className={`pb-4 px-2 font-semibold transition-all ${activeTab === 'qr' ? 'border-b-2 border-blue-600 text-blue-600' : ''}`} style={activeTab === 'qr' ? {} : { color: 'var(--text-3)' }} onClick={() => setActiveTab('qr')}>QR Customization</button>
       </div>
 

@@ -51,15 +51,27 @@ const createZone = async (req, res) => {
         if (!name) {
             return res.status(400).json({ error: 'Zone name is required' });
         }
-        const existingZone = await prisma_1.prisma.zone.findFirst({
-            where: {
-                tenantId: req.tenantId,
-                name: { equals: name, mode: 'insensitive' },
-            },
-            select: { id: true },
-        });
+        const [tenant, existingZone, zoneCount] = await Promise.all([
+            prisma_1.prisma.tenant.findUnique({ where: { id: req.tenantId }, select: { plan: true } }),
+            prisma_1.prisma.zone.findFirst({
+                where: {
+                    tenantId: req.tenantId,
+                    name: { equals: name, mode: 'insensitive' },
+                },
+                select: { id: true },
+            }),
+            prisma_1.prisma.zone.count({ where: { tenantId: req.tenantId } }),
+        ]);
+        if (!tenant)
+            return res.status(404).json({ error: 'Tenant not found' });
         if (existingZone) {
             return res.status(409).json({ error: `Zone '${name}' already exists.` });
+        }
+        const planLimits = (0, plans_1.getPlanLimits)(tenant.plan);
+        if (zoneCount >= planLimits.maxFloors) {
+            return res.status(403).json({
+                error: `Plan limit reached. Your ${planLimits.name} plan allows up to ${planLimits.maxFloors} floor(s)/zone(s).`
+            });
         }
         const zone = await prisma_1.prisma.zone.create({
             data: {
@@ -124,7 +136,7 @@ const createTable = async (req, res) => {
         }
         const planLimits = (0, plans_1.getPlanLimits)(tenant.plan);
         if (count >= planLimits.tables) {
-            return res.status(403).json({ error: `Plan limit reached. Your ${tenant.plan} plan allows up to ${planLimits.tables} tables.` });
+            return res.status(403).json({ error: `Plan limit reached. Your ${planLimits.name} plan allows up to ${planLimits.tables} tables.` });
         }
         const table = await prisma_1.prisma.table.create({
             data: {

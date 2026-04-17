@@ -11,7 +11,7 @@ async function resolveTenantBySlugOrThrow(tenantSlug: string) {
         async () => {
       const tenant = await prisma.tenant.findUnique({
         where: { slug: tenantSlug },
-        select: { id: true, businessName: true, taxRate: true, address: true, gstin: true, fssai: true },
+        select: { id: true, businessName: true, taxRate: true, address: true, gstin: true, fssai: true, plan: true },
       });
 
       if (!tenant) {
@@ -33,6 +33,190 @@ async function invalidateSessionCaches(tenantId: string, sessionId?: string | nu
     sessionId ? deleteCache(`public_session_${tenantId}_${sessionId}`) : Promise.resolve(),
     sessionId ? deleteCache(`session_orders_${tenantId}_${sessionId}`) : Promise.resolve(),
   ]);
+}
+
+/**
+ * Internal helper to transition a session to closed state.
+ * Marks orders as RECEIVED, frees table, and emits sockets.
+ */
+/**
+ * Internal helper to transition a session to closed or settled state.
+ * Marks orders as RECEIVED, generates bill if missing, and optionally closes session.
+ */
+export async function performSessionCompletion(
+  sessionId: string,
+  tenantId: string,
+  paymentMethod: string = 'cash',
+  shouldClose: boolean = true
+) {
+  const result = await prisma.$transaction(async (tx) => {
+    const existingSession = await tx.diningSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        orders: {
+          where: { status: { notIn: ['CANCELLED'] } },
+        },
+        bill: true,
+      },
+    });
+
+    if (!existingSession) throw new Error('SESSION_NOT_FOUND');
+    if (existingSession.tenantId !== tenantId) throw new Error('SESSION_TENANT_MISMATCH');
+
+    const tenant = await tx.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        businessName: true,
+        address: true,
+        taxRate: true,
+        gstin: true,
+        fssai: true,
+      },
+    });
+
+    if (!tenant) throw new Error('TENANT_NOT_FOUND');
+
+    let currentSession = existingSession;
+
+    // Generate Bill if missing
+    if (!existingSession.isBillGenerated) {
+      if (existingSession.orders.length === 0) {
+        // Allow clearing sessions with 0 orders (e.g. accidental opens)
+        currentSession = await tx.diningSession.update({
+          where: { id: sessionId },
+          data: {
+            sessionStatus: shouldClose ? ('CLOSED' as any) : ('OPEN' as any),
+            closedAt: shouldClose ? new Date() : null,
+          },
+          include: { orders: true, bill: true },
+        });
+      } else {
+        const subtotal = existingSession.orders.reduce((sum, o) => sum + o.subtotal, 0);
+        const taxAmount = existingSession.orders.reduce((sum, o) => sum + o.taxAmount, 0);
+        const totalAmount = subtotal + taxAmount;
+        const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
+
+        const bill = await tx.bill.create({
+          data: {
+            tenantId,
+            sessionId,
+            subtotal,
+            taxAmount,
+            discountAmount: 0,
+            totalAmount,
+            invoiceNumber,
+            businessName: tenant.businessName,
+            businessAddress: tenant.address,
+            gstin: (tenant as any).gstin,
+            fssai: (tenant as any).fssai,
+            paymentStatus: 'PAID',
+            paymentMethod,
+            paidAt: new Date(),
+          } as any,
+        });
+
+        currentSession = await tx.diningSession.update({
+          where: { id: sessionId },
+          data: {
+            isBillGenerated: true,
+            billGeneratedAt: new Date(),
+            sessionStatus: shouldClose ? ('CLOSED' as any) : ('AWAITING_BILL' as any),
+            closedAt: shouldClose ? new Date() : null,
+          },
+          include: { orders: true, bill: true },
+        });
+      }
+    } else {
+      // Bill already exists, just update payment status
+      await tx.bill.updateMany({
+        where: { sessionId },
+        data: {
+          paymentStatus: 'PAID',
+          paymentMethod,
+          paidAt: new Date(),
+        },
+      });
+
+      currentSession = await tx.diningSession.update({
+        where: { id: sessionId },
+        data: {
+          sessionStatus: shouldClose ? ('CLOSED' as any) : ('AWAITING_BILL' as any),
+          closedAt: shouldClose ? new Date() : null,
+        },
+        include: { orders: true, bill: true },
+      });
+    }
+
+    // Mark all orders as completed/received
+    await tx.order.updateMany({
+      where: { diningSessionId: sessionId, status: { notIn: ['CANCELLED'] } },
+      data: { status: 'RECEIVED' as any, completedAt: new Date() },
+    });
+
+    // Handle Table Occupancy
+    if (currentSession.tableId) {
+      if (shouldClose) {
+        // Fully free up the table
+        await tx.table.update({
+          where: { id: currentSession.tableId },
+          data: { status: 'AVAILABLE', currentOrderId: null, currentSessionId: null },
+        });
+      } else {
+        // Keep it occupied but in AWAITING_BILL state
+        await tx.table.update({
+          where: { id: currentSession.tableId },
+          data: { status: 'AWAITING_BILL' },
+        });
+      }
+    }
+
+    return currentSession;
+  });
+
+  // Socket emissions
+  const tenantRoom = getTenantRoom(tenantId);
+  const sessionRoom = getSessionRoom(tenantId, result.id);
+
+  const eventType = shouldClose ? 'session:completed' : 'session:settled';
+  const status = shouldClose ? 'CLOSED' : 'AWAITING_BILL';
+
+  const payload = {
+    sessionId: result.id,
+    paymentMethod,
+    closedAt: result.closedAt,
+    status,
+    totalAmount: (result as any).bill?.totalAmount,
+  };
+
+  getIO().to(tenantRoom).emit(eventType, payload);
+  getIO().to(sessionRoom).emit(eventType, payload);
+  
+  getIO().to(tenantRoom).emit('session:update', {
+    sessionId: result.id,
+    status,
+    updatedAt: new Date().toISOString(),
+  });
+  getIO().to(sessionRoom).emit('session:update', {
+    sessionId: result.id,
+    status,
+    updatedAt: new Date().toISOString(),
+  });
+
+  getIO().to(tenantRoom).emit('orders:bulk_status', {
+    sessionId: result.id,
+    status: 'RECEIVED',
+    updatedAt: new Date().toISOString(),
+  });
+
+  if (result.tableId) {
+    getIO().to(tenantRoom).emit('table:status_change', {
+      tableId: result.tableId,
+      status: shouldClose ? 'AVAILABLE' : 'AWAITING_BILL',
+    });
+  }
+
+  await invalidateSessionCaches(tenantId, result.id);
+  return result;
 }
 
 /**
@@ -245,6 +429,26 @@ export const getSession = async (req: Request, res: Response) => {
     );
 
     if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    // Auto Session Out for MINI plan: 
+    // If PAID + 1 hour inactivity (updatedAt) + status is AWAITING_BILL
+    if (
+      tenant.plan === 'MINI' && 
+      session.sessionStatus === 'AWAITING_BILL' && 
+      session.bill?.paymentStatus === 'PAID'
+    ) {
+      const oneHourAgo = new Date(Date.now() - 3600000);
+      if (new Date((session as any).updatedAt) < oneHourAgo) {
+        console.log(`[AUTO_SESSION_OUT] Mini plan auto-checkout for session ${sessionId}`);
+        const closedSession = await performSessionCompletion(sessionId, tenant.id, session.bill.paymentMethod || 'cash');
+        return res.json({
+          ...closedSession,
+          runningTotal: 0,
+          itemCount: 0,
+          isAutoClosed: true,
+        });
+      }
+    }
 
     // Calculate running total
     const runningTotal = session.orders.reduce((sum: number, order: any) => sum + order.totalAmount, 0);
@@ -595,126 +799,16 @@ export const completeSession = async (req: Request, res: Response) => {
   try {
     const { tenantSlug, sessionId } = req.params;
     const requestedPaymentMethod = typeof req.body?.paymentMethod === 'string' ? req.body.paymentMethod.toLowerCase() : 'cash';
-    const allowedPaymentMethods = new Set(['cash', 'online', 'upi', 'card']);
+    const shouldClose = req.body?.shouldClose !== undefined ? Boolean(req.body.shouldClose) : true;
+    
+    const allowedPaymentMethods = new Set(['cash', 'online', 'upi', 'card', 'other']);
 
     if (!allowedPaymentMethods.has(requestedPaymentMethod)) {
       return res.status(400).json({ error: 'Unsupported payment method' });
     }
 
-    const tenant = await prisma.tenant.findUnique({
-      where: { slug: tenantSlug },
-      select: { id: true },
-    });
-
-    if (!tenant) {
-      return res.status(404).json({ error: 'Restaurant not found' });
-    }
-
-    let result;
-    try {
-      result = await prisma.$transaction(async (tx) => {
-      const existingSession = await tx.diningSession.findUnique({
-        where: { id: sessionId },
-        select: {
-          id: true,
-          tenantId: true,
-          tableId: true,
-          isBillGenerated: true,
-          sessionStatus: true,
-        },
-      });
-
-      if (!existingSession) {
-        throw new Error('SESSION_NOT_FOUND');
-      }
-
-      if (existingSession.tenantId !== tenant.id) {
-        throw new Error('SESSION_TENANT_MISMATCH');
-      }
-
-      if (existingSession.sessionStatus !== 'AWAITING_BILL') {
-        throw new Error('SESSION_NOT_READY_FOR_PAYMENT');
-      }
-
-      const session = await tx.diningSession.update({
-        where: { id: sessionId },
-        data: {
-          sessionStatus: 'CLOSED' as any,
-          closedAt: new Date(),
-        },
-      });
-
-      // Update bill payment
-      if (session.isBillGenerated) {
-        await tx.bill.updateMany({
-          where: { sessionId },
-          data: {
-            paymentStatus: 'PAID',
-            paymentMethod: requestedPaymentMethod,
-            paidAt: new Date(),
-          },
-        });
-      }
-
-      // Mark all orders as completed
-      await tx.order.updateMany({
-        where: { diningSessionId: sessionId, status: { notIn: ['CANCELLED'] } },
-        data: { status: 'RECEIVED' as any, completedAt: new Date() },
-      });
-
-      // Free up table
-      if (session.tableId) {
-        await tx.table.update({
-          where: { id: session.tableId },
-          data: { status: 'AVAILABLE', currentOrderId: null, currentSessionId: null },
-        });
-      }
-
-      return session;
-      });
-    } catch (err) {
-      console.error('completeSession prisma.$transaction failed', {
-        tenantSlug,
-        sessionId,
-        requestedPaymentMethod,
-        error: err && (err instanceof Error ? err.stack || err.message : String(err)),
-      });
-      throw err;
-    }
-
-    const tenantRoom = getTenantRoom(result.tenantId);
-    const sessionRoom = getSessionRoom(result.tenantId, result.id);
-
-    const completedPayload = {
-      sessionId: result.id,
-      paymentMethod: requestedPaymentMethod,
-      closedAt: result.closedAt || new Date().toISOString(),
-    };
-    const sessionUpdatePayload = {
-      sessionId: result.id,
-      status: 'CLOSED',
-      updatedAt: new Date().toISOString(),
-    };
-    const bulkStatusPayload = {
-      sessionId: result.id,
-      status: 'RECEIVED',
-      updatedAt: new Date().toISOString(),
-    };
-
-    getIO().to(tenantRoom).emit('session:completed', completedPayload);
-    getIO().to(sessionRoom).emit('session:completed', completedPayload);
-    getIO().to(tenantRoom).emit('session:update', sessionUpdatePayload);
-    getIO().to(sessionRoom).emit('session:update', sessionUpdatePayload);
-    getIO().to(tenantRoom).emit('orders:bulk_status', bulkStatusPayload);
-    getIO().to(sessionRoom).emit('orders:bulk_status', bulkStatusPayload);
-    if (result.tableId) {
-      getIO().to(tenantRoom).emit('table:status_change', {
-        tableId: result.tableId,
-        status: 'AVAILABLE',
-      });
-    }
-
-    await invalidateSessionCaches(result.tenantId, result.id);
+    const tenant = await resolveTenantBySlugOrThrow(tenantSlug);
+    const result = await performSessionCompletion(sessionId, tenant.id, requestedPaymentMethod, shouldClose);
 
     res.json(result);
   } catch (error) {

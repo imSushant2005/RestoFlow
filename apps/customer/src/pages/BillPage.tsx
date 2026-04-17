@@ -1,21 +1,56 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import {
-  CheckCircle2,
-  ChevronLeft,
-  CreditCard,
-  Download,
-  Receipt,
-  Share2,
-  Star,
-  Users,
-  Wallet,
+import { 
+  CheckCircle2, 
+  ChevronLeft, 
+  CreditCard, 
+  Download, 
+  Receipt, 
+  Share2, 
+  Star, 
+  Users, 
+  Wallet, 
   X,
+  ChefHat,
+  UtensilsCrossed,
+  Clock3
 } from 'lucide-react';
 import { publicApi } from '../lib/api';
 import { formatINR } from '../lib/currency';
 import { getSocketUrl } from '../lib/network';
+
+interface StepConfig {
+  label: string;
+  icon: any;
+  rank: number;
+}
+
+const STEPS: StepConfig[] = [
+  { label: 'Accepted', icon: CheckCircle2, rank: 1 },
+  { label: 'Preparing', icon: ChefHat, rank: 2 },
+  { label: 'Ready', icon: UtensilsCrossed, rank: 3 },
+  { label: 'Served', icon: Clock3, rank: 5 },
+  { label: 'Settle', icon: Star, rank: 6 },
+];
+
+function getSessionRank(session: any) {
+  if (session?.bill?.paymentStatus === 'PAID') return 6;
+  const orders = session?.orders || [];
+  if (orders.length === 0) return 0;
+  
+  const ranks = orders.map((o: any) => {
+    switch (o.status) {
+      case 'ACCEPTED': return 1;
+      case 'PREPARING': return 2;
+      case 'READY': return 3;
+      case 'SERVED': return 5;
+      case 'RECEIVED': return 6;
+      default: return 0;
+    }
+  });
+  return Math.max(...ranks);
+}
 
 function RatingStars({
   label,
@@ -283,6 +318,29 @@ export function BillPage() {
         <p className="text-sm font-bold mt-3 opacity-60" style={{ color: 'var(--text-2)' }}>
           {[session.tenant?.businessName, session.table?.name || 'Takeaway'].filter(Boolean).join(' | ')}
         </p>
+
+        {/* Live Tracking Journey Indicator */}
+        <div className="mt-8 flex items-center justify-center gap-2 max-w-[280px] mx-auto opacity-80">
+          {STEPS.map((step, idx) => {
+            const currentRank = getSessionRank(session);
+            const isCompleted = currentRank >= step.rank;
+            const Icon = step.icon;
+            
+            return (
+              <div key={step.label} className="flex items-center flex-1 last:flex-none">
+                <div 
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isCompleted ? 'bg-emerald-500 text-white' : 'bg-white/10 text-white/30'}`}
+                  title={step.label}
+                >
+                  <Icon size={14} />
+                </div>
+                {idx < STEPS.length - 1 && (
+                  <div className={`h-[2px] flex-1 mx-1 rounded-full ${isCompleted && currentRank > step.rank ? 'bg-emerald-500' : 'bg-white/10'}`} />
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="max-w-screen-sm mx-auto px-6 -mt-12 relative z-10 print:mt-0 print:px-0">

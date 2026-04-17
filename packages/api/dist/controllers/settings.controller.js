@@ -57,6 +57,8 @@ const updateBusinessSettingsSchema = zod_1.z.object({
     phone: zod_1.z.string().trim().min(7).max(20).optional(),
     gstin: zod_1.z.string().trim().min(8).max(20).optional(),
     isActive: zod_1.z.boolean().optional(),
+    plan: zod_1.z.nativeEnum(prisma_2.Plan).optional(),
+    trialEndsAt: zod_1.z.string().pipe(zod_1.z.coerce.date()).optional().nullable(),
 });
 function sanitizeSegment(value) {
     return value
@@ -120,6 +122,8 @@ const getBusinessSettings = async (req, res) => {
                 primaryColor: true,
                 accentColor: true,
                 isActive: true,
+                plan: true,
+                trialEndsAt: true,
             },
         }), 20);
         res.json(tenant);
@@ -132,7 +136,7 @@ exports.getBusinessSettings = getBusinessSettings;
 const updateBusinessSettings = async (req, res) => {
     try {
         const payload = updateBusinessSettingsSchema.parse(req.body);
-        const { businessName, slug, description, primaryColor, accentColor, logoUrl, coverImageUrl, email, phone, gstin, isActive, } = payload;
+        const { businessName, slug, description, primaryColor, accentColor, logoUrl, coverImageUrl, email, phone, gstin, isActive, plan, trialEndsAt, } = payload;
         const normalizedSlug = slug?.trim().toLowerCase();
         const normalizedGstin = normalizeGstin(gstin);
         // Check if slug is taken by another tenant
@@ -170,6 +174,9 @@ const updateBusinessSettings = async (req, res) => {
                 phone,
                 gstin: gstin === undefined ? undefined : normalizedGstin || null,
                 isActive,
+                plan,
+                trialEndsAt: plan ? null : trialEndsAt, // Remove trial on manual plan change/upgrade
+                planStartedAt: plan ? new Date() : undefined,
             },
             select: {
                 id: true,
@@ -185,6 +192,8 @@ const updateBusinessSettings = async (req, res) => {
                 primaryColor: true,
                 accentColor: true,
                 isActive: true,
+                plan: true,
+                trialEndsAt: true,
             }
         });
         await Promise.all([
@@ -233,12 +242,23 @@ const createStaff = async (req, res) => {
             prisma_2.UserRole.KITCHEN,
             prisma_2.UserRole.WAITER,
         ]);
-        if (!allowedStaffRoles.has(normalizedRole)) {
-            return res.status(400).json({ error: 'Invalid staff role selected' });
-        }
         const tenant = await prisma_1.prisma.tenant.findUnique({ where: { id: req.tenantId } });
         if (!tenant)
             return res.status(404).json({ error: 'Tenant not found' });
+        const tenantLimits = (0, plans_1.getPlanLimits)(tenant.plan);
+        if (!allowedStaffRoles.has(normalizedRole)) {
+            return res.status(400).json({ error: 'Invalid staff role selected' });
+        }
+        if (normalizedRole === prisma_2.UserRole.WAITER && !tenantLimits.hasWaiterRole) {
+            return res.status(403).json({
+                error: `The ${tenantLimits.name} plan does not support the Waiter role. Please upgrade to CAFÉ or higher.`
+            });
+        }
+        if (normalizedRole !== prisma_2.UserRole.OWNER && tenantLimits.staff <= 1) {
+            return res.status(403).json({
+                error: `The ${tenantLimits.name} plan is Owner-only. Please upgrade to a higher plan to add staff members.`
+            });
+        }
         const requestedLogin = payload.username?.trim() || payload.email?.trim() || '';
         const email = normalizeLoginEmail(requestedLogin, tenant.slug);
         if (!isEmailLike(email)) {
@@ -247,9 +267,9 @@ const createStaff = async (req, res) => {
         const baseEmployeeCode = payload.employeeCode?.trim().toUpperCase() || defaultEmployeeCode(name, tenant.slug);
         const requestedEmployeeCode = baseEmployeeCode;
         const count = await prisma_1.prisma.user.count({ where: { tenantId: req.tenantId } });
-        const planLimits = (0, plans_1.getPlanLimits)(tenant.plan);
-        if (count >= planLimits.staff) {
-            return res.status(403).json({ error: `Plan limit reached. Your ${tenant.plan} plan allows up to ${planLimits.staff} staff members.` });
+        const staffLimits = (0, plans_1.getPlanLimits)(tenant.plan);
+        if (count >= staffLimits.staff) {
+            return res.status(403).json({ error: `Plan limit reached. Your ${staffLimits.name} plan allows up to ${staffLimits.staff} staff members.` });
         }
         const [existingByEmail, existingByEmployeeCode] = await Promise.all([
             prisma_1.prisma.user.findUnique({ where: { email }, select: { id: true } }),
@@ -331,6 +351,13 @@ const updateStaff = async (req, res) => {
             const normalizedRole = payload.role.trim().toUpperCase();
             if (!allowedStaffRoles.has(normalizedRole)) {
                 return res.status(400).json({ error: 'Invalid staff role selected' });
+            }
+            const currentTenant = await prisma_1.prisma.tenant.findUnique({ where: { id: req.tenantId }, select: { plan: true } });
+            const planLimits = (0, plans_1.getPlanLimits)(currentTenant?.plan || 'MINI');
+            if (normalizedRole === prisma_2.UserRole.WAITER && !planLimits.hasWaiterRole) {
+                return res.status(403).json({
+                    error: `The ${planLimits.name} plan does not support the Waiter role.`
+                });
             }
             updateData.role = normalizedRole;
         }

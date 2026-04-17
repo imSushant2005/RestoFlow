@@ -1,6 +1,6 @@
 export declare const jwtConfig: {
-    secret: string;
-    refreshSecret: string;
+    secret: any;
+    refreshSecret: any;
     expiresIn: string;
     refreshExpiresIn: string;
 };

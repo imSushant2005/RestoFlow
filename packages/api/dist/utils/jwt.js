@@ -7,7 +7,12 @@ exports.verifyRefreshToken = exports.verifyAccessToken = exports.generateTokens 
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const auth_1 = require("../config/auth");
 const generateTokens = (payload) => {
-    const plainPayload = { id: payload.id, tenantId: payload.tenantId, role: payload.role };
+    const plainPayload = {
+        id: payload.id,
+        tenantId: payload.tenantId,
+        role: payload.role,
+        email: payload.email
+    };
     const accessToken = jsonwebtoken_1.default.sign(plainPayload, auth_1.jwtConfig.secret, {
         expiresIn: auth_1.jwtConfig.expiresIn,
     });

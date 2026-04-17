@@ -2,11 +2,15 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { FloorBuilder } from '../components/FloorBuilder';
-import { Plus } from 'lucide-react';
+import { Plus, Lock } from 'lucide-react';
+import { usePlanFeatures } from '../hooks/usePlanFeatures';
+import { useNavigate } from 'react-router-dom';
 
 export function FloorPlan() {
   const queryClient = useQueryClient();
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const { features } = usePlanFeatures();
+  const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({
     queryKey: ['zones'],
@@ -52,12 +56,18 @@ export function FloorPlan() {
           <h2 className="font-black text-sm uppercase tracking-wider" style={{ color: 'var(--text-1)' }}>Zones</h2>
           <button
             onClick={() => {
+              if (zones.length >= features.maxFloors) {
+                if (confirm(`Your ${features.name} plan allows up to ${features.maxFloors} floor(s). Upgrade to add more?`)) {
+                   navigate('/app/subscription');
+                }
+                return;
+              }
               const name = prompt('Zone name:');
               if (name) createZoneMutation.mutate(name);
             }}
-            className="w-7 h-7 flex items-center justify-center bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className={`w-7 h-7 flex items-center justify-center text-white rounded-lg transition-colors ${zones.length >= features.maxFloors ? 'bg-slate-700' : 'bg-blue-600 hover:bg-blue-700'}`}
           >
-            <Plus size={15} />
+            {zones.length >= features.maxFloors ? <Lock size={12} /> : <Plus size={15} />}
           </button>
         </div>
         <div className="flex-1 overflow-y-auto py-2">

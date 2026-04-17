@@ -2,13 +2,13 @@ import { UserRole, OrderStatus } from '@dineflow/prisma';
 import { prisma } from '../db/prisma';
 
 const TRANSITIONS: Record<string, string[]> = {
-  NEW: ['ACCEPTED', 'CANCELLED'],
-  ACCEPTED: ['PREPARING', 'READY', 'CANCELLED'],
-  PREPARING: ['READY', 'CANCELLED'],
-  READY: ['SERVED', 'CANCELLED'],
-  SERVED: ['RECEIVED', 'CANCELLED'],
-  RECEIVED: [],
-  CANCELLED: [],
+  NEW: ['ACCEPTED', 'PREPARING', 'READY', 'SERVED', 'CANCELLED'],
+  ACCEPTED: ['NEW', 'PREPARING', 'READY', 'SERVED', 'CANCELLED'],
+  PREPARING: ['NEW', 'ACCEPTED', 'READY', 'SERVED', 'CANCELLED'],
+  READY: ['NEW', 'ACCEPTED', 'PREPARING', 'SERVED', 'CANCELLED'],
+  SERVED: ['READY', 'RECEIVED', 'CANCELLED'],
+  RECEIVED: ['SERVED'], // Allow un-completing session if needed
+  CANCELLED: ['NEW'], // Allow re-opening cancelled order
 };
 
 export class ConflictError extends Error {

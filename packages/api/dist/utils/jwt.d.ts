@@ -3,6 +3,7 @@ export interface JwtPayload {
     id: string;
     tenantId: string;
     role: UserRole;
+    email: string;
 }
 export declare const generateTokens: (payload: JwtPayload) => {
     accessToken: string;

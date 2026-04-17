@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma, withPrismaRetry } from '../db/prisma';
 import { getIO, getSessionRoom, getTenantRoom } from '../socket';
 import { getCache, setCache, deleteCache, withCache } from '../services/cache.service';
+import { transitionOrderStatus } from '../services/order.service';
 
 const WAITER_CALL_TYPES = new Set(['WAITER', 'BILL', 'WATER', 'EXTRA', 'HELP']);
 const ORDERABLE_SESSION_STATUSES = ['OPEN', 'PARTIALLY_SENT', 'ACTIVE'] as const;
@@ -512,16 +513,20 @@ export const createOrder = async (req: Request, res: Response) => {
 
     const taxAmount = subtotal * (tenant.taxRate / 100);
     const totalAmount = subtotal + taxAmount;
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const countForDay = await prisma.order.count({
+      where: {
+        tenantId: tenant.id,
+        createdAt: { gte: startOfDay },
+      },
+    });
+
+    const nextNumber = countForDay + 1;
     const orderType = safeTableId ? 'DINE_IN' : 'TAKEAWAY';
-    
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let orderNumber = '';
-    let exists = true;
-    while (exists) {
-      orderNumber = `#${Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')}`;
-      const check = await prisma.order.findFirst({ where: { tenantId: tenant.id, orderNumber } });
-      exists = !!check;
-    }
+    const prefix = orderType === 'DINE_IN' ? 'D-' : 'T-';
+    const orderNumber = `${prefix}${nextNumber}`;
 
     let order;
     try {
@@ -885,5 +890,55 @@ export const acknowledgeWaiterCall = async (req: Request, res: Response) => {
     console.error('acknowledgeWaiterCall error:', error);
     const message = error instanceof Error ? error.message : 'Failed to notify guest';
     res.status(message === 'Restaurant not found' ? 404 : 500).json({ error: message });
+  }
+};
+
+export const updateOrderStatusPublic = async (req: Request, res: Response) => {
+  try {
+    const { tenantSlug, id } = req.params;
+    const { status, sessionToken, version } = req.body;
+
+    if (status !== 'SERVED') {
+      return res.status(400).json({ error: 'Customers can only mark orders as served (received).' });
+    }
+
+    if (!sessionToken) {
+      return res.status(401).json({ error: 'Session token is required to update order status.' });
+    }
+
+    const tenantId = await resolveTenantIdBySlug(tenantSlug);
+    
+    // Verify order belongs to this session
+    const order = await prisma.order.findFirst({
+      where: { id, tenantId, diningSessionId: sessionToken },
+      select: { id: true, version: true }
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found in this session.' });
+    }
+
+    const updatedOrder = await transitionOrderStatus({
+      orderId: id,
+      tenantId,
+      expectedVersion: version || order.version,
+      newStatus: 'SERVED' as any,
+      actorId: sessionToken,
+      actorType: 'CUSTOMER',
+    });
+
+    // Notify Vendor Socket
+    getIO().to(getTenantRoom(tenantId)).emit('order:update', updatedOrder);
+    
+    // Notify Session Socket
+    getIO().to(getSessionRoom(tenantId, sessionToken)).emit('order:update', updatedOrder);
+
+    await invalidateOperationalCaches(tenantId, sessionToken);
+
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error('updateOrderStatusPublic error:', error);
+    const message = error instanceof Error ? error.message : 'Failed to update order status';
+    res.status(500).json({ error: message });
   }
 };

@@ -30,6 +30,7 @@ export function clearDashboardAuthStorage() {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('userRole');
   localStorage.removeItem('mustChangePassword');
+  localStorage.removeItem('userEmail');
 }
 
 export function markManualLogout() {
@@ -89,6 +90,7 @@ export function applySessionSnapshot(data: any) {
   const role = String(data?.user?.role || 'UNKNOWN').toUpperCase();
   localStorage.setItem('accessToken', data.accessToken);
   localStorage.setItem('userRole', role);
+  localStorage.setItem('userEmail', data?.user?.email || '');
 
   const mustChangePassword = role === 'OWNER' && Boolean(data?.user?.mustChangePassword);
   if (mustChangePassword) localStorage.setItem('mustChangePassword', '1');

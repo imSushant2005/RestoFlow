@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { formatINR } from '../lib/currency';
-import { ReceiptText, FileText, Printer, Download, Share2, Users, X } from 'lucide-react';
+import { ReceiptText, FileText, Printer, Download, Share2, Users, X, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 
 type OrderRow = {
@@ -40,7 +40,19 @@ type OrderRow = {
 };
 
 export function InvoicesPage() {
+  const queryClient = useQueryClient();
   const [selectedInvoice, setSelectedInvoice] = useState<OrderRow | null>(null);
+
+  const completeSessionMutation = useMutation({
+    mutationFn: async ({ sessionId, paymentMethod, shouldClose }: { sessionId: string; paymentMethod: 'cash' | 'online'; shouldClose: boolean }) => {
+      const res = await api.post(`/sessions/${sessionId}/complete`, { paymentMethod, shouldClose });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+    },
+  });
 
   const { data: business } = useQuery({
     queryKey: ['settings-business'],
@@ -50,7 +62,7 @@ export function InvoicesPage() {
 
   const { data: historyResponse, isLoading } = useQuery({
     queryKey: ['bill-counter-orders'],
-    queryFn: async () => (await api.get('/orders/history?status=RECEIVED&limit=100')).data,
+    queryFn: async () => (await api.get('/orders/history?status=RECEIVED,SERVED&limit=100')).data,
     staleTime: 1000 * 15,
   });
 
@@ -202,15 +214,31 @@ export function InvoicesPage() {
                       {order.customerPhone ? ` | ${order.customerPhone}` : ''}
                     </p>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     <span className="font-black text-blue-600">{formatINR(invoiceTotal)}</span>
                     <button
                       onClick={() => setSelectedInvoice(order)}
-                      className="px-3 py-2 rounded-lg font-semibold text-sm"
+                      className="px-3 py-2 rounded-lg font-semibold text-sm transition hover:bg-slate-200"
                       style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}
                     >
                       Open Invoice
                     </button>
+                    {order.diningSessionId && order.status !== 'RECEIVED' && order.diningSession?.bill?.paymentStatus === 'PAID' && (
+                      <button
+                        onClick={() => {
+                          completeSessionMutation.mutate({ 
+                            sessionId: order.diningSessionId!, 
+                            paymentMethod: (order.diningSession?.bill?.paymentMethod || 'cash').toLowerCase() as any,
+                            shouldClose: true 
+                          });
+                        }}
+                        disabled={completeSessionMutation.isPending}
+                        className="p-2 rounded-lg bg-emerald-600/10 text-emerald-600 hover:bg-emerald-600/20 transition-all active:scale-95"
+                        title="Clear Session & Archive"
+                      >
+                        <CheckCircle size={18} />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -242,7 +270,7 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function InvoiceModal({
+export function InvoiceModal({
   order,
   businessName,
   businessPhone,

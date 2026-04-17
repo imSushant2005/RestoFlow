@@ -14,6 +14,7 @@ router.get('/:tenantSlug/menu', PublicController.getPublicMenu);
 router.post('/:tenantSlug/orders', PublicController.createOrder);
 router.get('/:tenantSlug/sessions/:sessionToken/orders', PublicController.getSessionOrders);
 router.get('/:tenantSlug/orders/:id', PublicController.getOrderInfo);
+router.patch('/:tenantSlug/orders/:id/status', PublicController.updateOrderStatusPublic);
 router.post('/orders/:id/feedback', PublicController.submitFeedback);
 router.post('/:tenantSlug/waiter-call', PublicController.waiterCall);
 router.post('/:tenantSlug/waiter-call/acknowledge', PublicController.acknowledgeWaiterCall);

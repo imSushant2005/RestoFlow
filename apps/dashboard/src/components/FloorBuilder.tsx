@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { Plus, QrCode, Trash2, Power } from 'lucide-react';
+import { Plus, QrCode, Trash2, Power, Lock, CheckCircle } from 'lucide-react';
+import { usePlanFeatures } from '../hooks/usePlanFeatures';
+import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { toPng } from 'html-to-image';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -94,7 +96,16 @@ const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus, highligh
       </span>
       
       {showActions && (
-        <div ref={actionRef} className="absolute bottom-2 left-2 right-2 z-20 border rounded-xl shadow-2xl p-2 space-y-1 backdrop-blur-3xl" style={{ background: 'var(--surface-raised)', borderColor: 'var(--border)' }}>
+    <div ref={actionRef} className="absolute bottom-2 left-2 right-2 z-20 border rounded-xl shadow-2xl p-2 space-y-1 backdrop-blur-3xl" style={{ background: 'var(--surface-raised)', borderColor: 'var(--border)' }}>
+          {table.currentSessionId && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleStatus(table, 'CLEAR'); setShowActions(false); }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-emerald-500/10 text-xs font-bold text-emerald-600 flex items-center gap-2 transition-colors"
+            >
+              <CheckCircle size={13} />
+              Clear Session
+            </button>
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); onToggleStatus(table); setShowActions(false); }}
             className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-500/10 text-xs font-bold flex items-center gap-2 transition-colors"
@@ -117,7 +128,7 @@ const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus, highligh
             <Trash2 size={13} />
             Delete Table
           </button>
-        </div>
+</div>
       )}
     </div>
   );
@@ -128,6 +139,11 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
   const [selectedTable, setSelectedTable] = useState<any>(null);
   const [selectedSeatQR, setSelectedSeatQR] = useState<number | 'FULL'>('FULL');
   const [highlightedTableId, setHighlightedTableId] = useState<string | null>(null);
+  const { features } = usePlanFeatures();
+  const navigate = useNavigate();
+
+  const currentTablesCount = zone.tables?.length || 0;
+  const isLimitReached = currentTablesCount >= features.tables;
 
   // Real-time socket listener for table status changes
   useEffect(() => {
@@ -227,7 +243,23 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
     }
   };
 
-  const handleToggleStatus = (table: any) => {
+  const handleToggleStatus = async (table: any, mode?: 'TOGGLE' | 'CLEAR') => {
+    if (mode === 'CLEAR') {
+      if (!table.currentSessionId) return;
+      if (!window.confirm(`Force clear and archive session for Table ${table.name}?`)) return;
+      
+      try {
+        await api.post(`/sessions/${table.currentSessionId}/complete`, { 
+          paymentMethod: 'cash', 
+          shouldClose: true 
+        });
+        queryClient.invalidateQueries({ queryKey: ['zones'] });
+      } catch (err: any) {
+        alert(err?.response?.data?.error || 'Failed to clear session');
+      }
+      return;
+    }
+
     const newStatus = table.status === 'AVAILABLE' ? 'OCCUPIED' : 'AVAILABLE';
     toggleStatusMutation.mutate({ id: table.id, status: newStatus });
   };
@@ -268,15 +300,22 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
           </button>
           <button 
             onClick={() => {
+              if (isLimitReached) {
+                if (confirm(`Your ${features.name} plan allows up to ${features.tables} tables. Upgrade to add more?`)) {
+                  navigate('/app/subscription');
+                }
+                return;
+              }
               const name = prompt('Table Number/Name (e.g., "12"):');
               if (!name) return;
               const seatsRaw = prompt('Table Capacity (default 4):');
               const capacity = seatsRaw ? parseInt(seatsRaw, 10) : 4;
               createTableMutation.mutate({ name, capacity });
             }}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${isLimitReached ? 'bg-slate-700 text-slate-300' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
           >
-            <Plus size={18} /> Add Table
+            {isLimitReached ? <Lock size={18} /> : <Plus size={18} />} 
+            Add Table
           </button>
         </div>
       </div>

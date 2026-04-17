@@ -5,7 +5,7 @@ const env_1 = require("./env");
 exports.jwtConfig = {
     secret: env_1.env.JWT_SECRET,
     refreshSecret: env_1.env.JWT_REFRESH_SECRET || env_1.env.JWT_SECRET,
-    expiresIn: '15m',
+    expiresIn: '24h',
     refreshExpiresIn: '7d',
 };
 //# sourceMappingURL=auth.js.map

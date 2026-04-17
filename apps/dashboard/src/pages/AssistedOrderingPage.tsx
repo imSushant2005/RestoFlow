@@ -239,7 +239,7 @@ export function AssistedOrderingPage() {
   const [note, setNote] = useState('');
   const [seat, setSeat] = useState('');
   const [guestCount, setGuestCount] = useState(1);
-  const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY'>('TAKEAWAY');
+  const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'ZOMATO' | 'SWIGGY'>('TAKEAWAY');
   const [selectedTableId, setSelectedTableId] = useState('');
   const [fulfillmentMode, setFulfillmentMode] = useState<AssistedMode>('SEND_TO_KITCHEN');
   const [paymentPreset, setPaymentPreset] = useState<'UNPAID' | 'cash' | 'upi' | 'card' | 'online'>('UNPAID');
@@ -539,12 +539,14 @@ export function AssistedOrderingPage() {
                     Order type
                     <select
                       value={orderType}
-                      onChange={(event) => setOrderType(event.target.value as 'DINE_IN' | 'TAKEAWAY')}
+                      onChange={(event) => setOrderType(event.target.value as any)}
                       className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
                       style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
                     >
-                      <option value="TAKEAWAY">Takeaway</option>
-                      <option value="DINE_IN">Dine in</option>
+                      <option value="TAKEAWAY">Takeaway (T-)</option>
+                      <option value="DINE_IN">Dine in (D-)</option>
+                      <option value="ZOMATO">Zomato (Z-)</option>
+                      <option value="SWIGGY">Swiggy (S-)</option>
                     </select>
                   </label>
                   <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>

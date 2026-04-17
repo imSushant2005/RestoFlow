@@ -4,8 +4,13 @@ export type PlanLimit = {
     staff: number;
     price: number;
     name: string;
+    hasKDS: boolean;
+    hasWaiterRole: boolean;
+    hasWaiterApp: boolean;
+    hasAdvancedAnalytics: boolean;
+    maxFloors: number;
 };
-export type CanonicalPlan = 'FREE' | 'STARTER' | 'GOLD' | 'PLATINUM';
+export type CanonicalPlan = 'MINI' | 'CAFE' | 'DINEPRO' | 'PREMIUM';
 export declare const PLAN_LIMITS: Record<string, PlanLimit>;
 export declare function parsePlan(plan: unknown): CanonicalPlan | null;
 export declare function normalizePlan(plan: unknown): CanonicalPlan;

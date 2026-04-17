@@ -16,10 +16,10 @@ const razorpay = new razorpay_1.default({
 });
 // Razorpay amounts use paise.
 const PLAN_PRICING = {
-    FREE: 0,
-    STARTER: 1999 * 100,
-    GOLD: 4999 * 100,
-    PLATINUM: 9999 * 100,
+    MINI: 599 * 100,
+    CAFE: 1299 * 100,
+    DINEPRO: 2999 * 100,
+    PREMIUM: 6999 * 100,
 };
 const createSubscriptionOrder = async (req, res) => {
     try {
@@ -30,10 +30,6 @@ const createSubscriptionOrder = async (req, res) => {
         const tenant = await prisma_1.prisma.tenant.findUnique({ where: { id: req.tenantId } });
         if (!tenant)
             return res.status(404).json({ success: false, error: 'Tenant not found' });
-        if (normalizedPlan === 'FREE') {
-            await prisma_1.prisma.tenant.update({ where: { id: req.tenantId }, data: { plan: 'FREE' } });
-            return res.json({ success: true, message: 'Downgraded to Free Plan' });
-        }
         const amount = PLAN_PRICING[normalizedPlan];
         if (!Number.isFinite(amount) || amount <= 0) {
             return res.status(400).json({ success: false, error: 'Plan pricing is invalid' });

@@ -17,7 +17,7 @@ const authHeaders = {
 const refreshClient = axios.create({
   baseURL,
   withCredentials: true,
-  timeout: 10000,
+  timeout: 60000,
   headers: authHeaders,
 });
 
@@ -64,7 +64,7 @@ async function refreshAccessToken() {
 export const api = axios.create({
   baseURL,
   withCredentials: true,
-  timeout: 10000,
+  timeout: 60000,
   headers: authHeaders,
 });
 

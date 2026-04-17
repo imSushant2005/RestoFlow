@@ -204,7 +204,8 @@ export const updateBusinessSettings = async (req: Request, res: Response) => {
         gstin: gstin === undefined ? undefined : normalizedGstin || null,
         isActive,
         plan,
-        trialEndsAt,
+        trialEndsAt: plan ? null : trialEndsAt, // Remove trial on manual plan change/upgrade
+        planStartedAt: plan ? new Date() : undefined,
       },
       select: {
         id: true,
@@ -270,12 +271,26 @@ export const createStaff = async (req: Request, res: Response) => {
       UserRole.WAITER,
     ]);
 
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+    const tenantLimits = getPlanLimits(tenant.plan);
+
     if (!allowedStaffRoles.has(normalizedRole as UserRole)) {
       return res.status(400).json({ error: 'Invalid staff role selected' });
     }
 
-    const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
-    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+    if (normalizedRole === UserRole.WAITER && !tenantLimits.hasWaiterRole) {
+      return res.status(403).json({ 
+        error: `The ${tenantLimits.name} plan does not support the Waiter role. Please upgrade to CAFÉ or higher.` 
+      });
+    }
+
+    if (normalizedRole !== UserRole.OWNER && tenantLimits.staff <= 1) {
+       return res.status(403).json({ 
+        error: `The ${tenantLimits.name} plan is Owner-only. Please upgrade to a higher plan to add staff members.` 
+      });
+    }
 
     const requestedLogin = payload.username?.trim() || payload.email?.trim() || '';
     const email = normalizeLoginEmail(requestedLogin, tenant.slug);
@@ -287,10 +302,10 @@ export const createStaff = async (req: Request, res: Response) => {
     const requestedEmployeeCode = baseEmployeeCode;
 
     const count = await prisma.user.count({ where: { tenantId: req.tenantId } });
-    const planLimits = getPlanLimits(tenant.plan);
+    const staffLimits = getPlanLimits(tenant.plan);
 
-    if (count >= planLimits.staff) {
-      return res.status(403).json({ error: `Plan limit reached. Your ${tenant.plan} plan allows up to ${planLimits.staff} staff members.` });
+    if (count >= staffLimits.staff) {
+      return res.status(403).json({ error: `Plan limit reached. Your ${staffLimits.name} plan allows up to ${staffLimits.staff} staff members.` });
     }
 
     const [existingByEmail, existingByEmployeeCode] = await Promise.all([
@@ -380,6 +395,15 @@ export const updateStaff = async (req: Request, res: Response) => {
       if (!allowedStaffRoles.has(normalizedRole as UserRole)) {
         return res.status(400).json({ error: 'Invalid staff role selected' });
       }
+
+      const currentTenant = await prisma.tenant.findUnique({ where: { id: req.tenantId }, select: { plan: true } });
+      const planLimits = getPlanLimits(currentTenant?.plan || 'MINI');
+      if (normalizedRole === UserRole.WAITER && !planLimits.hasWaiterRole) {
+        return res.status(403).json({ 
+          error: `The ${planLimits.name} plan does not support the Waiter role.` 
+        });
+      }
+
       updateData.role = normalizedRole;
     }
 

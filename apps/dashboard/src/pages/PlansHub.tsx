@@ -5,7 +5,6 @@ import { api } from '../lib/api';
 import { 
   Rocket, 
   Target, 
-  Crown, 
   Check, 
   Zap, 
   HelpCircle, 
@@ -58,43 +57,44 @@ const PLANS: PricingPlan[] = [
   {
     id: 'CAFE',
     name: 'CAFÉ',
-    price: '₹1,499',
-    annualPrice: '₹1,199',
+    price: '₹1299',
+    annualPrice: '₹1299',
     tagline: 'Table Service (Hybrid Model)',
-    serviceStyle: 'Table + Partial Service',
-    description: 'Designed for small cafes where customers order via QR and you serve them.',
+    serviceStyle: 'Table + Waiter Service',
+    description: 'Designed for small cafes where waiters or QR orders drive the service.',
     gradient: 'from-fuchsia-600 to-purple-600',
-    icon: <Rocket className="text-white" size={24} />,
+    icon: <Target className="text-white" size={24} />,
     features: [
-      'Everything in Mini',
-      'Table Management (3–9 tables)',
-      'QR Ordering for Tables',
-      'Kitchen Display (KDS)',
-      'Waiter Role Support',
-      'Customer Table Mapping',
+      'Everything in MINI',
+      'Table Management (Up to 9)',
+      'Waiter Role Support (Staff)',
+      'Basic Kitchen Display (KDS)',
+      'Table Mapping & Sessions',
+      'GST Billing & Receipting',
       'Detailed Sales Reports',
+      'Up to 5 Staff accounts',
     ]
   },
   {
     id: 'DINEPRO',
     name: 'DINEPRO',
-    price: '₹3,499',
-    annualPrice: '₹2,799',
+    price: '₹2999',
+    annualPrice: '₹2999',
     tagline: 'High Control Dining System',
-    serviceStyle: 'Full Waiter Service',
+    serviceStyle: 'Full Waiter Service Controller',
     description: 'The standard for high-volume restaurants requiring full waiter coordination.',
     gradient: 'from-orange-500 to-rose-600',
-    icon: <Crown className="text-white" size={24} />,
+    icon: <Rocket className="text-white" size={24} />,
     popular: true,
     features: [
-      'Everything in Café',
-      '9 - 18 Tables Support',
+      'Everything in CAFÉ',
+      'Up to 18 Tables Support',
       '2-Floor / Zone Management',
-      'Role-based Waiter Login',
-      'Mobile Waiter App (POS)',
-      'Advanced Dining Sessions',
-      'Real-time Table Status Monitor',
-      'Multi-device (Unlimited staff)',
+      'Mobile Waiter App (Full POS)',
+      'Advanced Sessions Tracking',
+      'Analytics Pro (Hourly Rush)',
+      'Unlimited Staff accounts',
+      'Multi-device (Dual Floor Support)',
     ]
   },
   {
@@ -137,6 +137,9 @@ export function PlansHub() {
       queryClient.invalidateQueries({ queryKey: ['settings-business'] });
     },
   });
+
+  const userEmail = localStorage.getItem('userEmail');
+  const isSuperuser = userEmail === 'sushantrana2005@gmail.com';
 
   // Recommendation Engine State
   const [showRecommendation, setShowRecommendation] = useState(false);
@@ -192,9 +195,16 @@ export function PlansHub() {
              </span>
           </div>
           <h2 className="text-4xl font-black text-white tracking-tight"> Subscription & Growth</h2>
-          <p className="text-slate-400 mt-2 font-medium max-w-xl">
-            {activePlan ? `Current Plan: ${activePlan}` : "You're currently in your first month of RestoFlow. Dominate your operations with zero friction."}
-          </p>
+          <div className="flex items-center gap-3 mt-3">
+            <p className="text-slate-400 font-medium max-w-xl">
+              {activePlan ? `Manage your account subscription and scale your restaurant operations.` : "You're currently in your first month of RestoFlow. Dominate your operations with zero friction."}
+            </p>
+            {activePlan && (
+              <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-black uppercase tracking-widest border border-emerald-500/20">
+                Active Plan: {activePlan}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -317,8 +327,16 @@ export function PlansHub() {
               </div>
             )}
             
-            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${plan.gradient} flex items-center justify-center mb-5 shadow-xl`}>
-              {plan.icon}
+            <div className="flex items-center justify-between mb-5">
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${plan.gradient} flex items-center justify-center shadow-xl`}>
+                {plan.icon}
+              </div>
+              {plan.id === activePlan && (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <Check size={10} strokeWidth={4} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Active</span>
+                </div>
+              )}
             </div>
             
             <h3 className="text-xl font-black text-white">{plan.name} Plan</h3>
@@ -347,21 +365,22 @@ export function PlansHub() {
             
             <button 
               onClick={() => {
-                if (plan.id === activePlan || plan.isComingSoon || planMutation.isPending) return;
+                const canChange = isSuperuser || (plan.id !== activePlan && !plan.isComingSoon && !planMutation.isPending);
+                if (!canChange) return;
                 planMutation.mutate(plan.id);
               }}
-              disabled={plan.isComingSoon || planMutation.isPending}
+              disabled={(!isSuperuser && (plan.isComingSoon || plan.id === activePlan)) || planMutation.isPending}
               className={`w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${
-                plan.id === activePlan
+                plan.id === activePlan && !isSuperuser
                   ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-default'
-                  : plan.isComingSoon
+                  : plan.isComingSoon && !isSuperuser
                     ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-50'
                     : plan.popular 
                       ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-xl shadow-orange-900/20 hover:opacity-90' 
                       : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
             }`}>
-              {plan.id === activePlan ? 'Active Plan' : 
-               plan.isComingSoon ? 'Coming Soon' :
+              {plan.id === activePlan ? (isSuperuser ? 'Active (Change Anyway)' : 'Active Plan') : 
+               plan.isComingSoon ? (isSuperuser ? 'Coming Soon (Apply anyway)' : 'Coming Soon') :
                planMutation.isPending ? 'Updating...' :
                !trialEndsAt ? 'Start 30-Day Free Trial' : 'Upgrade Now'}
             </button>

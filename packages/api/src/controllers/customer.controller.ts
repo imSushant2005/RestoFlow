@@ -187,7 +187,7 @@ export const getHistory = async (req: Request, res: Response) => {
       where: {
         customerId,
         ...(tenantIdFilter ? { tenantId: tenantIdFilter } : {}),
-        sessionStatus: 'CLOSED' as any,
+        sessionStatus: { notIn: ['CANCELLED' as any] },
       },
       include: {
         tenant: {

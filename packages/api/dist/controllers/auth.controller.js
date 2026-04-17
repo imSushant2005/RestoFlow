@@ -103,6 +103,7 @@ async function issueSessionForUser(res, user) {
         id: user.id,
         tenantId: user.tenantId,
         role: user.role,
+        email: user.email,
     });
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS);
     await prisma_2.prisma.refreshToken.create({
@@ -217,6 +218,9 @@ const register = async (req, res) => {
                     businessName: finalTenantName,
                     slug,
                     email: normalizedEmail,
+                    trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day free trial on signup
+                    plan: 'MINI',
+                    planStartedAt: new Date(),
                 },
             });
             const user = await tx.user.create({
@@ -339,6 +343,9 @@ const clerkSync = async (req, res) => {
                     businessName: finalTenantName,
                     slug: tenantSlug,
                     email: normalizedEmail,
+                    trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day free trial on signup
+                    plan: 'MINI',
+                    planStartedAt: new Date(),
                 },
             });
             const user = await tx.user.create({
@@ -799,6 +806,7 @@ const refresh = async (req, res) => {
             id: dbToken.user.id,
             tenantId: dbToken.user.tenantId,
             role: dbToken.user.role,
+            email: dbToken.user.email,
         });
         const expiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS);
         await prisma_2.prisma.refreshToken.delete({ where: { id: dbToken.id } });

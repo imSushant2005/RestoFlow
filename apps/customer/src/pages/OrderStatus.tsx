@@ -128,6 +128,18 @@ export function OrderStatus() {
     },
   });
 
+  const statusMutation = useMutation({
+    mutationFn: async ({ orderId, status, version }: { orderId: string; status: string; version: number }) => {
+      return publicApi.patch(`/${tenantSlug}/orders/${orderId}/status`, { status, sessionToken, version });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error: any) => {
+      alert(error?.response?.data?.error || error?.message || 'Unable to update order status.');
+    },
+  });
+
   useEffect(() => {
     if (!tenantSlug || !sessionToken || shouldRedirectToTracker) return;
 
@@ -150,7 +162,7 @@ export function OrderStatus() {
       try {
         if (existing && existing.status !== incomingOrder.status) {
           if (incomingOrder.status === 'READY') {
-            notify({ title: 'Order Ready', message: `Order #${String(incomingOrder.orderNumber || incomingOrder.id).slice(-6).toUpperCase()} is ready.`, type: 'success' });
+            notify({ title: 'Order Ready', message: `Order is ready, pick your order.`, type: 'success' });
           } else if (incomingOrder.status === 'PREPARING') {
             notify({ title: 'Order Update', message: `Your order is being prepared.`, type: 'info' });
           } else if (incomingOrder.status === 'SERVED' || incomingOrder.status === 'RECEIVED') {
@@ -172,14 +184,12 @@ export function OrderStatus() {
     const handleSessionFinished = (payload?: { sessionId?: string }) => {
       if (payload?.sessionId && payload.sessionId !== sessionToken) return;
       queryClient.invalidateQueries({ queryKey });
-      notify?.({ title: 'Session Finished', message: `Your session has finished. Redirecting to bill.`, type: 'info' });
-      navigate(`/order/${tenantSlug}/session/${sessionToken}/bill`);
+      navigate(`/order/${tenantSlug}/history`);
     };
     const handleSessionCompleted = (payload?: { sessionId?: string }) => {
       if (payload?.sessionId && payload.sessionId !== sessionToken) return;
       queryClient.invalidateQueries({ queryKey });
-      notify?.({ title: 'Session Complete', message: `Thanks! Redirecting you to the bill.`, type: 'success' });
-      navigate(`/order/${tenantSlug}/session/${sessionToken}/bill`);
+      navigate(`/order/${tenantSlug}/history`);
     };
 
     socket.on('order:new', upsertOrderInCache);
@@ -425,20 +435,33 @@ export function OrderStatus() {
                         ))}
                       </div>
 
-                      <div className="flex items-center justify-between border-t pt-4" style={{ borderColor: 'var(--border)' }}>
-                        <div className="flex items-center gap-2">
-                          <Timer size={14} style={{ color: 'var(--text-3)' }} />
-                          <span className="text-xs font-black uppercase" style={{ color: 'var(--text-3)' }}>
-                            {getETA(order) ? `~${getETA(order)} min` : 'Soon'}
-                          </span>
+                      <div className="flex flex-col gap-4 border-t pt-4" style={{ borderColor: 'var(--border)' }}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Timer size={14} style={{ color: 'var(--text-3)' }} />
+                            <span className="text-xs font-black uppercase" style={{ color: 'var(--text-3)' }}>
+                              {getETA(order) ? `~${getETA(order)} min` : order.status === 'READY' ? 'Ready for Pickup' : 'Soon'}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => shareWhatsApp(order)}
+                            className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#25D366] transition-all active:scale-95"
+                          >
+                            <Share2 size={12} />
+                            Share Bill
+                          </button>
                         </div>
-                        <button
-                          onClick={() => shareWhatsApp(order)}
-                          className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#25D366] transition-all active:scale-95"
-                        >
-                          <Share2 size={12} />
-                          Share Bill
-                        </button>
+                        
+                        {order.status === 'READY' && (
+                          <button
+                            onClick={() => statusMutation.mutate({ orderId: order.id, status: 'SERVED', version: order.version })}
+                            disabled={statusMutation.isPending}
+                            className="w-full py-3.5 rounded-2xl bg-[#1a1c23] text-white text-xs font-black uppercase tracking-widest shadow-xl shadow-black/20 hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-2"
+                          >
+                            <CheckCircle2 size={16} className="text-emerald-400" />
+                            {statusMutation.isPending ? 'Updating...' : "I've Received My Order"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

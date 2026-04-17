@@ -41,6 +41,7 @@ import { SetupFlowPage } from './pages/SetupFlowPage';
 import { DashboardErrorBoundary } from './components/DashboardErrorBoundary';
 import { VendorTopNav, type OpsNotification } from './components/VendorTopNav';
 import { useRealtimeSocket } from './hooks/useRealtimeSocket';
+import { usePlanFeatures } from './hooks/usePlanFeatures';
 import { api } from './lib/api';
 import { clearDashboardAuthStorage, markManualLogout } from './lib/authSession';
 import { driver } from 'driver.js';
@@ -48,11 +49,6 @@ import 'driver.js/dist/driver.css';
 
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER' | 'UNKNOWN';
 
-const FULL_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER']);
-const ORDERS_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'KITCHEN', 'WAITER']);
-const BILLING_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER']);
-const BUSINESS_READ_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'KITCHEN', 'WAITER']);
-const ASSISTED_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'WAITER']);
 
 // REMOVED STATIC DASHBOARD_DEMO_STEPS
 
@@ -65,6 +61,13 @@ function normalizeDashboardRole(rawRole?: string | null): DashboardRole {
   if (normalized === 'WAITER') return 'WAITER';
   return 'UNKNOWN';
 }
+
+const FULL_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER']);
+const ORDERS_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'KITCHEN', 'WAITER']);
+const BILLING_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER']);
+const ASSISTED_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'WAITER']);
+const BUSINESS_READ_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'WAITER', 'KITCHEN']);
+const notificationStorageKey = 'rf_ops_notifications_v1';
 
 function getDefaultRouteForRole(role: DashboardRole) {
   if (role === 'WAITER') return '/app/waiter';
@@ -240,10 +243,10 @@ function DashboardShell() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [liveOrderCount, setLiveOrderCount] = useState(0);
   const [showFirstTimeDemo, setShowFirstTimeDemo] = useState(false);
-  const [notifications, setNotifications] = useState<OpsNotification[]>([]);
-  const [toasts, setToasts] = useState<OpsNotification[]>([]);
   const [activeWaiterCall, setActiveWaiterCall] = useState<OpsNotification | null>(null);
   const [notificationsHydrated, setNotificationsHydrated] = useState(false);
+  const [notifications, setNotifications] = useState<OpsNotification[]>([]);
+  const [toasts, setToasts] = useState<any[]>([]);
   const role = normalizeDashboardRole(localStorage.getItem('userRole'));
   const defaultRoute = getDefaultRouteForRole(role);
   const canAccessDashboard = FULL_ACCESS_ROLES.has(role);
@@ -254,6 +257,7 @@ function DashboardShell() {
   const canAccessAnalytics = FULL_ACCESS_ROLES.has(role);
   const canAccessSettings = FULL_ACCESS_ROLES.has(role);
   const canAccessAssistedOrdering = ASSISTED_ACCESS_ROLES.has(role);
+  const { features, isLoading: isPlanLoading } = usePlanFeatures();
   const canShowFirstTimeDemo = FULL_ACCESS_ROLES.has(role);
   const canShowAdminShellData = BUSINESS_READ_ROLES.has(role);
   const shouldFetchBusinessShellData = canShowAdminShellData;
@@ -284,7 +288,6 @@ function DashboardShell() {
   const isLoading = shouldFetchBusinessShellData && (businessQuery.isLoading || (shouldFetchBillingShellData && billingQuery.isLoading));
   const isError = shouldFetchBusinessShellData && businessQuery.isError;
   const demoStorageKey = getDemoStorageKey(business);
-  const notificationStorageKey = useMemo(() => getDemoStorageKey(business).replace('demo_seen', 'notifications'), [business]);
 
   const refreshLiveOrderCount = useCallback(async () => {
     if (!canAccessOrders) {
@@ -313,7 +316,6 @@ function DashboardShell() {
       };
 
       setNotifications((previous) => [next, ...previous].slice(0, 60));
-      setToasts((prev) => [...prev, next]);
       
       const soundUrl = entry.sound || 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
       try {
@@ -332,7 +334,7 @@ function DashboardShell() {
         setToasts((prev) => prev.filter((t) => t.id !== id));
       }, 6000);
     },
-    [],
+    [setNotifications],
   );
 
 
@@ -343,23 +345,21 @@ function DashboardShell() {
 
   const markNotificationsRead = useCallback(() => {
     setNotifications((previous) => previous.map((notification) => ({ ...notification, read: true })));
-  }, []);
+  }, [setNotifications]);
 
   const clearNotifications = useCallback(() => {
     setNotifications([]);
-  }, []);
+  }, [setNotifications]);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(notificationStorageKey);
       if (!raw) {
-        setNotifications([]);
         setNotificationsHydrated(true);
         return;
       }
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) {
-        setNotifications([]);
         setNotificationsHydrated(true);
         return;
       }
@@ -370,15 +370,14 @@ function DashboardShell() {
       );
       setNotificationsHydrated(true);
     } catch {
-      setNotifications([]);
       setNotificationsHydrated(true);
     }
-  }, [notificationStorageKey]);
+  }, []);
 
   useEffect(() => {
     if (!notificationsHydrated) return;
     localStorage.setItem(notificationStorageKey, JSON.stringify(notifications.slice(0, 60)));
-  }, [notificationStorageKey, notifications, notificationsHydrated]);
+  }, [notifications, notificationsHydrated]);
 
   const realtimeHandlers = useMemo(
     () => ({
@@ -399,14 +398,14 @@ function DashboardShell() {
       },
       'order:update': (updatedOrder: any) => {
         if (updatedOrder?.id) {
-          // Patch the cache in-place — no HTTP request fired.
+          // Patch the cache in-place â€” no HTTP request fired.
           // Version guard: only apply if this event is NEWER than what is in cache.
           // Prevents stale socket replay events from regressing the board during reconnect.
           queryClient.setQueryData(['live-orders'], (old: any[]) => {
             if (!Array.isArray(old)) return old;
             const exists = old.some((o) => o.id === updatedOrder.id);
             if (!exists) {
-              // Order not in live board (e.g. moved to history) — no action needed
+              // Order not in live board (e.g. moved to history) â€” no action needed
               return old;
             }
             return old.map((o) => {
@@ -418,11 +417,11 @@ function DashboardShell() {
               return updatedOrder;
             });
           });
-          // Also invalidate history and billing counter (these are lighter — they don't block the board)
+          // Also invalidate history and billing counter (these are lighter â€” they don't block the board)
           queryClient.invalidateQueries({ queryKey: ['order-history'] });
           queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
         } else {
-          // Fallback: no ID in payload — full refetch
+          // Fallback: no ID in payload â€” full refetch
           queryClient.invalidateQueries({ queryKey: ['live-orders'] });
           queryClient.invalidateQueries({ queryKey: ['order-history'] });
           queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
@@ -499,7 +498,7 @@ function DashboardShell() {
 
   useEffect(() => {
     void refreshLiveOrderCount();
-  }, [location.pathname, refreshLiveOrderCount]);
+  }, [refreshLiveOrderCount]);
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -538,8 +537,8 @@ function DashboardShell() {
     });
 
     driverObj.drive();
+  }, [isLoading, isPlanLoading, showFirstTimeDemo, canShowFirstTimeDemo, business, demoStorageKey, navigate, notifications.length]);
 
-  }, [business, canShowFirstTimeDemo, demoStorageKey, isLoading, navigate, showFirstTimeDemo]);
 
   if (isLoading) {
     return <ScreenLoader message="Syncing profile..." />;
@@ -603,15 +602,15 @@ function DashboardShell() {
 
   const navItems = [
     ...(role === 'WAITER'
-      ? [{ to: '/app/waiter', label: 'Waiter Ops', icon: <Receipt size={18} />, badge: liveOrderCount }]
+      ? [{ to: '/app/waiter', label: 'Waiter Ops', icon: <Receipt size={18} />, badge: liveOrderCount, isLocked: !features.hasWaiterApp }]
       : []),
     ...(canAccessDashboard ? [{ to: '/app', label: 'Dashboard', icon: <LayoutDashboard size={18} /> }] : []),
     ...(canAccessMenu ? [{ to: '/app/menu', label: 'Menu', icon: <UtensilsCrossed size={18} /> }] : []),
     ...(canAccessTables ? [{ to: '/app/tables', label: 'Tables & QR', icon: <Store size={18} /> }] : []),
     ...(canAccessOrders && role !== 'WAITER' ? [{ to: '/app/orders', label: 'Live Orders', icon: <Receipt size={18} />, badge: liveOrderCount }] : []),
-    ...(canAccessAssistedOrdering ? [{ to: '/app/assisted-ordering', label: 'Assisted Ordering', icon: <Receipt size={18} /> }] : []),
+    ...(canAccessAssistedOrdering ? [{ to: '/app/assisted-ordering', label: 'Assisted Ordering', icon: <Receipt size={18} />, isLocked: !features.hasWaiterRole }] : []),
     ...(canAccessBilling ? [{ to: '/app/billing', label: 'Billing', icon: <CreditCard size={18} /> }] : []),
-    ...(canAccessAnalytics ? [{ to: '/app/analytics', label: 'Analytics', icon: <BarChart3 size={18} /> }] : []),
+    ...(canAccessAnalytics ? [{ to: '/app/analytics', label: 'Analytics', icon: <BarChart3 size={18} />, badge: features.hasAdvancedAnalytics ? 0 : 'LOCKED', isLocked: !features.hasAdvancedAnalytics }] : []),
     ...(canAccessSettings ? [{ to: '/app/settings', label: 'Settings', icon: <Settings2 size={18} /> }] : []),
   ];
 
@@ -647,31 +646,36 @@ function DashboardShell() {
         </div>
 
         <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto overflow-x-hidden custom-scrollbar">
-          {navItems.map(({ to, label, icon, badge }) => {
+          {navItems.map(({ to, label, icon, badge, isLocked }: any) => {
             const active = location.pathname === to;
             return (
               <Link
                 key={to}
-                to={to}
+                to={isLocked ? '/app/subscription' : to}
                 id={`nav-${label.toLowerCase().replace(/ & /g, '-').replace(' ', '-')}`}
                 className={`flex items-center ${sidebarCollapsed ? 'justify-center' : ''} gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all relative group border ${
                   active ? 'border-blue-500/20' : 'border-transparent'
-                }`}
+                } ${isLocked ? 'opacity-60 grayscale-[0.5]' : ''}`}
                 style={{
                   background: active ? 'var(--sidebar-item-active-bg)' : undefined,
-                  color: active ? 'var(--sidebar-text-active)' : 'var(--sidebar-text)',
+                  color: isLocked ? '#94a3b8' : (active ? 'var(--sidebar-text-active)' : 'var(--sidebar-text)'),
                 }}
                 onClick={() => setMobileNavOpen(false)}
-                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--sidebar-item-hover-bg)'; }}
-                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = ''; }}
+                onMouseEnter={(e) => { if (!active && !isLocked) e.currentTarget.style.background = 'var(--sidebar-item-hover-bg)'; }}
+                onMouseLeave={(e) => { if (!active && !isLocked) e.currentTarget.style.background = ''; }}
               >
                 <span className="flex-shrink-0 relative">
                   {icon}
                   {active && <span className="absolute -inset-1.5 rounded-lg bg-blue-400/25 blur-sm -z-10" />}
                 </span>
                 {!sidebarCollapsed && <span className="truncate">{label}</span>}
-                {badge != null && badge > 0 && (
-                  <span className="ml-auto text-[10px] font-black px-1.5 py-0.5 rounded-full bg-blue-500 text-white">
+                {isLocked && !sidebarCollapsed && (
+                   <span className="ml-auto text-[8px] font-black px-1 py-0.5 rounded bg-amber-500/20 text-amber-500 uppercase tracking-widest border border-amber-500/30">
+                     PRO
+                   </span>
+                )}
+                {badge != null && !isLocked && (typeof badge === 'number' ? badge > 0 : true) && (
+                  <span className={`ml-auto text-[10px] font-black px-1.5 py-0.5 rounded-full ${typeof badge === 'string' ? 'bg-slate-700 text-slate-400' : 'bg-blue-500 text-white'}`}>
                     {badge}
                   </span>
                 )}

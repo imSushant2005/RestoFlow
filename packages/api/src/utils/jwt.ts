@@ -6,10 +6,16 @@ export interface JwtPayload {
   id: string;
   tenantId: string;
   role: UserRole;
+  email: string;
 }
 
 export const generateTokens = (payload: JwtPayload) => {
-  const plainPayload = { id: payload.id, tenantId: payload.tenantId, role: payload.role };
+  const plainPayload = { 
+    id: payload.id, 
+    tenantId: payload.tenantId, 
+    role: payload.role,
+    email: payload.email
+  };
   const accessToken = jwt.sign(plainPayload, jwtConfig.secret, {
     expiresIn: jwtConfig.expiresIn as any,
   });

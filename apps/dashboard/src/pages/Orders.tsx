@@ -3,7 +3,8 @@ import { api } from '../lib/api';
 import { useCallback, useEffect, useMemo, useState, memo } from 'react';
 import { format } from 'date-fns';
 import { formatINR } from '../lib/currency';
-import { CreditCard, ReceiptText, RefreshCw, Signal, XCircle, Zap, ShoppingBag, UtensilsCrossed, Clock, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
+import { CreditCard, ReceiptText, RefreshCw, Signal, XCircle, Zap, ShoppingBag, UtensilsCrossed, Clock, ChevronDown, ChevronUp, GripVertical, CheckCircle, FileText, Trash2 } from 'lucide-react';
+import { InvoiceModal } from './InvoicesPage';
 import { 
   DndContext, 
   DragOverlay, 
@@ -17,6 +18,7 @@ import {
   DragEndEvent,
   defaultDropAnimationSideEffects
 } from '@dnd-kit/core';
+import { usePlanFeatures } from '../hooks/usePlanFeatures';
 import { CSS } from '@dnd-kit/utilities';
 
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER';
@@ -130,7 +132,8 @@ const TicketCard = memo(({
   finishPending,
   paymentPending,
   onFinishSession,
-  onCompleteSession
+  onCompleteSession,
+  onViewInvoice
 }: {
   ticket: any;
   canCloseSession: boolean;
@@ -140,6 +143,7 @@ const TicketCard = memo(({
   paymentPending: boolean;
   onFinishSession: (sessionId: string) => void;
   onCompleteSession: (sessionId: string, paymentMethod: 'cash' | 'online') => void;
+  onViewInvoice: (ticket: any) => void;
 }) => {
   const ticketOrders = Array.isArray(ticket?.orders) ? ticket.orders : [];
   const sessionStatus = String(ticket?.session?.sessionStatus || '').toUpperCase();
@@ -188,13 +192,49 @@ const TicketCard = memo(({
              </span>
           </div>
         </div>
-        <div className="text-right">
-          <span className="text-xl font-black text-blue-500">{formatINR(ticket.totalAmount || 0)}</span>
+        <div className="text-right flex flex-col items-end gap-1">
+          <div className="flex items-center gap-3">
+             {ticket.isSession && sessionStatus !== 'CLOSED' && (
+               <button 
+                 onClick={() => {
+                   if (!ticket.sessionId) return;
+                   const msg = ticketOrders.length > 0 
+                     ? "This session has active orders. Force clear and archive it?"
+                     : "Clear and archive this session?";
+                   if (window.confirm(msg)) {
+                     onCompleteSession(ticket.sessionId, (ticket.session?.bill?.paymentMethod || 'cash').toLowerCase() as any);
+                   }
+                 }}
+                 className="p-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+                 title="Force Clear Session"
+               >
+                 <Trash2 size={14} />
+               </button>
+             )}
+            <span className="text-xl font-black text-blue-500">{formatINR(ticket.totalAmount || 0)}</span>
+          </div>
           {ticket.isSession && sessionStatus && (
-            <div className="mt-1">
-              <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border border-slate-700">
+            <div className="flex flex-col items-end gap-1">
+              <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${
+                sessionStatus === 'CLOSED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
+                sessionStatus === 'AWAITING_BILL' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 
+                'bg-slate-800 text-slate-400 border-slate-700'
+              }`}>
                 {sessionStatus.replace(/_/g, ' ')}
               </span>
+              {ticket.session?.bill?.invoiceNumber && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-bold text-slate-500 tracking-tight">
+                    {ticket.session.bill.invoiceNumber}
+                  </span>
+                  <button 
+                    onClick={() => onViewInvoice(ticket)}
+                    className="p-1 rounded bg-slate-800 text-slate-500 hover:text-white transition-colors"
+                  >
+                    <FileText size={10} />
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -227,10 +267,13 @@ const TicketCard = memo(({
       {ticket.isSession && (
         <div className="mt-2 pt-4 border-t border-white/5 space-y-3">
           {isClosedSession ? (
-             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center">
-               <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-1">Settled</p>
+             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
+               <div className="flex justify-between items-center mb-1">
+                 <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Settled</p>
+                 <span className="text-[10px] font-black text-emerald-500/50">{sessionPaymentMethod}</span>
+               </div>
                <p className="text-[11px] font-semibold text-emerald-400/70">
-                 Payment via {sessionPaymentMethod.toLowerCase()}. Archived in history.
+                 Order completed and archived in history.
                </p>
              </div>
           ) : (
@@ -285,10 +328,26 @@ const TicketCard = memo(({
                     }}
                     disabled={finishPending || paymentPending}
                     className="rounded-xl bg-blue-600 px-5 py-3 text-xs font-black text-white hover:bg-blue-500 transition-all disabled:opacity-50"
+                    title={selectedBillAction === 'AWAITING_BILL' ? 'Generate Bill' : 'Settle & Close'}
                   >
                     <ReceiptText size={16} />
                   </button>
                 </div>
+              )}
+              {sessionStatus === 'AWAITING_BILL' && (
+                <button
+                  onClick={() => {
+                    if (!ticket.sessionId) return;
+                    const isPaid = ticket.session?.bill?.paymentStatus === 'PAID';
+                    if (!isPaid && !window.confirm("Payment not recorded. Clear and archive this session anyway?")) return;
+                    onCompleteSession(ticket.sessionId, (ticket.session?.bill?.paymentMethod || 'cash').toLowerCase() as any);
+                  }}
+                  disabled={paymentPending}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-3 text-xs font-black text-white shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.97]"
+                >
+                  <CheckCircle size={14} />
+                  Clear Session & Archive
+                </button>
               )}
             </>
           )}
@@ -328,24 +387,31 @@ const KanbanColumn = ({ id, label, color, bg, badge, children, pulse, isActive }
 
 const PipelineCard = memo(({
   order,
+  hasKDS,
   canSetKitchenStages,
   canSetServiceStages,
   isStatusPending,
-  onUpdateStatus
+  onUpdateStatus,
+  onCompleteSession,
+  isCompletePending,
+  plan
 }: {
   order: any;
+  hasKDS: boolean;
   canSetKitchenStages: boolean;
   canSetServiceStages: boolean;
   isStatusPending: boolean;
   onUpdateStatus: (id: string, status: string, cancelReason?: string) => void;
+  onCompleteSession?: (sessionId: string, paymentMethod: 'cash' | 'online', shouldClose: boolean) => void;
+  isCompletePending?: boolean;
+  plan?: string;
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(order?.status === 'NEW');
   const currentStatus = String(order?.status || '').toUpperCase();
   const createdAtMs = toValidTimestamp(order?.createdAt);
   const elapsedMinutes = createdAtMs > 0 ? Math.max(0, Math.floor((Date.now() - createdAtMs) / 60000)) : 0;
   const isUrgent = elapsedMinutes >= 15 && ['NEW', 'ACCEPTED', 'PREPARING'].includes(currentStatus);
   const isSessionOrder = Boolean(order?.diningSessionId);
-  const sessionStatus = String(order?.diningSession?.sessionStatus || '').toUpperCase();
   
   const {
     attributes,
@@ -383,17 +449,38 @@ const PipelineCard = memo(({
           <div {...attributes} {...listeners} className="p-1 cursor-grab active:cursor-grabbing text-slate-600 hover:text-slate-400 transition-colors">
             <GripVertical size={16} />
           </div>
-          <div className="flex flex-col gap-1">
-            <h3 className="text-base font-black text-white leading-none tracking-tight">
-              {order.orderNumber || `#${asOrderCode(order?.id)}`}
-            </h3>
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <div className="flex items-center gap-2">
+              <span 
+                className={`flex-shrink-0 flex items-center justify-center h-8 px-3 rounded-xl text-sm font-black tracking-tight shadow-lg shadow-blue-500/10 ${
+                  order.orderType === 'TAKEAWAY' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' :
+                  order.orderType === 'ZOMATO' ? 'bg-red-600/20 text-red-400 border border-red-500/30' :
+                  order.orderType === 'SWIGGY' ? 'bg-orange-600/20 text-orange-400 border border-orange-500/30' :
+                  'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
+                }`}
+              >
+                {order.orderNumber || `T-${asOrderCode(order?.id)}`}
+              </span>
+              {order.orderType === 'ZOMATO' && (
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-red-600/10 text-red-500 uppercase tracking-widest border border-red-500/20">ZOMATO</span>
+              )}
+              {order.orderType === 'SWIGGY' && (
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-orange-600/10 text-orange-500 uppercase tracking-widest border border-orange-500/20">SWIGGY</span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {order.table?.name ? (
-                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest leading-none">Table {order.table.name}</span>
+                <div className="flex items-center gap-1">
+                  <UtensilsCrossed size={10} className="text-emerald-500" />
+                  <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest leading-none">Table {order.table.name}</span>
+                </div>
               ) : (
-                <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest leading-none">
-                  {String(order.orderType || '').toUpperCase() === 'TAKEAWAY' ? 'Takeaway' : 'Walk-In'}
-                </span>
+                <div className="flex items-center gap-1">
+                  <ShoppingBag size={10} className="text-blue-400" />
+                  <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest leading-none">
+                    {order.orderType === 'TAKEAWAY' ? 'Takeaway' : order.orderType === 'ZOMATO' ? 'Zomato Delivery' : order.orderType === 'SWIGGY' ? 'Swiggy Delivery' : 'Quick Order'}
+                  </span>
+                </div>
               )}
             </div>
           </div>
@@ -436,7 +523,10 @@ const PipelineCard = memo(({
                      {item.menuItem?.name || item.name}
                    </span>
                    {item.notes && (
-                     <span className="mt-1 block text-[10px] font-semibold text-slate-500 leading-tight">↳ {item.notes}</span>
+                     <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-white/5 p-1.5 border border-white/5">
+                        <span className="text-[10px] text-blue-400 leading-none mt-0.5 font-black">↳</span>
+                        <span className="flex-1 text-[10px] font-bold text-slate-400 leading-snug italic">{item.notes}</span>
+                     </div>
                    )}
                 </div>
               </li>
@@ -454,13 +544,13 @@ const PipelineCard = memo(({
             <div className="flex flex-col gap-2.5">
               {currentStatus === 'NEW' && canSetKitchenStages && (
                 <div className="grid grid-cols-5 gap-2">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'ACCEPTED'); }}
-                    disabled={isStatusPending}
-                    className="col-span-3 rounded-xl bg-blue-600 hover:bg-blue-500 py-3 text-xs font-black text-white transition-all active:scale-[0.97] disabled:opacity-50"
-                  >
-                    Accept
-                  </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, hasKDS ? 'ACCEPTED' : 'READY'); }}
+                      disabled={isStatusPending}
+                      className={`col-span-3 rounded-xl py-3 text-xs font-black text-white transition-all active:scale-[0.97] disabled:opacity-50 ${plan === 'MINI' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20' : 'bg-blue-600 hover:bg-blue-500'}`}
+                    >
+                      {plan === 'MINI' ? 'Settle & Accept' : 'Accept'}
+                    </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'CANCELLED', 'Rejected'); }}
                     disabled={isStatusPending}
@@ -498,20 +588,25 @@ const PipelineCard = memo(({
                 </button>
               )}
               {currentStatus === 'SERVED' && isSessionOrder && (
-                <div className="rounded-xl bg-slate-900 border border-slate-700/50 p-3 text-center">
-                  <p className="text-xs font-bold text-slate-400">
-                    {sessionStatus === 'AWAITING_BILL' ? 'Awaiting Payment' : 'Served'}
-                  </p>
-                </div>
-              )}
-              {currentStatus === 'SERVED' && !isSessionOrder && canSetServiceStages && (
                 <button
-                   onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'RECEIVED'); }}
-                   disabled={isStatusPending}
-                   className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 py-3 text-xs font-black text-white"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const isPaid = order.diningSession?.bill?.paymentStatus === 'PAID';
+                    if (plan === 'MINI' && !isPaid) {
+                      onUpdateStatus(order.id, 'COMPLETE_SETTLE');
+                    } else if (order.diningSessionId && onCompleteSession) {
+                      onCompleteSession(
+                        order.diningSessionId, 
+                        order.diningSession?.bill?.paymentMethod || 'cash',
+                        true 
+                      );
+                    }
+                  }}
+                  disabled={isStatusPending || isCompletePending}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-3 text-xs font-black text-white shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.97]"
                 >
-                  <CreditCard size={14} />
-                  Mark Paid
+                  <CheckCircle size={14} />
+                  Order Complete
                 </button>
               )}
             </div>
@@ -528,13 +623,24 @@ export function Orders({ role }: { role?: string }) {
   const canViewSessions = effectiveRole !== 'KITCHEN';
   const canViewHistory = effectiveRole !== 'KITCHEN';
   const canCloseSession = effectiveRole === 'OWNER' || effectiveRole === 'MANAGER' || effectiveRole === 'CASHIER';
-  const canBulkClose = effectiveRole === 'OWNER' || effectiveRole === 'MANAGER';
-  const canToggleBusyMode = effectiveRole === 'OWNER' || effectiveRole === 'MANAGER';
+  const { features, plan } = usePlanFeatures();
+  const [localToast, setLocalToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+
+  useEffect(() => {
+    if (localToast) {
+      const timer = setTimeout(() => setLocalToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [localToast]);
   const canSetKitchenStages = ['OWNER', 'MANAGER', 'KITCHEN'].includes(effectiveRole);
   const canSetServiceStages = ['OWNER', 'MANAGER', 'CASHIER', 'WAITER'].includes(effectiveRole);
+  const canToggleBusyMode = effectiveRole === 'OWNER' || effectiveRole === 'MANAGER';
+  const canBulkClose = canCloseSession;
   const [activeTab, setActiveTab] = useState<'PIPELINE' | 'SESSIONS' | 'HISTORY'>('PIPELINE');
   const [busyMode, setBusyMode] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [pendingMiniSettle, setPendingMiniSettle] = useState<{ id: string; status: string; order: any } | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
   
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -547,9 +653,7 @@ export function Orders({ role }: { role?: string }) {
     };
   }, []);
 
-  const [billSelections, setBillSelections] = useState<Record<string, BillWorkflowAction>>({});
-
-  const { data: businessSettings } = useQuery<{ slug?: string }>({
+  const { data: businessSettings } = useQuery<any>({
     queryKey: ['settings-business'],
     queryFn: async () => {
       const res = await api.get('/settings/business');
@@ -602,7 +706,7 @@ export function Orders({ role }: { role?: string }) {
     },
     staleTime: 1000 * 30,
   });
-  const historyOrders = historyResponse?.data || [];
+
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, status, cancelReason, expectedVersion }: any) => {
@@ -661,18 +765,114 @@ export function Orders({ role }: { role?: string }) {
   });
 
   const completeSessionMutation = useMutation({
-    mutationFn: async ({ sessionId, paymentMethod }: { sessionId: string; paymentMethod: 'cash' | 'online' }) => {
+    mutationFn: async ({ sessionId, paymentMethod, shouldClose }: { sessionId: string; paymentMethod: 'cash' | 'online'; shouldClose?: boolean }) => {
       const slug = await resolveTenantSlug();
       if (!slug) {
         throw new Error('Tenant slug missing. Complete Business Profile setup first.');
       }
-      return api.post(`/public/${slug}/sessions/${sessionId}/complete`, { paymentMethod });
+      return api.post(`/public/${slug}/sessions/${sessionId}/complete`, { paymentMethod, shouldClose });
     },
     onSuccess: refreshOperationalData,
     onError: (error: any) => {
       window.alert(error?.response?.data?.error || error?.message || 'Could not confirm payment for this bill.');
     },
   });
+
+  const [activeDragOrder, setActiveDragOrder] = useState<any>(null);
+  const [billSelections, setBillSelections] = useState<Record<string, BillWorkflowAction>>({});
+  
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  const historyTickets = useMemo(() => {
+    const historyOrders = historyResponse?.data || [];
+    return Object.values(
+      historyOrders.reduce((acc: any, order: any) => {
+        const groupId = order?.diningSessionId ? `history_session_${order.diningSessionId}` : `history_order_${order.id}`;
+        if (!acc[groupId]) {
+          acc[groupId] = {
+            id: groupId,
+            isSession: Boolean(order?.diningSessionId),
+            sessionId: order?.diningSessionId,
+            session: order?.diningSession,
+            table: order?.table,
+            orderType: order?.orderType,
+            customerName: order?.diningSession?.customer?.name || order?.customerName,
+            customerPhone: order?.diningSession?.customer?.phone || order?.customerPhone,
+            orders: [],
+            createdAt: order?.diningSession?.openedAt || order?.createdAt,
+            totalAmount: 0,
+          };
+        }
+        acc[groupId].orders.push(order);
+        acc[groupId].totalAmount += toAmount(order?.totalAmount);
+        return acc;
+      }, {}),
+    ).sort((a: any, b: any) => toValidTimestamp(b?.createdAt) - toValidTimestamp(a?.createdAt));
+  }, [historyResponse?.data]);
+
+  const handleSelectBillAction = useCallback((sessionId: string, action: string) => {
+    setBillSelections((previous) => ({
+      ...previous,
+      [sessionId]: action as BillWorkflowAction,
+    }));
+  }, []);
+
+  const handleFinishSession = useCallback((sessionId: string) => {
+    finishSessionMutation.mutate({ sessionId });
+  }, [finishSessionMutation]);
+
+  const handleCompleteSession = useCallback((sessionId: string, paymentMethod: 'cash' | 'online') => {
+    completeSessionMutation.mutate({ sessionId, paymentMethod });
+  }, [completeSessionMutation]);
+
+  const handleUpdateStatus = useCallback((id: string, status: string, cancelReason?: string) => {
+    const order = liveOrders.find((o: any) => o.id === id);
+    if (!order) return;
+
+    // Intercept Settle for Mini Plan to ask for Payment Method
+    const isPaid = order.diningSession?.bill?.paymentStatus === 'PAID';
+    if (plan === 'MINI' && !isPaid && (status === 'READY' || status === 'COMPLETE_SETTLE') && order.diningSessionId) {
+      setPendingMiniSettle({ id, status, order });
+      return;
+    }
+
+    statusMutation.mutate({ 
+      id, 
+      status, 
+      cancelReason, 
+      expectedVersion: order?.version || 0 
+    }, {
+      onError: () => {
+        setLocalToast({ message: 'Failed to update status. Snapping back.', type: 'error' });
+      }
+    });
+  }, [liveOrders, statusMutation, plan]);
+
+  const pipelineColumns = useMemo(() => {
+    const cols = [
+      { id: 'col-new', label: 'NEW ORDERS', color: 'text-blue-700', bg: 'bg-blue-50/50', badge: 'bg-blue-100 text-blue-800', filter: (o: any) => o.status === 'NEW', pulse: true },
+      { id: 'col-kitchen', label: 'IN KITCHEN', color: 'text-amber-700', bg: 'bg-amber-50/50', badge: 'bg-amber-100 text-amber-800', filter: (o: any) => o.status === 'ACCEPTED' || o.status === 'PREPARING', pulse: false },
+      { id: 'col-ready', label: 'READY TO SERVE', color: 'text-emerald-700', bg: 'bg-emerald-50/50', badge: 'bg-emerald-100 text-emerald-800', filter: (o: any) => o.status === 'READY', pulse: false },
+      { id: 'col-served', label: 'SERVED', color: 'text-slate-500', bg: 'bg-slate-100/50', badge: 'bg-slate-200 text-slate-600', filter: (o: any) => o.status === 'SERVED', pulse: false },
+    ];
+
+    if (!features.hasKDS) {
+      return cols.filter(c => c.id !== 'col-kitchen');
+    }
+    return cols;
+  }, [features.hasKDS]);
+
+  const sortedLiveOrders = useMemo(() => {
+    return [...liveOrders].sort((a: any, b: any) => 
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  }, [liveOrders]);
 
   if (isLoading) {
     return (
@@ -694,6 +894,7 @@ export function Orders({ role }: { role?: string }) {
       </div>
     );
   }
+
 
   const groupedLive = Object.values(
     liveOrders.reduce((acc: any, order: any) => {
@@ -720,33 +921,6 @@ export function Orders({ role }: { role?: string }) {
     }, {}),
   ).sort((a: any, b: any) => toValidTimestamp(b?.createdAt) - toValidTimestamp(a?.createdAt));
 
-  const historyTickets = useMemo(
-    () =>
-      Object.values(
-        historyOrders.reduce((acc: any, order: any) => {
-          const groupId = order?.diningSessionId ? `history_session_${order.diningSessionId}` : `history_order_${order.id}`;
-          if (!acc[groupId]) {
-            acc[groupId] = {
-              id: groupId,
-              isSession: Boolean(order?.diningSessionId),
-              sessionId: order?.diningSessionId,
-              session: order?.diningSession,
-              table: order?.table,
-              orderType: order?.orderType,
-              customerName: order?.diningSession?.customer?.name || order?.customerName,
-              customerPhone: order?.diningSession?.customer?.phone || order?.customerPhone,
-              orders: [],
-              createdAt: order?.diningSession?.openedAt || order?.createdAt,
-              totalAmount: 0,
-            };
-          }
-          acc[groupId].orders.push(order);
-          acc[groupId].totalAmount += toAmount(order?.totalAmount);
-          return acc;
-        }, {}),
-      ).sort((a: any, b: any) => toValidTimestamp(b?.createdAt) - toValidTimestamp(a?.createdAt)),
-    [historyOrders],
-  );
 
   const connectionTone = {
     label: 'Synced',
@@ -754,15 +928,6 @@ export function Orders({ role }: { role?: string }) {
   };
   const overviewTimestamp = format(new Date(), 'MMM d, yyyy | h:mm a');
   const readyOrders = liveOrders.filter((order: any) => order.status === 'READY');
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
-
-  const [activeDragOrder, setActiveDragOrder] = useState<any>(null);
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -776,50 +941,146 @@ export function Orders({ role }: { role?: string }) {
     if (!over) return;
 
     const orderId = active.id as string;
-    const targetColId = over.id as string;
     const order = active.data.current?.order;
     if (!order) return;
 
-    let newStatus = '';
-    if (targetColId === 'col-kitchen') {
-      if (order.status === 'NEW') newStatus = 'ACCEPTED';
-      else if (order.status === 'ACCEPTED') newStatus = 'PREPARING';
-    } else if (targetColId === 'col-ready') {
-      if (['NEW', 'ACCEPTED', 'PREPARING'].includes(order.status)) newStatus = 'READY';
-    } else if (targetColId === 'col-served') {
-      if (order.status === 'READY') newStatus = 'SERVED';
+    const targetStatusMap: Record<string, string> = {
+      'col-new': 'NEW',
+      'col-kitchen': 'ACCEPTED',
+      'col-ready': 'READY',
+      'col-served': 'SERVED',
+    };
+
+    let targetColId = over.id as string;
+    
+    // If we dropped on top of another card, find its container
+    if (!targetStatusMap[targetColId]) {
+      const overOrder = liveOrders.find((o: any) => o.id === targetColId);
+      if (overOrder) {
+        if (overOrder.status === 'NEW') targetColId = 'col-new';
+        else if (['ACCEPTED', 'PREPARING'].includes(overOrder.status)) targetColId = 'col-kitchen';
+        else if (overOrder.status === 'READY') targetColId = 'col-ready';
+        else if (overOrder.status === 'SERVED') targetColId = 'col-served';
+      }
     }
 
+    const newStatus = targetStatusMap[targetColId];
+
     if (newStatus && newStatus !== order.status) {
-      statusMutation.mutate({ id: orderId, status: newStatus, expectedVersion: order.version || 0 });
+      // Intercept Drag for Mini Plan to ask for Payment Method
+      // ONLY IF NOT ALREADY PAID
+      const isPaid = order.diningSession?.bill?.paymentStatus === 'PAID';
+      if (plan === 'MINI' && order.status === 'NEW' && newStatus === 'READY' && order.diningSessionId && !isPaid) {
+        setPendingMiniSettle({ id: orderId, status: newStatus, order });
+        return;
+      }
+      
+      statusMutation.mutate({ 
+        id: orderId, 
+        status: newStatus, 
+        expectedVersion: order.version || 0 
+      }, {
+        onError: () => {
+          setLocalToast({ message: 'Failed to update status. Snapping back.', type: 'error' });
+        }
+      });
     }
   };
 
-  const handleSelectBillAction = useCallback((sessionId: string, action: string) => {
-    setBillSelections((previous) => ({
-      ...previous,
-      [sessionId]: action as BillWorkflowAction,
-    }));
-  }, []);
-
-  const handleFinishSession = useCallback((sessionId: string) => {
-    finishSessionMutation.mutate({ sessionId });
-  }, [finishSessionMutation]);
-
-  const handleCompleteSession = useCallback((sessionId: string, paymentMethod: 'cash' | 'online') => {
-    completeSessionMutation.mutate({ sessionId, paymentMethod });
-  }, [completeSessionMutation]);
-
-  const handleUpdateStatus = useCallback((id: string, status: string, cancelReason?: string) => {
-    const order = liveOrders.find((o: any) => o.id === id);
-    statusMutation.mutate({ id, status, cancelReason, expectedVersion: order?.version || 0 });
-  }, [liveOrders, statusMutation]);
 
 
 
 
   return (
-    <div className="flex h-full min-h-0 flex-col p-3 sm:p-5 lg:p-8">
+    <>
+      <div className="flex h-full min-h-0 flex-col p-3 sm:p-5 lg:p-8 relative">
+      {pendingMiniSettle && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setPendingMiniSettle(null)} />
+          <div className="relative w-full max-w-sm rounded-[2.5rem] bg-[#0F1115] p-8 shadow-2xl border border-white/5 animate-in zoom-in-95 duration-300">
+             <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 rounded-3xl bg-blue-600/20 flex items-center justify-center mb-6 border border-blue-500/30">
+                  <CreditCard className="text-blue-500" size={32} />
+                </div>
+                <h2 className="text-xl font-black text-white tracking-tight">Settle & Accept</h2>
+                <p className="mt-2 text-sm text-slate-400 font-bold">
+                  How should we record the payment for <span className="text-blue-400">Token {pendingMiniSettle.order.orderNumber || asOrderCode(pendingMiniSettle.order.id)}</span>?
+                </p>
+                <div className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 text-emerald-400 text-sm font-black tracking-widest uppercase">
+                  Total {formatINR(pendingMiniSettle.order.totalAmount)}
+                </div>
+             </div>
+
+             <div className="mt-8 grid grid-cols-1 gap-3">
+                <button
+                  onClick={() => {
+                    const { id, status, order } = pendingMiniSettle;
+                    setPendingMiniSettle(null);
+                    const shouldClose = status === 'COMPLETE_SETTLE';
+                    completeSessionMutation.mutate({ 
+                      sessionId: order.diningSessionId, 
+                      paymentMethod: 'cash', 
+                      shouldClose 
+                    });
+                    if (!shouldClose) {
+                      statusMutation.mutate({ id, status: 'READY', expectedVersion: order.version || 0 });
+                    }
+                  }}
+                  className="group flex items-center justify-between w-full h-16 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                >
+                  <div className="flex items-center gap-4">
+                    <ReceiptText size={20} className="group-hover:scale-110 transition-transform" />
+                    <span>CASH PAYMENT</span>
+                  </div>
+                  <Zap size={16} className="opacity-50" />
+                </button>
+
+                <button
+                  onClick={() => {
+                    const { id, status, order } = pendingMiniSettle;
+                    setPendingMiniSettle(null);
+                    const shouldClose = status === 'COMPLETE_SETTLE';
+                    completeSessionMutation.mutate({ 
+                      sessionId: order.diningSessionId, 
+                      paymentMethod: 'online', 
+                      shouldClose 
+                    });
+                    if (!shouldClose) {
+                      statusMutation.mutate({ id, status: 'READY', expectedVersion: order.version || 0 });
+                    }
+                  }}
+                  className="group flex items-center justify-between w-full h-16 px-6 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black transition-all active:scale-95 shadow-lg shadow-blue-500/20"
+                >
+                  <div className="flex items-center gap-4">
+                    <Signal size={20} className="group-hover:scale-110 transition-transform" />
+                    <span>ONLINE / UPI</span>
+                  </div>
+                  <RefreshCw size={16} className="opacity-50" />
+                </button>
+
+                <button
+                  onClick={() => setPendingMiniSettle(null)}
+                  className="mt-2 w-full h-12 text-sm font-bold text-slate-500 hover:text-slate-300 transition-all"
+                >
+                  Cancel & Rollback
+                </button>
+             </div>
+          </div>
+        </div>
+      )}
+      {localToast && (
+        <div 
+          className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl border backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300"
+          style={{ 
+            background: localToast.type === 'error' ? 'rgba(239, 68, 68, 0.9)' : 'rgba(16, 185, 129, 0.9)',
+            borderColor: 'rgba(255,255,255,0.1)',
+            color: 'white'
+          }}
+        >
+          <div className="h-2 w-2 rounded-full bg-white animate-pulse shadow-[0_0_10px_white]" />
+          <span className="text-sm font-black tracking-tight">{localToast.message}</span>
+        </div>
+      )}
       <div className="mb-4 flex flex-col gap-3 lg:mb-6">
         <div
           className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border p-2"
@@ -927,13 +1188,8 @@ export function Orders({ role }: { role?: string }) {
             className={`flex flex-1 flex-col gap-4 overflow-y-auto custom-scrollbar p-3 sm:p-4 lg:h-full lg:flex-row lg:gap-6 lg:overflow-x-auto lg:overflow-y-hidden lg:p-6 relative ${isOffline ? 'opacity-40 pointer-events-none' : ''}`}
             style={{ background: 'var(--kanban-bg)' }}
           >
-            {[
-              { id: 'col-new', label: 'NEW ORDERS', color: 'text-blue-700', bg: 'bg-blue-50/50', badge: 'bg-blue-100 text-blue-800', filter: (o: any) => o.status === 'NEW', pulse: true },
-              { id: 'col-kitchen', label: 'IN KITCHEN', color: 'text-amber-700', bg: 'bg-amber-50/50', badge: 'bg-amber-100 text-amber-800', filter: (o: any) => o.status === 'ACCEPTED' || o.status === 'PREPARING', pulse: false },
-              { id: 'col-ready', label: 'READY TO SERVE', color: 'text-emerald-700', bg: 'bg-emerald-50/50', badge: 'bg-emerald-100 text-emerald-800', filter: (o: any) => o.status === 'READY', pulse: false },
-              { id: 'col-served', label: 'SERVED', color: 'text-slate-500', bg: 'bg-slate-100/50', badge: 'bg-slate-200 text-slate-600', filter: (o: any) => o.status === 'SERVED', pulse: false },
-            ].map(({ id, label, color, bg, badge, filter, pulse }) => {
-              const colOrders = liveOrders.filter(filter);
+            {pipelineColumns.map(({ id, label, color, bg, badge, filter, pulse }) => {
+              const colOrders = sortedLiveOrders.filter(filter);
               return (
                 <KanbanColumn 
                   key={id} 
@@ -949,10 +1205,14 @@ export function Orders({ role }: { role?: string }) {
                     <PipelineCard
                       key={order.id}
                       order={order}
+                      hasKDS={features.hasKDS}
                       canSetKitchenStages={canSetKitchenStages}
                       canSetServiceStages={canSetServiceStages}
                       isStatusPending={statusMutation.isPending && statusMutation.variables?.id === order.id}
                       onUpdateStatus={handleUpdateStatus}
+                      onCompleteSession={(sid, method, close) => completeSessionMutation.mutate({ sessionId: sid, paymentMethod: method, shouldClose: close })}
+                      isCompletePending={completeSessionMutation.isPending}
+                      plan={plan}
                     />
                   ))}
                   {colOrders.length === 0 && (
@@ -978,6 +1238,7 @@ export function Orders({ role }: { role?: string }) {
               <div className="w-[300px] pointer-events-none opacity-90 scale-105 rotate-2">
                 <PipelineCard
                   order={activeDragOrder}
+                  hasKDS={features.hasKDS}
                   canSetKitchenStages={false}
                   canSetServiceStages={false}
                   isStatusPending={false}
@@ -1004,6 +1265,14 @@ export function Orders({ role }: { role?: string }) {
                 paymentPending={completeSessionMutation.isPending && completeSessionMutation.variables?.sessionId === ticket.sessionId}
                 onFinishSession={handleFinishSession}
                 onCompleteSession={handleCompleteSession}
+                onViewInvoice={(t) => {
+                  const sessionBill = t.session?.bill || t.diningSession?.bill;
+                  setSelectedInvoice({
+                    ...t,
+                    items: (t.orders || []).flatMap((o: any) => o.items || []),
+                    diningSession: { bill: sessionBill }
+                  });
+                }}
               />
             ))}
             {groupedLive.length === 0 && (
@@ -1040,6 +1309,14 @@ export function Orders({ role }: { role?: string }) {
                 paymentPending={false}
                 onFinishSession={handleFinishSession}
                 onCompleteSession={handleCompleteSession}
+                onViewInvoice={(t) => {
+                  const sessionBill = t.session?.bill || t.diningSession?.bill;
+                  setSelectedInvoice({
+                    ...t,
+                    items: (t.orders || []).flatMap((o: any) => o.items || []),
+                    diningSession: { bill: sessionBill }
+                  });
+                }}
               />
             ))}
             {historyTickets.length === 0 && (
@@ -1052,5 +1329,17 @@ export function Orders({ role }: { role?: string }) {
         </div>
       )}
     </div>
+
+      {selectedInvoice && (
+        <InvoiceModal
+          order={selectedInvoice}
+          businessName={businessSettings?.businessName || 'Your Venue'}
+          businessPhone={businessSettings?.phone || '-'}
+          businessGstin={businessSettings?.gstin || '-'}
+          taxRate={Number(businessSettings?.taxRate || 5)}
+          onClose={() => setSelectedInvoice(null)}
+        />
+      )}
+    </>
   );
 }

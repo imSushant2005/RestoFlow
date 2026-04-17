@@ -22,7 +22,7 @@ const ROLE_ALLOWED_STATUS_UPDATES = {
     OWNER: new Set(VALID_ORDER_STATUSES),
     MANAGER: new Set(VALID_ORDER_STATUSES),
     KITCHEN: new Set(['ACCEPTED', 'PREPARING', 'READY']),
-    CASHIER: new Set(['SERVED', 'RECEIVED', 'CANCELLED']),
+    CASHIER: new Set(VALID_ORDER_STATUSES),
     WAITER: new Set(['SERVED']),
 };
 const leanOrderItemSelect = {
@@ -80,6 +80,17 @@ const LIVE_ORDERS_SELECT = {
             id: true,
             openedAt: true,
             sessionStatus: true,
+            isBillGenerated: true,
+            bill: {
+                select: {
+                    id: true,
+                    invoiceNumber: true,
+                    totalAmount: true,
+                    paymentStatus: true,
+                    paymentMethod: true,
+                    paidAt: true,
+                },
+            },
         },
     },
     items: {
@@ -102,6 +113,26 @@ const HISTORY_ORDERS_SELECT = {
             id: true,
             name: true,
         },
+    },
+    diningSession: {
+        select: {
+            id: true,
+            sessionStatus: true,
+            isBillGenerated: true,
+            bill: {
+                select: {
+                    id: true,
+                    invoiceNumber: true,
+                    totalAmount: true,
+                    paymentStatus: true,
+                    paymentMethod: true,
+                    paidAt: true,
+                },
+            },
+        },
+    },
+    items: {
+        select: orderItemSelect,
     },
 };
 const orderSelect = {
@@ -211,19 +242,25 @@ async function resolveStaffName(db, userId) {
     });
     return user?.name?.trim() || 'Staff';
 }
-async function generateOrderNumberForTenant(tenantId) {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let orderNumber = '';
-    let exists = true;
-    while (exists) {
-        orderNumber = `#${Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')}`;
-        const existing = await prisma_1.prisma.order.findFirst({
-            where: { tenantId, orderNumber },
-            select: { id: true },
-        });
-        exists = Boolean(existing);
-    }
-    return orderNumber;
+async function generateOrderNumberForTenant(tenantId, orderType) {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const countForDay = await prisma_1.prisma.order.count({
+        where: {
+            tenantId,
+            createdAt: { gte: startOfDay },
+        },
+    });
+    const nextNumber = countForDay + 1;
+    const uppercaseType = String(orderType || '').toUpperCase();
+    let prefix = 'T-'; // Default Takeaway
+    if (uppercaseType === 'DINE_IN')
+        prefix = 'D-';
+    else if (uppercaseType === 'ZOMATO')
+        prefix = 'Z-';
+    else if (uppercaseType === 'SWIGGY')
+        prefix = 'S-';
+    return `${prefix}${nextNumber}`;
 }
 async function buildServerPricedOrderPayload(db, tenantId, items) {
     if (!Array.isArray(items) || items.length === 0) {
@@ -717,7 +754,7 @@ const createAssistedOrder = async (req, res) => {
                     select: { id: true, isActive: true, name: true, phone: true },
                 });
             }
-            const orderNumber = await generateOrderNumberForTenant(tenant.id);
+            const orderNumber = await generateOrderNumberForTenant(tenant.id, orderType);
             const isDirectBill = fulfillmentMode === 'DIRECT_BILL';
             const shouldSettleImmediately = isDirectBill && (markPaid || Boolean(paymentMethod));
             const sessionStatus = isDirectBill
