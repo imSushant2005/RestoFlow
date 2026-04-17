@@ -56,9 +56,31 @@ function buildAllowedOrigins() {
 
 const allowedOrigins = buildAllowedOrigins();
 
+// Trusted origin patterns — used as fallback when CLIENT_URL / CORS_ORIGIN are not set.
+// These match any subdomain of Vercel and Railway deployments (standard indie stack).
+const TRUSTED_ORIGIN_PATTERNS = [
+  /\.vercel\.app$/,
+  /\.railway\.app$/,
+  /\.up\.railway\.app$/,
+];
+
 function isOriginAllowed(origin?: string | null) {
-  if (!origin) return !isProduction || allowedOrigins.length === 0;
-  return allowedOrigins.includes(origin);
+  // No origin header — server-to-server or same-origin request, always allow
+  if (!origin) return true;
+
+  // Explicit allow-list takes priority
+  if (allowedOrigins.includes(origin)) return true;
+
+  // Localhost always allowed (dev)
+  if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) return true;
+
+  // If no explicit list is configured, fall back to trusted deployment patterns
+  // This prevents the silent "all origins blocked" state when CLIENT_URL is missing.
+  if (allowedOrigins.length === 0) {
+    return TRUSTED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin));
+  }
+
+  return false;
 }
 
 app.disable('x-powered-by');
