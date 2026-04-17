@@ -1,11 +1,13 @@
 import { Request, Response } from 'express';
+import { randomUUID } from 'crypto';
 import { prisma, withPrismaRetry } from '../db/prisma';
 import { getIO, getSessionRoom, getTenantRoom } from '../socket';
 import { deleteCache, withCache } from '../services/cache.service';
+import { generateOrderNumber } from '../services/order-number.service';
 
 async function resolveTenantBySlugOrThrow(tenantSlug: string) {
   return withCache(
-    `tenant_by_slug_${tenantSlug}`,
+    `tenant_full_${tenantSlug}`, // Distinct key from tenant_meta_ used in public.controller
     async () =>
       withPrismaRetry(
         async () => {
@@ -94,7 +96,8 @@ export async function performSessionCompletion(
         const subtotal = existingSession.orders.reduce((sum, o) => sum + o.subtotal, 0);
         const taxAmount = existingSession.orders.reduce((sum, o) => sum + o.taxAmount, 0);
         const totalAmount = subtotal + taxAmount;
-        const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
+        // UUID-based invoice number — guaranteed unique, no collision with @unique constraint
+        const invoiceNumber = `INV-${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
 
         const bill = await tx.bill.create({
           data: {
@@ -565,8 +568,8 @@ export const addOrderToSession = async (req: Request, res: Response) => {
     const taxAmount = subtotal * (tenant.taxRate / 100);
     const totalAmount = subtotal + taxAmount;
 
-    // Generate order number
-    const orderNumber = `#${Date.now().toString(36).toUpperCase().slice(-6)}`;
+    // Generate order number — unified format using collision-resistant generator
+    const orderNumber = generateOrderNumber('DINE_IN');
 
     let order;
     try {
@@ -689,7 +692,8 @@ export const finishSession = async (req: Request, res: Response) => {
     const discountAmount = 0;
     const totalAmount = subtotal + taxAmount - discountAmount;
 
-    const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
+    // UUID-based invoice number — guaranteed unique, no collision with @unique constraint
+    const invoiceNumber = `INV-${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
 
     let result;
     try {

@@ -26540,6 +26540,7 @@ export namespace Prisma {
 
   export type OrderWhereUniqueInput = Prisma.AtLeast<{
     id?: string
+    tenantId_orderNumber?: OrderTenantIdOrderNumberCompoundUniqueInput
     AND?: OrderWhereInput | OrderWhereInput[]
     OR?: OrderWhereInput[]
     NOT?: OrderWhereInput | OrderWhereInput[]
@@ -26575,7 +26576,7 @@ export namespace Prisma {
     items?: OrderItemListRelationFilter
     review?: XOR<ReviewNullableRelationFilter, ReviewWhereInput> | null
     auditLogs?: OrderAuditLogListRelationFilter
-  }, "id">
+  }, "id" | "tenantId_orderNumber">
 
   export type OrderOrderByWithAggregationInput = {
     id?: SortOrder
@@ -30900,6 +30901,11 @@ export namespace Prisma {
   export type DiningSessionNullableRelationFilter = {
     is?: DiningSessionWhereInput | null
     isNot?: DiningSessionWhereInput | null
+  }
+
+  export type OrderTenantIdOrderNumberCompoundUniqueInput = {
+    tenantId: string
+    orderNumber: string
   }
 
   export type OrderCountOrderByAggregateInput = {

@@ -36,6 +36,9 @@ export function useRealtimeSocket({
   const handlersRef = useRef<RealtimeHandlers>(handlers);
   const onReconnectRef = useRef<typeof onReconnect>(onReconnect);
   const socketRef = useRef<Socket | null>(null);
+  // Tracks whether this is the very first connect or a subsequent reconnect.
+  // onReconnect (full query invalidation) should NOT fire on initial page load.
+  const isFirstConnectRef = useRef<boolean>(true);
 
 
   useEffect(() => {
@@ -81,8 +84,14 @@ export function useRealtimeSocket({
 
     const handleConnect = () => {
       setStatus('connected');
-      onReconnectRef.current?.();
-      socket.emit('sync:request', { reason: 'connect' }, () => undefined);
+      if (isFirstConnectRef.current) {
+        // Initial connect: do NOT fire onReconnect (avoids double-fetching all queries on page load)
+        isFirstConnectRef.current = false;
+      } else {
+        // Genuine reconnect: full state sync needed
+        onReconnectRef.current?.();
+        socket.emit('sync:request', { reason: 'reconnect' }, () => undefined);
+      }
     };
 
     const handleDisconnect = () => {
@@ -151,6 +160,12 @@ export function useRealtimeSocket({
       socket.disconnect();
       socketRef.current = null;
     };
+  }, [enabled, token]);
+
+  // Reset first-connect flag whenever the socket is re-created (useEffect re-runs)
+  // This ensures that after an auth change, the next connect is treated as initial again.
+  useEffect(() => {
+    isFirstConnectRef.current = true;
   }, [enabled, token]);
 
 

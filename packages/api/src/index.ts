@@ -30,6 +30,7 @@ import { initSocket, getSocketMetrics } from './socket';
 import { logger } from './utils/logger';
 import { tracingMiddleware } from './middlewares/tracing.middleware';
 import { tenantRateLimitMiddleware } from './middlewares/tenant-rate-limit.middleware';
+import { getRedisClient } from './services/cache.service';
 
 // Instrumentation handled by ./instrumentation
 
@@ -82,6 +83,23 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// C-7: Auth routes are brute-force targets — rate-limit them independently
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,                   // 20 auth requests per 15 min per IP
+  message: { error: 'Too many authentication attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const strictAuthLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,                    // Only 5 password reset attempts per hour per IP
+  message: { error: 'Too many password reset attempts. Please try again in 1 hour.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use('/public', apiLimiter);
 app.use(pinoHttp({ logger }));
 app.use(
@@ -110,22 +128,40 @@ app.get('/health/live', (_req, res) => {
 });
 
 app.get('/health/ready', async (_req, res) => {
+  const checks: Record<string, string> = {};
+  let overallStatus = 'ready';
+  let httpStatus = 200;
+
+  // DB check
   try {
     await checkPrismaReadiness();
-    res.json({
-      status: 'ready',
-      db: 'ok',
-      sockets: getSocketMetrics(),
-      version: '1.0.0',
-    });
+    checks.db = 'ok';
   } catch (error) {
-    res.status(503).json({
-      status: 'degraded',
-      db: 'unavailable',
-      sockets: getSocketMetrics(),
-      error: error instanceof Error ? error.message : 'Database readiness failed',
-    });
+    checks.db = 'unavailable';
+    overallStatus = 'degraded';
+    httpStatus = 503;
   }
+
+  // Redis check (non-fatal — degrades caching and rate limiting but doesn't crash API)
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      await redis.ping();
+      checks.redis = 'ok';
+    } catch {
+      checks.redis = 'unavailable';
+      if (overallStatus === 'ready') overallStatus = 'degraded';
+    }
+  } else {
+    checks.redis = 'not_configured';
+  }
+
+  res.status(httpStatus).json({
+    status: overallStatus,
+    ...checks,
+    sockets: getSocketMetrics(),
+    version: '1.0.0',
+  });
 });
 
 app.get('/health', async (_req, res) => {
@@ -137,6 +173,10 @@ app.get('/health', async (_req, res) => {
   }
 });
 
+// C-7: Auth rate limiters applied BEFORE the auth router
+app.use('/auth/login', authLimiter);
+app.use('/auth/register', authLimiter);
+app.use('/auth/forgot-password/reset', strictAuthLimiter);
 app.use('/auth', authRoutes);
 app.use('/menus', menuRoutes);
 app.use('/venue', tableRoutes);

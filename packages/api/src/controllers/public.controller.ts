@@ -3,6 +3,7 @@ import { prisma, withPrismaRetry } from '../db/prisma';
 import { getIO, getSessionRoom, getTenantRoom } from '../socket';
 import { getCache, setCache, deleteCache, withCache } from '../services/cache.service';
 import { transitionOrderStatus } from '../services/order.service';
+import { generateOrderNumber } from '../services/order-number.service';
 
 const WAITER_CALL_TYPES = new Set(['WAITER', 'BILL', 'WATER', 'EXTRA', 'HELP']);
 const ORDERABLE_SESSION_STATUSES = ['OPEN', 'PARTIALLY_SENT', 'ACTIVE'] as const;
@@ -113,7 +114,7 @@ async function resolveTenantIdBySlug(tenantSlug: string) {
 
 async function resolveTenantBySlug(tenantSlug: string) {
   return withCache(
-    `tenant_by_slug_${tenantSlug}`,
+    `tenant_meta_${tenantSlug}`, // 'tenant_meta' = short shape {id,taxRate}; distinct from 'tenant_full' in session.controller
     async () =>
       withPrismaRetry(
         async () => {
@@ -513,20 +514,8 @@ export const createOrder = async (req: Request, res: Response) => {
 
     const taxAmount = subtotal * (tenant.taxRate / 100);
     const totalAmount = subtotal + taxAmount;
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const countForDay = await prisma.order.count({
-      where: {
-        tenantId: tenant.id,
-        createdAt: { gte: startOfDay },
-      },
-    });
-
-    const nextNumber = countForDay + 1;
     const orderType = safeTableId ? 'DINE_IN' : 'TAKEAWAY';
-    const prefix = orderType === 'DINE_IN' ? 'D-' : 'T-';
-    const orderNumber = `${prefix}${nextNumber}`;
+    const orderNumber = generateOrderNumber(orderType); // Collision-resistant — replaces COUNT+1 race
 
     let order;
     try {

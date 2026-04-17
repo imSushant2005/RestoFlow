@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as PublicController from '../controllers/public.controller';
 import * as TableController from '../controllers/table.controller';
+import { idempotencyMiddleware } from '../middlewares/idempotency.middleware';
 // Lazy-load customer controller at request-time to avoid startup failure
 // if the compiled controller file is missing in some build contexts.
 
@@ -11,7 +12,10 @@ router.get('/resolve-domain', PublicController.resolveCustomDomain);
 
 // Public Menu (No Auth Required)
 router.get('/:tenantSlug/menu', PublicController.getPublicMenu);
-router.post('/:tenantSlug/orders', PublicController.createOrder);
+
+// C-5: idempotencyMiddleware added — prevents duplicate orders on double-tap / poor network
+router.post('/:tenantSlug/orders', idempotencyMiddleware, PublicController.createOrder);
+
 router.get('/:tenantSlug/sessions/:sessionToken/orders', PublicController.getSessionOrders);
 router.get('/:tenantSlug/orders/:id', PublicController.getOrderInfo);
 router.patch('/:tenantSlug/orders/:id/status', PublicController.updateOrderStatusPublic);

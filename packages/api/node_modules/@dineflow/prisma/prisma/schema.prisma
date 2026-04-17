@@ -97,6 +97,9 @@ model RefreshToken {
   token     String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
+
+  @@index([expiresAt]) // needed for cleanup job: deleteMany({ where: { expiresAt: { lt: now } } })
+  @@index([userId])
 }
 
 model StaffInvite {
@@ -307,6 +310,7 @@ model DiningSession {
   @@index([tenantId, source])
   @@index([tableId])
   @@index([customerId])
+  @@index([openedAt]) // cleanup job: findMany({ where: { openedAt: { lt: threshold } } })
 }
 
 // ─── BILLS (Generated after session completion) ───────────
@@ -391,7 +395,7 @@ model Order {
   @@index([tenantId, status, createdAt(sort: Desc)], map: "Order_history_board_idx")
   @@index([tenantId, tableId, status])
   @@index([tenantId, diningSessionId, status, createdAt])
-  @@index([tenantId, orderNumber])
+  @@unique([tenantId, orderNumber], map: "Order_tenantId_orderNumber_key") // prevents duplicate order numbers — P2002 on race
   @@index([diningSessionId])
   @@index([diningSessionId, createdAt])
 }

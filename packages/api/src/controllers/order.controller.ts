@@ -1,9 +1,11 @@
 import { Request, Response } from 'express';
+import { randomUUID } from 'crypto';
 import { UserRole } from '@dineflow/prisma';
 import { prisma, withPrismaRetry } from '../db/prisma';
 import { getIO, getRoleRoom, getSessionRoom, getTenantRoom } from '../socket';
 import { deleteCache, withCache } from '../services/cache.service';
 import { transitionOrderStatus, ConflictError } from '../services/order.service';
+import { generateOrderNumber } from '../services/order-number.service';
 
 const VALID_ORDER_STATUSES = new Set([
   'NEW',
@@ -262,27 +264,9 @@ async function resolveStaffName(db: any, userId?: string) {
   return user?.name?.trim() || 'Staff';
 }
 
-async function generateOrderNumberForTenant(tenantId: string, orderType?: string) {
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-
-  const countForDay = await prisma.order.count({
-    where: {
-      tenantId,
-      createdAt: { gte: startOfDay },
-    },
-  });
-
-  const nextNumber = countForDay + 1;
-  const uppercaseType = String(orderType || '').toUpperCase();
-  
-  let prefix = 'T-'; // Default Takeaway
-  if (uppercaseType === 'DINE_IN') prefix = 'D-';
-  else if (uppercaseType === 'ZOMATO') prefix = 'Z-';
-  else if (uppercaseType === 'SWIGGY') prefix = 'S-';
-
-  return `${prefix}${nextNumber}`;
-}
+// generateOrderNumberForTenant removed — replaced by generateOrderNumber() from order-number.service.
+// The old COUNT+1 approach had a TOCTOU race: two concurrent requests both read the same count
+// and generated duplicate order numbers. The new approach is synchronous and collision-resistant.
 
 async function buildServerPricedOrderPayload(db: any, tenantId: string, items: any[]) {
   if (!Array.isArray(items) || items.length === 0) {
@@ -671,11 +655,11 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     getIO().to(tenantRoom).emit('order:update', order);
     if (order.diningSessionId) {
       getIO().to(getSessionRoom(req.tenantId!, order.diningSessionId)).emit('order:update', order);
-      getIO().to(tenantRoom).emit('session:update', {
-        sessionId: order.diningSessionId,
-        status: order.status,
-        updatedAt: new Date().toISOString(),
-      });
+      // NOTE: session:update is intentionally NOT emitted here.
+      // Order status changes do NOT change the DiningSession.sessionStatus.
+      // Emitting session:update with order.status (wrong payload) caused the frontend
+      // to display the order status as the session status. Session events are only
+      // emitted by session.controller when session.sessionStatus actually changes.
     }
     if (normalizedStatus === 'READY') {
       getIO().to(getRoleRoom(req.tenantId!, 'WAITER')).emit('waiter:pickup_ready', buildWaiterPickupPayload(order));
@@ -875,7 +859,7 @@ export const createAssistedOrder = async (req: Request, res: Response) => {
         });
       }
 
-      const orderNumber = await generateOrderNumberForTenant(tenant.id, orderType);
+      const orderNumber = generateOrderNumber(orderType); // Synchronous \u2014 no DB call, collision-resistant
       const isDirectBill = fulfillmentMode === 'DIRECT_BILL';
       const shouldSettleImmediately = isDirectBill && (markPaid || Boolean(paymentMethod));
       const sessionStatus = isDirectBill
@@ -940,7 +924,7 @@ export const createAssistedOrder = async (req: Request, res: Response) => {
               taxAmount,
               discountAmount: 0,
               totalAmount,
-              invoiceNumber: `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`,
+              invoiceNumber: `INV-${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`, // UUID-based — no collision risk
               paymentStatus: shouldSettleImmediately ? 'PAID' : 'UNPAID',
               paymentMethod: shouldSettleImmediately ? paymentMethod || 'cash' : null,
               paidAt: shouldSettleImmediately ? new Date() : null,

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as SessionController from '../controllers/session.controller';
 import { requireAuth } from '../middlewares/auth.middleware';
 import { requireRoles } from '../middlewares/role.middleware';
+import { idempotencyMiddleware } from '../middlewares/idempotency.middleware';
 import { BILLING_VIEW_ROLES } from '../constants/rbac.js';
 
 const router: Router = Router();
@@ -9,7 +10,14 @@ const router: Router = Router();
 // Session lifecycle (public, customer-facing)
 router.post('/:tenantSlug/sessions', SessionController.createSession);
 router.get('/:tenantSlug/sessions/:sessionId', SessionController.getSession);
-router.post('/:tenantSlug/sessions/:sessionId/orders', SessionController.addOrderToSession);
+
+// C-5: idempotencyMiddleware added — prevents duplicate orders on double-tap / poor network
+router.post(
+  '/:tenantSlug/sessions/:sessionId/orders',
+  idempotencyMiddleware,
+  SessionController.addOrderToSession,
+);
+
 router.post('/:tenantSlug/sessions/:sessionId/finish', SessionController.finishSession);
 router.post(
   '/:tenantSlug/sessions/:sessionId/admin-finish',

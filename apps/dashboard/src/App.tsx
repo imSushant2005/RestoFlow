@@ -47,6 +47,24 @@ import { clearDashboardAuthStorage, markManualLogout } from './lib/authSession';
 import { driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
 
+// Pre-load notification sounds at module level — avoids creating a new Audio object
+// (and a CDN HTTP request) on every notification.
+const _notifSound = typeof window !== 'undefined'
+  ? new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3')
+  : null;
+const _waiterSound = typeof window !== 'undefined'
+  ? new Audio('https://assets.mixkit.co/active_storage/sfx/495/495-preview.mp3')
+  : null;
+
+function playNotificationSound(url?: string) {
+  const sound = url?.includes('495') ? _waiterSound : _notifSound;
+  if (!sound) return;
+  sound.currentTime = 0;
+  sound.volume = 0.5;
+  sound.play().catch(() => undefined);
+  setTimeout(() => { sound.pause(); sound.currentTime = 0; }, 1000);
+}
+
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER' | 'UNKNOWN';
 
 
@@ -289,18 +307,16 @@ function DashboardShell() {
   const isError = shouldFetchBusinessShellData && businessQuery.isError;
   const demoStorageKey = getDemoStorageKey(business);
 
-  const refreshLiveOrderCount = useCallback(async () => {
+  // Derives live order count from React Query cache — no HTTP request fired.
+  // Previously called GET /orders on every socket event (~60+ requests/min during service).
+  const refreshLiveOrderCount = useCallback(() => {
     if (!canAccessOrders) {
       setLiveOrderCount(0);
       return;
     }
-    try {
-      const response = await api.get('/orders');
-      setLiveOrderCount(Array.isArray(response.data) ? response.data.length : 0);
-    } catch {
-      setLiveOrderCount(0);
-    }
-  }, [canAccessOrders]);
+    const cached = queryClient.getQueryData<any[]>(['live-orders']);
+    setLiveOrderCount(Array.isArray(cached) ? cached.length : 0);
+  }, [canAccessOrders, queryClient]);
 
   const pushNotification = useCallback(
     (entry: Omit<OpsNotification, 'id' | 'read' | 'createdAt'> & { sound?: string; createdAt?: string }) => {
@@ -317,18 +333,8 @@ function DashboardShell() {
 
       setNotifications((previous) => [next, ...previous].slice(0, 60));
       
-      const soundUrl = entry.sound || 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
-      try {
-        const audio = new Audio(soundUrl);
-        audio.volume = 0.5;
-        audio.play().catch((err) => console.warn('Notification sound blocked:', err));
-        
-        // LIMIT SOUND TO 1 SECOND MAX
-        setTimeout(() => {
-          audio.pause();
-          audio.currentTime = 0;
-        }, 1000);
-      } catch (e) {}
+      // Use pre-loaded sound element — no new Audio or CDN request per notification
+      playNotificationSound(entry.sound);
 
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -497,7 +503,7 @@ function DashboardShell() {
   });
 
   useEffect(() => {
-    void refreshLiveOrderCount();
+    refreshLiveOrderCount(); // Synchronous — safe on mount
   }, [refreshLiveOrderCount]);
 
   useEffect(() => {
