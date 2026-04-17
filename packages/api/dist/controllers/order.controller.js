@@ -7,6 +7,8 @@ const socket_1 = require("../socket");
 const cache_service_1 = require("../services/cache.service");
 const order_service_1 = require("../services/order.service");
 const order_number_service_1 = require("../services/order-number.service");
+const order_payload_service_1 = require("../services/order-payload.service");
+const cache_keys_1 = require("../utils/cache-keys");
 const VALID_ORDER_STATUSES = new Set([
     'NEW',
     'ACCEPTED',
@@ -247,123 +249,16 @@ async function resolveStaffName(db, userId) {
 // generateOrderNumberForTenant removed — replaced by generateOrderNumber() from order-number.service.
 // The old COUNT+1 approach had a TOCTOU race: two concurrent requests both read the same count
 // and generated duplicate order numbers. The new approach is synchronous and collision-resistant.
-async function buildServerPricedOrderPayload(db, tenantId, items) {
-    if (!Array.isArray(items) || items.length === 0) {
-        throw new Error('ORDER_ITEMS_REQUIRED');
-    }
-    const normalizedItems = items.map((item) => ({
-        menuItemId: String(item?.menuItemId || item?.menuItem?.id || '').trim(),
-        quantity: Math.max(1, Number(item?.quantity) || 1),
-        notes: typeof item?.notes === 'string' ? item.notes.trim() : typeof item?.specialNote === 'string' ? item.specialNote.trim() : '',
-        selectedModifierIds: Array.from(new Set((Array.isArray(item?.selectedModifierIds)
-            ? item.selectedModifierIds
-            : Array.isArray(item?.selectedModifiers)
-                ? item.selectedModifiers.map((modifier) => modifier?.id)
-                : Array.isArray(item?.modifiers)
-                    ? item.modifiers.map((modifier) => modifier?.id)
-                    : [])
-            .map((value) => String(value || '').trim())
-            .filter(Boolean))),
-    }));
-    if (normalizedItems.some((item) => !item.menuItemId)) {
-        throw new Error('ORDER_ITEMS_INVALID');
-    }
-    const menuItems = await db.menuItem.findMany({
-        where: {
-            tenantId,
-            isAvailable: true,
-            id: { in: normalizedItems.map((item) => item.menuItemId) },
-        },
-        select: {
-            id: true,
-            name: true,
-            description: true,
-            price: true,
-            images: true,
-            isVeg: true,
-            modifierGroups: {
-                select: {
-                    id: true,
-                    name: true,
-                    isRequired: true,
-                    minSelections: true,
-                    maxSelections: true,
-                    modifiers: {
-                        where: { isAvailable: true },
-                        select: {
-                            id: true,
-                            name: true,
-                            priceAdjustment: true,
-                        },
-                    },
-                },
-            },
-        },
-    });
-    const menuMap = new Map(menuItems.map((menuItem) => [menuItem.id, menuItem]));
-    let subtotal = 0;
-    const orderItems = normalizedItems.map((item) => {
-        const menuItem = menuMap.get(item.menuItemId);
-        if (!menuItem) {
-            throw new Error(`MENU_ITEM_NOT_FOUND:${item.menuItemId}`);
-        }
-        const availableModifierIds = new Set((menuItem.modifierGroups || []).flatMap((group) => (group.modifiers || []).map((modifier) => modifier.id)));
-        if (item.selectedModifierIds.some((modifierId) => !availableModifierIds.has(modifierId))) {
-            throw new Error(`MODIFIER_NOT_FOUND:${menuItem.id}`);
-        }
-        let unitPrice = Number(menuItem.price || 0);
-        const selectedModifiers = [];
-        for (const group of menuItem.modifierGroups || []) {
-            const groupMinSelections = Math.max(0, Number(group.minSelections || 0));
-            const groupMaxSelections = Math.max(1, Number(group.maxSelections || 1));
-            const groupSelections = (group.modifiers || []).filter((modifier) => item.selectedModifierIds.includes(modifier.id));
-            if (groupSelections.length < groupMinSelections) {
-                throw new Error(`MODIFIER_REQUIRED:${group.name}`);
-            }
-            if (groupSelections.length > groupMaxSelections) {
-                throw new Error(`MODIFIER_LIMIT:${group.name}`);
-            }
-            groupSelections.forEach((modifier) => {
-                const priceAdjustment = Number(modifier.priceAdjustment || 0);
-                unitPrice += priceAdjustment;
-                selectedModifiers.push({
-                    id: modifier.id,
-                    name: modifier.name,
-                    groupName: group.name,
-                    priceAdjustment,
-                });
-            });
-        }
-        const totalPrice = unitPrice * item.quantity;
-        subtotal += totalPrice;
-        return {
-            menuItemId: menuItem.id,
-            name: menuItem.name,
-            description: menuItem.description || '',
-            imageUrl: menuItem.images?.[0] || null,
-            unitPrice,
-            quantity: item.quantity,
-            totalPrice,
-            selectedModifiers,
-            specialNote: item.notes || null,
-            isVeg: menuItem.isVeg,
-        };
-    });
-    return {
-        subtotal,
-        orderItems,
-    };
-}
 function getLiveOrdersCacheKey(tenantId) {
-    return `dashboard_live_orders_${tenantId}`;
+    return cache_keys_1.cacheKeys.dashboardLiveOrders(tenantId);
 }
 function getOrderHistoryCacheKey(tenantId, page, limit, statusKey) {
-    return `dashboard_order_history_${tenantId}_${page}_${limit}_${statusKey}`;
+    return cache_keys_1.cacheKeys.dashboardOrderHistory(tenantId, page, limit, statusKey);
 }
 async function invalidateDashboardOrderCaches(tenantId) {
     await Promise.all([
         (0, cache_service_1.deleteCache)(getLiveOrdersCacheKey(tenantId)),
-        (0, cache_service_1.deleteCache)(`dashboard_order_history_${tenantId}_*`),
+        (0, cache_service_1.deleteCache)(cache_keys_1.cacheKeys.dashboardOrderHistoryPattern(tenantId)),
     ]);
 }
 const getOrders = async (req, res) => {
@@ -706,7 +601,7 @@ const createAssistedOrder = async (req, res) => {
             return res.status(409).json({ error: 'This table already has an active session. Choose another table or finish the open session first.' });
         }
         const staffName = await resolveStaffName(prisma_1.prisma, req.user.id);
-        const { subtotal, orderItems } = await buildServerPricedOrderPayload(prisma_1.prisma, tenant.id, req.body?.items);
+        const { subtotal, orderItems } = await (0, order_payload_service_1.buildServerPricedOrderPayload)(prisma_1.prisma, tenant.id, req.body?.items);
         const taxAmount = subtotal * (Number(tenant.taxRate || 0) / 100);
         const totalAmount = subtotal + taxAmount;
         const result = await prisma_1.prisma.$transaction(async (tx) => {

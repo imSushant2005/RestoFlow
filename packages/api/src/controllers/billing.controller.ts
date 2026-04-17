@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
 import { getAvailablePlans, getPlanLimits, normalizePlan, parsePlan } from '../config/plans';
-import { deleteCache, withCache } from '../services/cache.service';
+import { withCache } from '../services/cache.service';
 
 export const getBillingDetails = async (req: Request, res: Response) => {
   try {
@@ -50,17 +50,10 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
     if (!requestedPlan) {
       return res.status(400).json({ error: 'Invalid plan' });
     }
-
-    const stubUrl = `https://checkout.stripe.demo/pay/cs_test_stub?tenant=${req.tenantId}&plan=${requestedPlan}`;
-    
-    // Auto-update plan for demo since we don't have simulated webhook listeners
-    await prisma.tenant.update({
-      where: { id: req.tenantId },
-      data: { plan: requestedPlan as any }
+    return res.status(503).json({
+      error: 'Billing checkout is disabled until verified payment settlement is configured.',
+      code: 'BILLING_NOT_CONFIGURED',
     });
-    await deleteCache(`tenant:${req.tenantId}:billing`);
-
-    res.json({ url: stubUrl, simulatedSuccess: true, message: `Upgraded to ${requestedPlan} successfully!` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create checkout' });
   }

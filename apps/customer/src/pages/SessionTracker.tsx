@@ -20,7 +20,7 @@ import {
   getCustomerStatusMeta,
 } from '../lib/orderPresentation';
 import { useCartStore } from '../store/cartStore';
-import { getActiveSessionForTenant, setLastTableIdForTenant } from '../lib/tenantStorage';
+import { getActiveSessionForTenant, getSessionAccessTokenForTenant, setLastTableIdForTenant } from '../lib/tenantStorage';
 
 type SocketStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline';
 
@@ -61,6 +61,7 @@ export function SessionTracker() {
   const refreshTimerRef = useRef<number | null>(null);
   const sessionId =
     routeSessionId || getActiveSessionForTenant(tenantSlug);
+  const sessionAccessToken = getSessionAccessTokenForTenant(tenantSlug);
   const tableId = session?.tableId;
 
   const fetchSession = useCallback(async () => {
@@ -123,10 +124,10 @@ export function SessionTracker() {
   }, [session?.tableId, tenantSlug]);
 
   useEffect(() => {
-    if (!sessionId || !tenantSlug) return;
+    if (!sessionId || !tenantSlug || !sessionAccessToken) return;
 
     const socket = io(getSocketUrl(), {
-      auth: { tenantSlug, sessionToken: sessionId, client: 'customer-session' },
+      auth: { tenantSlug, sessionAccessToken, client: 'customer-session' },
       transports: ['websocket'],
       rememberUpgrade: true,
       reconnection: true,
@@ -150,12 +151,10 @@ export function SessionTracker() {
 
     socket.on('order:new', (order: any) => {
       upsertOrder(order);
-      scheduleRefresh(220);
     });
 
     socket.on('order:update', (order: any) => {
       upsertOrder(order);
-      scheduleRefresh(220);
     });
 
     socket.on('session:update', (payload: { sessionId?: string; status?: string }) => {
@@ -193,7 +192,7 @@ export function SessionTracker() {
       }
       socket.disconnect();
     };
-  }, [navigate, scheduleRefresh, sessionId, tenantSlug, upsertOrder]);
+  }, [navigate, scheduleRefresh, sessionAccessToken, sessionId, tenantSlug, upsertOrder]);
 
   const [error, setError] = useState<string | null>(null);
 

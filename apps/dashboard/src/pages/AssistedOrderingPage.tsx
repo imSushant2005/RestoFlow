@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { usePlanFeatures } from '../hooks/usePlanFeatures';
 import { ArrowRight, BadgeCheck, Phone, ReceiptText, RefreshCw, Search, ShoppingBag, Sparkles, Users, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { formatINR } from '../lib/currency';
@@ -248,6 +249,7 @@ export function AssistedOrderingPage() {
   const [lookupResult, setLookupResult] = useState<any>(null);
   const [lookupError, setLookupError] = useState('');
   const [result, setResult] = useState<AssistedResult | null>(null);
+  const { features } = usePlanFeatures();
 
   const { data: business } = useQuery({
     queryKey: ['settings-business'],
@@ -448,21 +450,28 @@ export function AssistedOrderingPage() {
                 <h2 className="mt-2 text-xl font-black" style={{ color: 'var(--text-1)' }}>Capture customer details before ordering.</h2>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button
+                 <button
                   type="button"
                   onClick={() => setFulfillmentMode('SEND_TO_KITCHEN')}
-                  className="rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.18em]"
-                  style={{ background: fulfillmentMode === 'SEND_TO_KITCHEN' ? 'var(--brand)' : 'var(--surface-3)', color: fulfillmentMode === 'SEND_TO_KITCHEN' ? 'white' : 'var(--text-2)' }}
+                  className={`rounded-full px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${fulfillmentMode === 'SEND_TO_KITCHEN' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 ring-2 ring-blue-500/10' : 'bg-transparent border'}`}
+                  style={fulfillmentMode === 'SEND_TO_KITCHEN' ? {} : { borderColor: 'var(--border)', color: 'var(--text-3)' }}
                 >
                   Send to kitchen
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFulfillmentMode('DIRECT_BILL')}
-                  className="rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.18em]"
-                  style={{ background: fulfillmentMode === 'DIRECT_BILL' ? 'var(--brand)' : 'var(--surface-3)', color: fulfillmentMode === 'DIRECT_BILL' ? 'white' : 'var(--text-2)' }}
+                  onClick={() => {
+                    if (features.hasAssistedDirectBill) {
+                      setFulfillmentMode('DIRECT_BILL');
+                    } else {
+                      window.alert(`Direct billing is a ${features.name === 'Mini' ? 'Café' : 'Pro'} feature. Please upgrade your plan.`);
+                    }
+                  }}
+                  className={`rounded-full px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 relative overflow-hidden group ${fulfillmentMode === 'DIRECT_BILL' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 ring-2 ring-blue-500/10' : 'bg-transparent border'}`}
+                  style={fulfillmentMode === 'DIRECT_BILL' ? {} : { borderColor: 'var(--border)', color: 'var(--text-3)', opacity: features.hasAssistedDirectBill ? 1 : 0.6 }}
                 >
-                  Direct bill
+                  {!features.hasAssistedDirectBill && <span className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                  Direct bill {!features.hasAssistedDirectBill && <Sparkles size={10} className="inline ml-1 text-blue-500 animate-pulse" />}
                 </button>
               </div>
             </div>
@@ -492,12 +501,24 @@ export function AssistedOrderingPage() {
                       />
                       <button
                         type="button"
-                        disabled={!lookupAllowed || lookupMutation.isPending}
-                        onClick={() => lookupMutation.mutate(customerPhone)}
-                        className="rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em]"
-                        style={{ background: lookupAllowed ? 'var(--brand)' : 'var(--surface-3)', color: lookupAllowed ? 'white' : 'var(--text-3)' }}
+                        disabled={!lookupAllowed || lookupMutation.isPending || !features.hasAssistedCustomerLookup}
+                        onClick={() => {
+                          if (features.hasAssistedCustomerLookup) {
+                            lookupMutation.mutate(customerPhone);
+                          } else {
+                            window.alert('Returning guest insights are only available on the DinePro plan.');
+                          }
+                        }}
+                        className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-[0.15em] transition-all relative overflow-hidden group shadow-md ${lookupAllowed && features.hasAssistedCustomerLookup ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-60'}`}
                       >
-                        {lookupMutation.isPending ? 'Looking...' : 'Lookup'}
+                        {lookupMutation.isPending ? (
+                          <RefreshCw size={14} className="animate-spin" />
+                        ) : (
+                          <>
+                            {features.hasAssistedCustomerLookup ? 'Lookup' : 'Pro Gated'}
+                            {!features.hasAssistedCustomerLookup && <Sparkles size={10} className="ml-1.5 inline text-blue-500" />}
+                          </>
+                        )}
                       </button>
                     </div>
                   </label>
@@ -817,9 +838,12 @@ export function AssistedOrderingPage() {
             </div>
           </section>
 
-          <section className="rounded-[28px] border p-5" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>Assisted output</p>
-            <h3 className="mt-2 text-lg font-black" style={{ color: 'var(--text-1)' }}>Realtime status and bill details</h3>
+          <section className="rounded-[2.5rem] border p-8 shadow-2xl transition-all hover:shadow-blue-500/5" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--text-3)' }}>Assisted output</p>
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+            </div>
+            <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--text-1)' }}>Realtime status & details</h3>
             <div className="mt-3 space-y-3 rounded-3xl border px-4 py-4" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
               {result ? (
                 <>

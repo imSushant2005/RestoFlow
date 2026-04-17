@@ -13,6 +13,7 @@ const ioredis_1 = __importDefault(require("ioredis"));
 const prisma_1 = require("./db/prisma");
 const env_1 = require("./config/env");
 const jwt_1 = require("./utils/jwt");
+const public_access_1 = require("./utils/public-access");
 const WS_PING_INTERVAL_MS = 25_000;
 const WS_PING_TIMEOUT_MS = 20_000;
 const WS_CONNECT_TIMEOUT_MS = 10_000;
@@ -293,28 +294,53 @@ async function authMiddleware(socket, next) {
             return next();
         }
         const tenantSlug = auth.tenantSlug;
-        const sessionToken = auth.sessionToken;
-        if (typeof tenantSlug !== 'string' ||
-            tenantSlug.length === 0 ||
-            tenantSlug.length > MAX_TENANT_SLUG_LENGTH) {
-            return rejectAuth(socket, next, 'invalid_tenant_slug');
+        const sessionAccessToken = auth.sessionAccessToken;
+        if (typeof sessionAccessToken !== 'string' ||
+            sessionAccessToken.length === 0 ||
+            sessionAccessToken.length > MAX_SESSION_TOKEN_LENGTH) {
+            return rejectAuth(socket, next, 'invalid_session_access_token');
         }
-        if (!TENANT_SLUG_REGEX.test(tenantSlug)) {
-            return rejectAuth(socket, next, 'tenant_slug_format_rejected');
+        let verifiedSession;
+        try {
+            verifiedSession = (0, public_access_1.verifySessionAccessToken)(sessionAccessToken);
         }
-        if (typeof sessionToken !== 'string' ||
-            sessionToken.length === 0 ||
-            sessionToken.length > MAX_SESSION_TOKEN_LENGTH) {
-            return rejectAuth(socket, next, 'invalid_session_token');
+        catch (error) {
+            const message = error instanceof Error ? error.message.toLowerCase() : '';
+            if (message.includes('expired')) {
+                return rejectAuth(socket, next, 'session_access_expired');
+            }
+            return rejectAuth(socket, next, 'invalid_session_access_token');
         }
-        const tenantId = await resolveTenantIdFromSlug(tenantSlug);
-        if (!tenantId) {
-            return rejectAuth(socket, next, 'tenant_not_found');
+        if (typeof tenantSlug === 'string' && tenantSlug.trim().length > 0) {
+            if (tenantSlug.length > MAX_TENANT_SLUG_LENGTH) {
+                return rejectAuth(socket, next, 'invalid_tenant_slug');
+            }
+            if (!TENANT_SLUG_REGEX.test(tenantSlug)) {
+                return rejectAuth(socket, next, 'tenant_slug_format_rejected');
+            }
+            const tenantIdFromSlug = await resolveTenantIdFromSlug(tenantSlug);
+            if (!tenantIdFromSlug) {
+                return rejectAuth(socket, next, 'tenant_not_found');
+            }
+            if (tenantIdFromSlug !== verifiedSession.tenantId) {
+                return rejectAuth(socket, next, 'session_tenant_mismatch');
+            }
         }
-        socket.data.tenantId = tenantId;
-        socket.data.sessionToken = sessionToken;
+        const session = await prisma_1.prisma.diningSession.findFirst({
+            where: {
+                id: verifiedSession.sessionId,
+                tenantId: verifiedSession.tenantId,
+                customerId: verifiedSession.customerId,
+            },
+            select: { id: true },
+        });
+        if (!session) {
+            return rejectAuth(socket, next, 'session_missing_or_revoked');
+        }
+        socket.data.tenantId = verifiedSession.tenantId;
+        socket.data.sessionId = verifiedSession.sessionId;
         socket.data.connectedAt = Date.now();
-        socket.join((0, exports.getSessionRoom)(tenantId, sessionToken));
+        socket.join((0, exports.getSessionRoom)(verifiedSession.tenantId, verifiedSession.sessionId));
         return next();
     }
     catch (error) {

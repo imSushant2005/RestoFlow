@@ -6,10 +6,14 @@ import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { parsePlan } from '../config/plans';
 
-const razorpay = new Razorpay({
-  key_id: env.RAZORPAY_KEY_ID || 'test_key',
-  key_secret: env.RAZORPAY_KEY_SECRET || 'test_secret',
-});
+const hasRazorpayConfig = Boolean(env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET);
+
+const razorpay = hasRazorpayConfig
+  ? new Razorpay({
+      key_id: env.RAZORPAY_KEY_ID!,
+      key_secret: env.RAZORPAY_KEY_SECRET!,
+    })
+  : null;
 
 // Razorpay amounts use paise.
 const PLAN_PRICING = {
@@ -21,6 +25,10 @@ const PLAN_PRICING = {
 
 export const createSubscriptionOrder = async (req: Request, res: Response) => {
   try {
+    if (!hasRazorpayConfig || !razorpay) {
+      return res.status(503).json({ success: false, error: 'Billing provider is not configured.' });
+    }
+
     const normalizedPlan = parsePlan(req.body?.plan);
     if (!normalizedPlan) {
       return res.status(400).json({ success: false, error: 'Invalid plan selected' });
@@ -59,6 +67,10 @@ export const createSubscriptionOrder = async (req: Request, res: Response) => {
 
 export const verifyPayment = async (req: Request, res: Response) => {
   try {
+    if (!hasRazorpayConfig) {
+      return res.status(503).json({ success: false, error: 'Billing provider is not configured.' });
+    }
+
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
     const normalizedPlan = parsePlan(req.body?.plan);
 
@@ -68,7 +80,7 @@ export const verifyPayment = async (req: Request, res: Response) => {
 
     const body = `${razorpay_order_id}|${razorpay_payment_id}`;
     const expectedSignature = crypto
-      .createHmac('sha256', env.RAZORPAY_KEY_SECRET || 'test_secret')
+      .createHmac('sha256', env.RAZORPAY_KEY_SECRET!)
       .update(body)
       .digest('hex');
 
@@ -76,12 +88,21 @@ export const verifyPayment = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Invalid payment signature. Potential fraudulent request.' });
     }
 
-    await prisma.tenant.update({
-      where: { id: req.tenantId },
-      data: { plan: normalizedPlan as any },
-    });
+    logger.warn(
+      {
+        tenantId: req.tenantId,
+        plan: normalizedPlan,
+        razorpayOrderId: razorpay_order_id,
+        razorpayPaymentId: razorpay_payment_id,
+      },
+      'Client-side billing verification blocked until webhook-backed settlement ledger is implemented',
+    );
 
-    res.json({ success: true, message: 'Payment successful, plan upgraded.', plan: normalizedPlan });
+    res.status(409).json({
+      success: false,
+      error: 'Plan upgrades are applied only after verified webhook settlement.',
+      code: 'WEBHOOK_SETTLEMENT_REQUIRED',
+    });
   } catch (error) {
     logger.error({ error }, 'Payment verification failure');
     res.status(500).json({ success: false, error: 'Payment verification failed' });
@@ -90,11 +111,15 @@ export const verifyPayment = async (req: Request, res: Response) => {
 
 export const handleWebhook = async (req: Request, res: Response) => {
   try {
+    if (!hasRazorpayConfig) {
+      return res.status(503).json({ success: false, error: 'Billing provider is not configured.' });
+    }
+
     const signature = req.headers['x-razorpay-signature'] as string;
     const bodyText = JSON.stringify(req.body);
 
     const expectedSignature = crypto
-      .createHmac('sha256', env.RAZORPAY_KEY_SECRET || 'test_secret')
+      .createHmac('sha256', env.RAZORPAY_KEY_SECRET!)
       .update(bodyText)
       .digest('hex');
 
@@ -107,7 +132,10 @@ export const handleWebhook = async (req: Request, res: Response) => {
     if (event.event === 'subscription.charged') {
       const notes = event.payload.subscription.entity.notes;
       if (notes && notes.tenantId) {
-        logger.info(`Subscription charged successfully for tenant ${notes.tenantId}`);
+        logger.info(
+          { tenantId: notes.tenantId, plan: notes.plan, event: event.event },
+          'Verified billing event received. No plan mutation applied without settlement ledger.',
+        );
       }
     }
 

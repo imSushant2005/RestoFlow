@@ -19,7 +19,7 @@ const getAnalytics = async (req, res) => {
         const cacheKey = `analytics:${tenantId}:${Math.floor(fromDate.getTime() / 3_600_000)}:${Math.floor(toDate.getTime() / 3_600_000)}`;
         const result = await (0, cache_service_1.withCache)(cacheKey, async () => {
             // Parallelize queries for maximum throughput
-            const [summary, totalSessions, topItems, peakHoursRaw, dailyRevenueRaw] = await Promise.all([
+            const [summary, totalSessions, topItems, peakHoursRaw, dailyRevenueRaw, expensesSummary] = await Promise.all([
                 // 1. Core Summary: Aggregated counts and sums
                 prisma_1.prisma.order.aggregate({
                     where: {
@@ -83,7 +83,15 @@ const getAnalytics = async (req, res) => {
               AND "createdAt" <= ${toDate}
             GROUP BY date 
             ORDER BY date ASC
-          `
+          `,
+                // 6. Expenses Summary
+                prisma_1.prisma.expense.aggregate({
+                    where: {
+                        tenantId,
+                        date: { gte: fromDate, lte: toDate }
+                    },
+                    _sum: { amount: true }
+                })
             ]);
             // Data Transformation for UI consumption
             const formattedTopItems = topItems.map(item => ({
@@ -104,6 +112,7 @@ const getAnalytics = async (req, res) => {
             }));
             const totalOrders = summary._count?.id || 0;
             const totalRevenue = summary._sum?.totalAmount || 0;
+            const totalExpenses = expensesSummary._sum?.amount || 0;
             // Funnel Logic
             const funnelSteps = [
                 { name: 'Menu Views', value: totalSessions < totalOrders ? totalOrders * 2 : totalSessions },
@@ -113,6 +122,8 @@ const getAnalytics = async (req, res) => {
                 summary: {
                     totalOrders,
                     totalRevenue,
+                    totalExpenses,
+                    netProfit: totalRevenue - totalExpenses,
                     conversionRate: totalSessions > 0 ? ((totalOrders / totalSessions) * 100).toFixed(1) : 0
                 },
                 topItems: formattedTopItems,

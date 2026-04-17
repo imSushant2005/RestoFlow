@@ -54,9 +54,43 @@ const COLS = [
   },
 ];
 
+function mergeLiveOrders(previous: any, incoming: any) {
+  const current = Array.isArray(previous) ? previous : [];
+  if (!incoming?.id) {
+    return current;
+  }
+
+  const normalizedStatus = String(incoming.status || '').toUpperCase();
+  if (['RECEIVED', 'CANCELLED'].includes(normalizedStatus)) {
+    return current.filter((order: any) => order.id !== incoming.id);
+  }
+
+  const currentIndex = current.findIndex((order: any) => order.id === incoming.id);
+  if (currentIndex === -1) {
+    return [incoming, ...current];
+  }
+
+  return current.map((order: any) => {
+    if (order.id !== incoming.id) {
+      return order;
+    }
+
+    if (
+      typeof order.version === 'number' &&
+      typeof incoming.version === 'number' &&
+      incoming.version <= order.version
+    ) {
+      return order;
+    }
+
+    return { ...order, ...incoming };
+  });
+}
+
 export function KitchenBoard({ onLogout }: { onLogout?: () => void }) {
   const queryClient = useQueryClient();
   const [clock, setClock] = useState(new Date());
+  const [connectionState, setConnectionState] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
   const playAlert = () => {
     const audio = new Audio('/notification.mp3');
     audio.play().catch(() => {
@@ -141,16 +175,36 @@ export function KitchenBoard({ onLogout }: { onLogout?: () => void }) {
       reconnectionDelayMax: 3000,
     });
 
+    socket.on('connect', () => {
+      setConnectionState('live');
+      socket.timeout(2000).emit('sync:request', { surface: 'kds' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+      });
+    });
+
     socket.on('order:new', (order) => {
-      queryClient.setQueryData(['live-orders'], (old: any) => [...(old || []), order]);
-      playAlert();
+      const hadOrder = Array.isArray(queryClient.getQueryData(['live-orders']))
+        ? (queryClient.getQueryData(['live-orders']) as any[]).some((entry: any) => entry.id === order?.id)
+        : false;
+      queryClient.setQueryData(['live-orders'], (old: any) => mergeLiveOrders(old, order));
+      if (!hadOrder) {
+        playAlert();
+      }
     });
     socket.on('order:update', (updated) => {
-      queryClient.setQueryData(['live-orders'], (old: any) => {
-        if (!old) return old;
-        if (['RECEIVED', 'CANCELLED'].includes(updated.status)) return old.filter((o: any) => o.id !== updated.id);
-        return old.map((o: any) => o.id === updated.id ? updated : o);
-      });
+      queryClient.setQueryData(['live-orders'], (old: any) => mergeLiveOrders(old, updated));
+    });
+    socket.on('orders:bulk_status', () => {
+      queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+    });
+    socket.on('session:finished', () => {
+      queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+    });
+    socket.on('connect_error', () => {
+      setConnectionState('reconnecting');
+    });
+    socket.on('disconnect', () => {
+      setConnectionState('reconnecting');
     });
 
     return () => { socket.disconnect(); };
@@ -232,6 +286,22 @@ export function KitchenBoard({ onLogout }: { onLogout?: () => void }) {
             <span className={`w-2 h-2 rounded-full ${total > 0 ? 'bg-red-500 animate-pulse' : 'bg-slate-600'}`} />
             <span className={`text-xs font-black ${total > 0 ? 'text-red-400' : 'text-slate-500'}`}>
               {total} {total === 1 ? 'ticket' : 'tickets'} open
+            </span>
+          </div>
+          <div
+            className={`flex items-center gap-2 rounded-full border px-3 py-1.5 ${
+              connectionState === 'live'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+            }`}
+          >
+            <span
+              className={`h-2 w-2 rounded-full ${
+                connectionState === 'live' ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
+              }`}
+            />
+            <span className="text-[11px] font-black uppercase tracking-[0.14em]">
+              {connectionState === 'live' ? 'Realtime Live' : 'Reconnecting'}
             </span>
           </div>
         </div>

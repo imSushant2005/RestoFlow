@@ -26,26 +26,33 @@ export function PartySizePage() {
     }
 
     const finalSize = showCustom ? parseInt(customSize, 10) || 1 : partySize;
+    const idempotencyKey = `session_${tenantSlug}_${tableId}_${customerId || customerPhone || 'guest'}_${finalSize}`;
 
     setLoading(true);
     setError('');
 
     try {
-      const response = await publicApi.post(`/${tenantSlug}/sessions`, {
-        customerId,
-        customerName: customerName || undefined,
-        customerPhone: customerPhone || undefined,
-        tableId,
-        partySize: finalSize,
-      });
+      const response = await publicApi.post(
+        `/${tenantSlug}/sessions`,
+        {
+          customerId,
+          customerName: customerName || undefined,
+          customerPhone: customerPhone || undefined,
+          tableId,
+          partySize: finalSize,
+        },
+        {
+          headers: {
+            'x-idempotency-key': idempotencyKey,
+          },
+        },
+      );
 
       setActiveSessionForTenant(tenantSlug, response.data.id);
       navigate(`/order/${tenantSlug}/${tableId}/menu`);
     } catch (requestError: any) {
       if (requestError?.response?.status === 409) {
-        const existingId = requestError.response.data.existingSessionId;
-        setActiveSessionForTenant(tenantSlug, existingId);
-        navigate(`/order/${tenantSlug}/${tableId}/menu`);
+        setError('This table already has an active dining session. Ask staff to finish it or rescan the active guest session.');
       } else {
         setError(requestError?.response?.data?.error || 'Failed to start session');
       }

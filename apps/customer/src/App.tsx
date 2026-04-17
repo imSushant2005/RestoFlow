@@ -13,9 +13,12 @@ import { BillPage } from './pages/BillPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { publicApi } from './lib/api';
+import { clearLegacyCustomerStorage } from './lib/tenantStorage';
 
 function App() {
   useEffect(() => {
+    clearLegacyCustomerStorage();
+
     const existingSession = localStorage.getItem('startup_session');
     if (!existingSession) {
       localStorage.setItem('startup_session', uuidv4());

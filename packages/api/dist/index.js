@@ -61,6 +61,7 @@ const ai_routes_1 = __importDefault(require("./routes/ai.routes"));
 const notification_routes_1 = __importDefault(require("./routes/notification.routes"));
 const customer_routes_1 = __importDefault(require("./routes/customer.routes"));
 const session_routes_1 = __importDefault(require("./routes/session.routes"));
+const expense_routes_1 = __importDefault(require("./routes/expense.routes"));
 const prisma_1 = require("./db/prisma");
 const session_cleanup_service_1 = require("./services/session-cleanup.service");
 const error_middleware_1 = require("./middlewares/error.middleware");
@@ -68,6 +69,7 @@ const socket_1 = require("./socket");
 const logger_1 = require("./utils/logger");
 const tracing_middleware_1 = require("./middlewares/tracing.middleware");
 const tenant_rate_limit_middleware_1 = require("./middlewares/tenant-rate-limit.middleware");
+const metrics_middleware_1 = require("./middlewares/metrics.middleware");
 const cache_service_1 = require("./services/cache.service");
 // Instrumentation handled by ./instrumentation
 const app = (0, express_1.default)();
@@ -91,28 +93,28 @@ function buildAllowedOrigins() {
 }
 const allowedOrigins = buildAllowedOrigins();
 // Trusted origin patterns — used as fallback when CLIENT_URL / CORS_ORIGIN are not set.
-// These match any subdomain of Vercel and Railway deployments (standard indie stack).
 const TRUSTED_ORIGIN_PATTERNS = [
     /\.vercel\.app$/,
     /\.railway\.app$/,
     /\.up\.railway\.app$/,
 ];
 function isOriginAllowed(origin) {
-    // No origin header — server-to-server or same-origin request, always allow
+    // 1. Same-origin or server-to-server (no Origin header)
     if (!origin)
         return true;
-    // Explicit allow-list takes priority
+    // 2. Explicitly allowed
     if (allowedOrigins.includes(origin))
         return true;
-    // Localhost always allowed (dev)
+    // 3. Localhost (dev)
     if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))
         return true;
-    // If no explicit list is configured, fall back to trusted deployment patterns
-    // This prevents the silent "all origins blocked" state when CLIENT_URL is missing.
-    if (allowedOrigins.length === 0) {
-        return TRUSTED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin));
+    // 4. Pattern match (vercel/railway)
+    // Use a simple check to catch if the origin ends with a trusted domain
+    const isTrusted = TRUSTED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin));
+    if (!isTrusted && isProduction) {
+        console.warn(`[CORS_REJECT] Restricted origin attempt: ${origin}. Add to CLIENT_URL if this is expected.`);
     }
-    return false;
+    return isTrusted;
 }
 app.disable('x-powered-by');
 if (env_1.env.TRUST_PROXY) {
@@ -120,6 +122,17 @@ if (env_1.env.TRUST_PROXY) {
 }
 // Observability and Tracing bounds
 app.use(tracing_middleware_1.tracingMiddleware);
+app.use(metrics_middleware_1.metricsMiddleware);
+app.use((0, cors_1.default)({
+    origin(origin, callback) {
+        if (isOriginAllowed(origin)) {
+            callback(null, true);
+            return;
+        }
+        callback(new Error('Origin not allowed by CORS'));
+    },
+    credentials: true,
+}));
 app.use((0, helmet_1.default)({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
@@ -147,16 +160,7 @@ const strictAuthLimiter = (0, express_rate_limit_1.default)({
 });
 app.use('/public', apiLimiter);
 app.use((0, pino_http_1.default)({ logger: logger_1.logger }));
-app.use((0, cors_1.default)({
-    origin(origin, callback) {
-        if (isOriginAllowed(origin)) {
-            callback(null, true);
-            return;
-        }
-        callback(new Error('Origin not allowed by CORS'));
-    },
-    credentials: true,
-}));
+// Removed cors() from here as it's now at the top
 app.post('/payments/webhook', express_1.default.raw({ type: 'application/json' }), PaymentController.handleWebhook);
 app.use(express_1.default.json({ limit: env_1.env.JSON_BODY_LIMIT }));
 app.use((0, cookie_parser_1.default)());
@@ -200,8 +204,9 @@ app.get('/health/ready', async (_req, res) => {
     res.status(httpStatus).json({
         status: overallStatus,
         ...checks,
-        sockets: (0, socket_1.getSocketMetrics)(),
         version: '1.0.0',
+        patch: 'v3-cors-hardened', // Version flag to verify deploy
+        sockets: (0, socket_1.getSocketMetrics)(),
     });
 });
 app.get('/health', async (_req, res) => {
@@ -212,6 +217,27 @@ app.get('/health', async (_req, res) => {
     catch {
         res.status(503).json({ status: 'degraded', version: '1.0.0', sockets: (0, socket_1.getSocketMetrics)() });
     }
+});
+app.get('/metrics', async (_req, res) => {
+    const redis = (0, cache_service_1.getRedisClient)();
+    let redisStatus = 'not_configured';
+    if (redis) {
+        try {
+            await redis.ping();
+            redisStatus = 'ok';
+        }
+        catch {
+            redisStatus = 'unavailable';
+        }
+    }
+    res.json({
+        generatedAt: new Date().toISOString(),
+        http: (0, metrics_middleware_1.getHttpMetricsSnapshot)(),
+        sockets: (0, socket_1.getSocketMetrics)(),
+        dependencies: {
+            redis: redisStatus,
+        },
+    });
 });
 // C-7: Auth rate limiters applied BEFORE the auth router
 app.use('/auth/login', authLimiter);
@@ -230,6 +256,7 @@ app.use('/payments', payment_routes_1.default);
 app.use('/ai', ai_routes_1.default);
 app.use('/notifications', notification_routes_1.default);
 app.use('/customer', customer_routes_1.default);
+app.use('/expenses', tenant_rate_limit_middleware_1.tenantRateLimitMiddleware, expense_routes_1.default);
 Sentry.setupExpressErrorHandler(app);
 app.use(error_middleware_1.globalErrorHandler);
 httpServer.on('error', (error) => {

@@ -9,7 +9,7 @@ type VerifiedAccessToken = {
 type SocketData = {
     user?: VerifiedAccessToken;
     tenantId?: string;
-    sessionToken?: string;
+    sessionId?: string;
     connectedAt: number;
 };
 type ClientToServerEvents = {
@@ -85,6 +85,7 @@ type ServerToClientEvents = {
         timestamp: string;
     }) => void;
     'waiter:acknowledged': (payload: {
+        sessionId?: string;
         tableId?: string;
         status: 'ACCEPTED';
         timestamp: string;

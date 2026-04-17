@@ -23,6 +23,7 @@ import aiRoutes from './routes/ai.routes';
 import notificationRoutes from './routes/notification.routes';
 import customerRoutes from './routes/customer.routes';
 import sessionRoutes from './routes/session.routes';
+import expenseRoutes from './routes/expense.routes';
 import { checkPrismaReadiness } from './db/prisma';
 import { startSessionCleanupJob } from './services/session-cleanup.service';
 import { globalErrorHandler } from './middlewares/error.middleware';
@@ -30,6 +31,7 @@ import { initSocket, getSocketMetrics } from './socket';
 import { logger } from './utils/logger';
 import { tracingMiddleware } from './middlewares/tracing.middleware';
 import { tenantRateLimitMiddleware } from './middlewares/tenant-rate-limit.middleware';
+import { getHttpMetricsSnapshot, metricsMiddleware } from './middlewares/metrics.middleware';
 import { getRedisClient } from './services/cache.service';
 
 // Instrumentation handled by ./instrumentation
@@ -91,6 +93,7 @@ if (env.TRUST_PROXY) {
 
 // Observability and Tracing bounds
 app.use(tracingMiddleware);
+app.use(metricsMiddleware);
 
 app.use(
   cors({
@@ -200,6 +203,28 @@ app.get('/health', async (_req, res) => {
   }
 });
 
+app.get('/metrics', async (_req, res) => {
+  const redis = getRedisClient();
+  let redisStatus = 'not_configured';
+  if (redis) {
+    try {
+      await redis.ping();
+      redisStatus = 'ok';
+    } catch {
+      redisStatus = 'unavailable';
+    }
+  }
+
+  res.json({
+    generatedAt: new Date().toISOString(),
+    http: getHttpMetricsSnapshot(),
+    sockets: getSocketMetrics(),
+    dependencies: {
+      redis: redisStatus,
+    },
+  });
+});
+
 // C-7: Auth rate limiters applied BEFORE the auth router
 app.use('/auth/login', authLimiter);
 app.use('/auth/register', authLimiter);
@@ -217,6 +242,7 @@ app.use('/payments', paymentRoutes);
 app.use('/ai', aiRoutes);
 app.use('/notifications', notificationRoutes);
 app.use('/customer', customerRoutes);
+app.use('/expenses', tenantRateLimitMiddleware, expenseRoutes);
 
 Sentry.setupExpressErrorHandler(app);
 app.use(globalErrorHandler);

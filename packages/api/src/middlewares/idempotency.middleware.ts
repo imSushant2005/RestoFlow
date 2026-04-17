@@ -9,7 +9,11 @@ export const idempotencyMiddleware = async (req: Request, res: Response, next: N
     return;
   }
 
-  const tenantId = (req as any).tenantId || 'unknown';
+  const tenantId =
+    (req as any).tenantId ||
+    (typeof req.params?.tenantSlug === 'string' && req.params.tenantSlug.trim()) ||
+    (typeof req.body?.tenantSlug === 'string' && req.body.tenantSlug.trim()) ||
+    'unknown';
   const route = req.baseUrl + req.path;
   const redisKey = `idempotency:${route}:${tenantId}:${idempotencyKey}`;
   const bodyHash = crypto.createHash('sha256').update(JSON.stringify(req.body || {})).digest('hex');

@@ -5,10 +5,14 @@ import { FloorBuilder } from '../components/FloorBuilder';
 import { Plus, Lock } from 'lucide-react';
 import { usePlanFeatures } from '../hooks/usePlanFeatures';
 import { useNavigate } from 'react-router-dom';
+import { UpgradeModal } from '../components/UpgradeModal';
+import { PromptModal } from '../components/PromptModal';
 
 export function FloorPlan() {
   const queryClient = useQueryClient();
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showPromptModal, setShowPromptModal] = useState(false);
   const { features } = usePlanFeatures();
   const navigate = useNavigate();
 
@@ -57,19 +61,35 @@ export function FloorPlan() {
           <button
             onClick={() => {
               if (zones.length >= features.maxFloors) {
-                if (confirm(`Your ${features.name} plan allows up to ${features.maxFloors} floor(s). Upgrade to add more?`)) {
-                   navigate('/app/subscription');
-                }
+                setShowUpgradeModal(true);
                 return;
               }
-              const name = prompt('Zone name:');
-              if (name) createZoneMutation.mutate(name);
+              setShowPromptModal(true);
             }}
             className={`w-7 h-7 flex items-center justify-center text-white rounded-lg transition-colors ${zones.length >= features.maxFloors ? 'bg-slate-700' : 'bg-blue-600 hover:bg-blue-700'}`}
           >
             {zones.length >= features.maxFloors ? <Lock size={12} /> : <Plus size={15} />}
           </button>
         </div>
+
+        <UpgradeModal
+          isOpen={showUpgradeModal}
+          onClose={() => setShowUpgradeModal(false)}
+          onUpgrade={() => navigate('/app/subscription')}
+          title="Floor Limit Reached"
+          description={`Your ${features.name} plan allows up to ${features.maxFloors} floor zone(s). Upgrade to expand your restaurant footprint.`}
+          tierName={features.name}
+          limitText={`${features.maxFloors} Zone Limit`}
+        />
+
+        <PromptModal
+          isOpen={showPromptModal}
+          onClose={() => setShowPromptModal(false)}
+          onSubmit={(name) => createZoneMutation.mutate(name)}
+          title="Create New Zone"
+          label="Zone Name"
+          placeholder="e.g. Roof Top, Garden, Main Hall"
+        />
         <div className="flex-1 overflow-y-auto py-2">
           {zones.map((zone: any) => (
             <div

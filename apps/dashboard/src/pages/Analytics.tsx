@@ -13,7 +13,7 @@ import {
   CartesianGrid,
   Cell,
 } from 'recharts';
-import { Download, TrendingUp, Lightbulb, TrendingDown, Clock, AlertTriangle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Download, TrendingUp, Lightbulb, TrendingDown, Clock, AlertTriangle, ArrowUpRight, ArrowDownRight, Plus, ReceiptText, Trash2, Calculator } from 'lucide-react';
 import { formatINR } from '../lib/currency';
 
 import { usePlanFeatures } from '../hooks/usePlanFeatures';
@@ -28,7 +28,8 @@ export function Analytics() {
   const navigate = useNavigate();
 
   const { features } = usePlanFeatures();
-  const isBasicsOnly = !features.hasAdvancedAnalytics;
+  const isBasicsOnly = features.analyticsLevel === 'BASIC';
+  const showExpenses = features.hasExpenseTracking;
 
   const queryParams = useMemo(() => {
     if (range === '7d') return '?days=7';
@@ -37,13 +38,49 @@ export function Analytics() {
     return '?days=30';
   }, [range, from, to]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['analytics', queryParams],
     queryFn: async () => {
       const res = await api.get(`/analytics${queryParams}`);
       return res.data;
     },
   });
+
+  const { data: expenses = [], refetch: refetchExpenses } = useQuery({
+    queryKey: ['expenses', queryParams],
+    queryFn: async () => {
+      if (!showExpenses) return [];
+      const res = await api.get(`/expenses${queryParams}`);
+      return res.data;
+    },
+    enabled: showExpenses
+  });
+
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [expenseForm, setExpenseForm] = useState({ description: '', amount: '', category: 'General', date: new Date().toISOString().split('T')[0] });
+
+  const addExpenseMutation = async () => {
+    try {
+      await api.post('/expenses', expenseForm);
+      setIsExpenseModalOpen(false);
+      setExpenseForm({ description: '', amount: '', category: 'General', date: new Date().toISOString().split('T')[0] });
+      refetch();
+      refetchExpenses();
+    } catch (err) {
+      alert('Failed to add expense');
+    }
+  };
+
+  const deleteExpenseMutation = async (id: string) => {
+    if (!window.confirm('Delete this expense?')) return;
+    try {
+      await api.delete(`/expenses/${id}`);
+      refetch();
+      refetchExpenses();
+    } catch (err) {
+      alert('Failed to delete expense');
+    }
+  };
 
   const downloadCSV = () => {
     if (!data) return;
@@ -117,8 +154,8 @@ export function Analytics() {
   const TrendBadge = ({ value }: { value: number }) => {
     const positive = value >= 0;
     return (
-      <span className={`inline-flex items-center gap-1 text-xs font-black px-2 py-1 rounded-full ${positive ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}>
-        {positive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+      <span className={`inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-full shadow-sm ${positive ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-red-500/10 text-red-600 border border-red-500/20'}`}>
+        {positive ? <ArrowUpRight size={12} className="stroke-[3]" /> : <ArrowDownRight size={12} className="stroke-[3]" />}
         {Math.abs(value).toFixed(1)}%
       </span>
     );
@@ -159,6 +196,7 @@ export function Analytics() {
           subtitle="Selected period"
           trend={<TrendBadge value={trend.revenue} />}
           accent="blue"
+          icon={<TrendingUp size={24} />}
         />
         <InsightMetric
           title="Orders"
@@ -166,15 +204,110 @@ export function Analytics() {
           subtitle="Fulfilled orders"
           trend={<TrendBadge value={trend.orders} />}
           accent="emerald"
+          icon={<Clock size={24} />}
         />
-        <InsightMetric
-          title="Conversion"
-          value={`${data.summary.conversionRate}%`}
-          subtitle="Menu to order"
-          trend={<TrendBadge value={trend.conversion} />}
-          accent="violet"
-        />
+        {showExpenses ? (
+          <InsightMetric
+            title="Net Profit"
+            value={formatINR(data.summary.netProfit)}
+            subtitle={`After ${formatINR(data.summary.totalExpenses)} expenses`}
+            trend={<TrendBadge value={trend.revenue * 0.9} />}
+            accent="violet"
+            icon={<Calculator size={24} />}
+          />
+        ) : (
+          <InsightMetric
+            title="Conversion"
+            value={`${data.summary.conversionRate}%`}
+            subtitle="Menu to order"
+            trend={<TrendBadge value={trend.conversion} />}
+            accent="violet"
+            icon={<ArrowUpRight size={24} />}
+          />
+        )}
       </div>
+
+      {showExpenses && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+           <div className="lg:col-span-2 p-6 rounded-2xl border" style={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)' }}>
+             <div className="flex justify-between items-center mb-6">
+               <h3 className="font-bold text-xl flex items-center gap-2" style={{ color: 'var(--text-1)' }}>
+                 <ReceiptText size={20} className="text-blue-500" />
+                 Recent Expenses
+               </h3>
+               <button 
+                onClick={() => setIsExpenseModalOpen(true)}
+                className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 hover:bg-blue-500 transition-all"
+               >
+                 <Plus size={14} /> ADD EXPENSE
+               </button>
+             </div>
+             <div className="overflow-x-auto">
+               <table className="w-full text-left">
+                 <thead>
+                   <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
+                     <th className="pb-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Description</th>
+                     <th className="pb-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Category</th>
+                     <th className="pb-3 text-[10px] font-black uppercase text-slate-500 tracking-wider text-right">Amount</th>
+                     <th className="pb-3 text-[10px] font-black uppercase text-slate-500 tracking-wider text-right">Action</th>
+                   </tr>
+                 </thead>
+                 <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                   {expenses.map((exp: any) => (
+                     <tr key={exp.id} className="group">
+                       <td className="py-3 text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{exp.description}</td>
+                       <td className="py-3">
+                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-bold text-slate-600 border" style={{ background: 'var(--surface-3)', color: 'var(--text-2)', borderColor: 'var(--border)' }}>
+                           {exp.category}
+                         </span>
+                       </td>
+                       <td className="py-3 text-sm font-black text-right" style={{ color: 'var(--text-1)' }}>{formatINR(exp.amount)}</td>
+                       <td className="py-3 text-right">
+                         <button onClick={() => deleteExpenseMutation(exp.id)} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors">
+                           <Trash2 size={14} />
+                         </button>
+                       </td>
+                     </tr>
+                   ))}
+                   {expenses.length === 0 && (
+                     <tr>
+                       <td colSpan={4} className="py-8 text-center text-xs font-bold text-slate-500">No expenses recorded for this period.</td>
+                     </tr>
+                   )}
+                 </tbody>
+               </table>
+             </div>
+           </div>
+           
+           <div className="p-6 rounded-2xl border flex flex-col justify-between" style={{ background: 'linear-gradient(135deg, #1e293b, #0f172a)', borderColor: 'rgba(255,255,255,0.1)' }}>
+             <div>
+               <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
+                 <Calculator size={18} className="text-blue-400" />
+                 Profit Analysis
+               </h3>
+               <div className="space-y-4">
+                 <div className="flex justify-between items-end">
+                   <span className="text-slate-400 text-xs font-bold uppercase">Gross Revenue</span>
+                   <span className="text-white font-black">{formatINR(data.summary.totalRevenue)}</span>
+                 </div>
+                 <div className="flex justify-between items-end">
+                   <span className="text-slate-400 text-xs font-bold uppercase">Total Expenses</span>
+                   <span className="text-red-400 font-black">- {formatINR(data.summary.totalExpenses)}</span>
+                 </div>
+                 <div className="pt-4 border-t border-white/10 flex justify-between items-end">
+                   <span className="text-blue-400 text-sm font-black uppercase">Net Profit</span>
+                   <span className="text-emerald-400 text-2xl font-black">{formatINR(data.summary.netProfit)}</span>
+                 </div>
+               </div>
+             </div>
+             <div className="mt-8 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+               <p className="text-[10px] text-blue-300 font-bold leading-tight">
+                 Your profit margin is {((data.summary.netProfit / (data.summary.totalRevenue || 1)) * 100).toFixed(1)}% for this period.
+               </p>
+             </div>
+           </div>
+        </div>
+      )}
 
       {insights.length > 0 && (
         <div className="mb-8 rounded-2xl p-6 relative overflow-hidden" style={{ background: 'linear-gradient(to right, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1))', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
@@ -303,6 +436,81 @@ export function Analytics() {
           {data.topItems.length === 0 && <div className="py-8 text-center text-lg" style={{ color: 'var(--text-3)' }}>No analytical data generated yet.</div>}
         </div>
       </div>
+
+      {isExpenseModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white rounded-[32px] p-8 shadow-2xl animate-in fade-in zoom-in duration-200" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}>
+            <h3 className="text-2xl font-black mb-6" style={{ color: 'var(--text-1)' }}>Record Expense</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 ml-1">Description</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Electricity Bill, Fresh Produce"
+                  value={expenseForm.description}
+                  onChange={(e) => setExpenseForm({...expenseForm, description: e.target.value})}
+                  className="w-full bg-slate-100 border p-3 rounded-2xl outline-none text-sm font-semibold"
+                  style={{ background: 'var(--surface-3)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 ml-1">Amount</label>
+                  <input 
+                    type="number" 
+                    placeholder="₹0.00"
+                    value={expenseForm.amount}
+                    onChange={(e) => setExpenseForm({...expenseForm, amount: e.target.value})}
+                    className="w-full bg-slate-100 border p-3 rounded-2xl outline-none text-sm font-semibold"
+                    style={{ background: 'var(--surface-3)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 ml-1">Category</label>
+                  <select 
+                    value={expenseForm.category}
+                    onChange={(e) => setExpenseForm({...expenseForm, category: e.target.value})}
+                    className="w-full bg-slate-100 border p-3 rounded-2xl outline-none text-sm font-semibold"
+                    style={{ background: 'var(--surface-3)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
+                  >
+                    <option value="General">General</option>
+                    <option value="Inventory">Inventory</option>
+                    <option value="Salaries">Salaries</option>
+                    <option value="Rent">Rent</option>
+                    <option value="Utilities">Utilities</option>
+                    <option value="Marketing">Marketing</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-500 mb-1.5 ml-1">Date</label>
+                <input 
+                  type="date" 
+                  value={expenseForm.date}
+                  onChange={(e) => setExpenseForm({...expenseForm, date: e.target.value})}
+                  className="w-full bg-slate-100 border p-3 rounded-2xl outline-none text-sm font-semibold"
+                  style={{ background: 'var(--surface-3)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
+                />
+              </div>
+            </div>
+            <div className="mt-8 flex gap-3">
+              <button 
+                onClick={() => setIsExpenseModalOpen(false)}
+                className="flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-2)' }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={addExpenseMutation}
+                className="flex-1 py-3 rounded-2xl bg-blue-600 text-white text-xs font-black uppercase tracking-widest hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all"
+              >
+                Save Expense
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -313,33 +521,43 @@ function InsightMetric({
   subtitle,
   trend,
   accent,
+  icon
 }: {
   title: string;
   value: string;
   subtitle: string;
   trend: React.ReactNode;
   accent: 'blue' | 'emerald' | 'violet';
+  icon?: React.ReactNode;
 }) {
+  const shadowColor = accent === 'blue' ? 'rgba(37,99,235,0.15)' : accent === 'emerald' ? 'rgba(16,185,129,0.15)' : 'rgba(139,92,246,0.15)';
+  const iconColor = accent === 'blue' ? 'var(--brand)' : accent === 'emerald' ? 'var(--success)' : '#8b5cf6';
+
   return (
     <div
-      className="p-6 rounded-2xl border shadow-sm"
+      className="p-8 rounded-[2rem] border transition-all hover:scale-[1.02] duration-300 relative overflow-hidden group"
       style={{
-        background:
-          accent === 'blue'
-            ? 'linear-gradient(135deg, var(--card-bg), rgba(37,99,235,0.08))'
-            : accent === 'emerald'
-              ? 'linear-gradient(135deg, var(--card-bg), rgba(16,185,129,0.08))'
-              : 'linear-gradient(135deg, var(--card-bg), rgba(139,92,246,0.08))',
+        background: 'var(--card-bg)',
         borderColor: 'var(--card-border)',
-        boxShadow: 'var(--card-shadow)',
+        boxShadow: `0 20px 40px -15px ${shadowColor}`,
       }}
     >
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--text-3)' }}>{title}</p>
+      <div className="absolute top-0 right-0 w-32 h-32 -mr-8 -mt-8 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity duration-500" style={{ color: iconColor }}>
+        {icon}
+      </div>
+      
+      <div className="flex items-center justify-between mb-6">
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center`} style={{ background: `${iconColor}15`, color: iconColor }}>
+          {icon}
+        </div>
         {trend}
       </div>
-      <p className="text-4xl font-black mt-2" style={{ color: 'var(--text-1)' }}>{value}</p>
-      <p className="text-sm mt-1 font-medium" style={{ color: 'var(--text-3)' }}>{subtitle}</p>
+      
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: 'var(--text-3)' }}>{title}</p>
+        <p className="text-4xl font-black tracking-tighter" style={{ color: 'var(--text-1)' }}>{value}</p>
+        <p className="text-sm mt-2 font-bold opacity-60" style={{ color: 'var(--text-3)' }}>{subtitle}</p>
+      </div>
     </div>
   );
 }

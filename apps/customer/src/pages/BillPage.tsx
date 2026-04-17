@@ -19,6 +19,7 @@ import {
 import { publicApi } from '../lib/api';
 import { formatINR } from '../lib/currency';
 import { getSocketUrl } from '../lib/network';
+import { getSessionAccessTokenForTenant } from '../lib/tenantStorage';
 
 interface StepConfig {
   label: string;
@@ -85,6 +86,7 @@ function RatingStars({
 export function BillPage() {
   const { tenantSlug, sessionId } = useParams();
   const navigate = useNavigate();
+  const sessionAccessToken = getSessionAccessTokenForTenant(tenantSlug);
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showSplit, setShowSplit] = useState(false);
@@ -130,10 +132,10 @@ export function BillPage() {
   }, [fetchBill]);
 
   useEffect(() => {
-    if (!tenantSlug || !sessionId) return;
+    if (!tenantSlug || !sessionId || !sessionAccessToken) return;
 
     const socket = io(getSocketUrl(), {
-      auth: { tenantSlug, sessionToken: sessionId, client: 'customer-bill' },
+      auth: { tenantSlug, sessionAccessToken, client: 'customer-bill' },
       transports: ['websocket'],
       rememberUpgrade: true,
       reconnection: true,
@@ -155,7 +157,7 @@ export function BillPage() {
     return () => {
       socket.disconnect();
     };
-  }, [fetchBill, sessionId, tenantSlug]);
+  }, [fetchBill, sessionAccessToken, sessionId, tenantSlug]);
 
   useEffect(() => {
     if (!tenantSlug || !sessionId) return;

@@ -5,6 +5,8 @@ const LEGACY_KEYS = {
   customerPhone: 'rf_customer_phone',
   activeSession: 'rf_active_session',
   guestHandshakeToken: 'rf_handshake_token',
+  sessionAccessToken: 'rf_session_access_token',
+  tableQrSecret: 'rf_table_qr_secret',
 };
 
 const TENANT_STORAGE_EVENT = 'rf:tenant-storage-updated';
@@ -28,21 +30,7 @@ function scopedKey(tenantSlug: string | null | undefined, key: string) {
 }
 
 export function getTenantStorageItem(tenantSlug: string | null | undefined, key: string) {
-  const scoped = localStorage.getItem(scopedKey(tenantSlug, key));
-  if (scoped != null) return scoped;
-
-  if (key === 'customer_token') return localStorage.getItem(LEGACY_KEYS.customerToken);
-  if (key === 'customer_id') return localStorage.getItem(LEGACY_KEYS.customerId);
-  if (key === 'customer_name') return localStorage.getItem(LEGACY_KEYS.customerName);
-  if (key === 'customer_phone') return localStorage.getItem(LEGACY_KEYS.customerPhone);
-  if (key === 'active_session') {
-    return localStorage.getItem(LEGACY_KEYS.activeSession) || localStorage.getItem('restoflow_session');
-  }
-  if (key === 'guest_handshake_token') {
-    return localStorage.getItem(LEGACY_KEYS.guestHandshakeToken);
-  }
-
-  return null;
+  return localStorage.getItem(scopedKey(tenantSlug, key));
 }
 
 export function setTenantStorageItem(tenantSlug: string | null | undefined, key: string, value: string) {
@@ -61,26 +49,35 @@ export function getActiveSessionForTenant(tenantSlug: string | null | undefined)
 
 export function setActiveSessionForTenant(tenantSlug: string | null | undefined, sessionId: string) {
   setTenantStorageItem(tenantSlug, 'active_session', sessionId);
-  localStorage.setItem(LEGACY_KEYS.activeSession, sessionId);
-  localStorage.setItem('restoflow_session', sessionId);
 }
 
 export function getCustomerTokenForTenant(tenantSlug: string | null | undefined) {
   return getTenantStorageItem(tenantSlug, 'customer_token');
 }
 
-export function getGuestHandshakeTokenForTenant(tenantSlug: string | null | undefined) {
-  return getTenantStorageItem(tenantSlug, 'guest_handshake_token');
+export function getSessionAccessTokenForTenant(tenantSlug: string | null | undefined) {
+  return getTenantStorageItem(tenantSlug, 'session_access_token');
 }
 
-export function ensureGuestHandshakeTokenForTenant(tenantSlug: string | null | undefined) {
-  const existing = getGuestHandshakeTokenForTenant(tenantSlug);
-  if (existing) return existing;
+export function setSessionAccessForTenant(
+  tenantSlug: string | null | undefined,
+  payload: { sessionId: string; sessionAccessToken: string },
+) {
+  setTenantStorageItem(tenantSlug, 'active_session', payload.sessionId);
+  setTenantStorageItem(tenantSlug, 'session_access_token', payload.sessionAccessToken);
+}
 
-  const nextToken = `guest_${Math.random().toString(36).slice(2, 11)}`;
-  setTenantStorageItem(tenantSlug, 'guest_handshake_token', nextToken);
-  localStorage.setItem(LEGACY_KEYS.guestHandshakeToken, nextToken);
-  return nextToken;
+export function clearSessionAccessForTenant(tenantSlug: string | null | undefined) {
+  removeTenantStorageItem(tenantSlug, 'active_session');
+  removeTenantStorageItem(tenantSlug, 'session_access_token');
+}
+
+export function getTableQrSecretForTenant(tenantSlug: string | null | undefined) {
+  return getTenantStorageItem(tenantSlug, 'table_qr_secret');
+}
+
+export function setTableQrSecretForTenant(tenantSlug: string | null | undefined, qrSecret: string) {
+  setTenantStorageItem(tenantSlug, 'table_qr_secret', qrSecret);
 }
 
 export function getLastTableIdForTenant(tenantSlug: string | null | undefined) {
@@ -117,12 +114,6 @@ export function setCustomerAuthForTenant(
   if (payload.customerPhone != null) {
     setTenantStorageItem(tenantSlug, 'customer_phone', payload.customerPhone);
   }
-
-  // Keep legacy compatibility so existing screens continue to work.
-  localStorage.setItem(LEGACY_KEYS.customerToken, payload.token);
-  localStorage.setItem(LEGACY_KEYS.customerId, payload.customerId);
-  if (payload.customerName != null) localStorage.setItem(LEGACY_KEYS.customerName, payload.customerName);
-  if (payload.customerPhone != null) localStorage.setItem(LEGACY_KEYS.customerPhone, payload.customerPhone);
 }
 
 export function clearCustomerContextForTenant(tenantSlug: string | null | undefined) {
@@ -131,13 +122,12 @@ export function clearCustomerContextForTenant(tenantSlug: string | null | undefi
   removeTenantStorageItem(tenantSlug, 'customer_name');
   removeTenantStorageItem(tenantSlug, 'customer_phone');
   removeTenantStorageItem(tenantSlug, 'active_session');
+  removeTenantStorageItem(tenantSlug, 'session_access_token');
   removeTenantStorageItem(tenantSlug, 'guest_handshake_token');
+  removeTenantStorageItem(tenantSlug, 'table_qr_secret');
+}
 
-  localStorage.removeItem(LEGACY_KEYS.customerToken);
-  localStorage.removeItem(LEGACY_KEYS.customerId);
-  localStorage.removeItem(LEGACY_KEYS.customerName);
-  localStorage.removeItem(LEGACY_KEYS.customerPhone);
-  localStorage.removeItem(LEGACY_KEYS.activeSession);
-  localStorage.removeItem(LEGACY_KEYS.guestHandshakeToken);
+export function clearLegacyCustomerStorage() {
+  Object.values(LEGACY_KEYS).forEach((key) => localStorage.removeItem(key));
   localStorage.removeItem('restoflow_session');
 }

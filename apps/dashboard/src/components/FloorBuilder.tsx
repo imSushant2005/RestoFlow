@@ -4,6 +4,9 @@ import { api } from '../lib/api';
 import { Plus, QrCode, Trash2, Power, Lock, CheckCircle } from 'lucide-react';
 import { usePlanFeatures } from '../hooks/usePlanFeatures';
 import { useNavigate } from 'react-router-dom';
+import { UpgradeModal } from './UpgradeModal';
+import { PromptModal } from './PromptModal';
+import { ConfirmModal } from './ConfirmModal';
 import { QRCodeSVG } from 'qrcode.react';
 import { toPng } from 'html-to-image';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -139,6 +142,10 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
   const [selectedTable, setSelectedTable] = useState<any>(null);
   const [selectedSeatQR, setSelectedSeatQR] = useState<number | 'FULL'>('FULL');
   const [highlightedTableId, setHighlightedTableId] = useState<string | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showTablePrompt, setShowTablePrompt] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<any>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState<any>(null);
   const { features } = usePlanFeatures();
   const navigate = useNavigate();
 
@@ -210,7 +217,7 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
     },
     onError: (error: any) => {
       console.error('Failed to create table:', error);
-      alert('Failed to add table: ' + (error.response?.data?.error || error.message));
+      // Fallback for unexpected errors, though mostly handled by plan limits
     }
   });
 
@@ -238,25 +245,13 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
   });
 
   const handleDelete = (table: any) => {
-    if (window.confirm(`Are you sure you want to delete Table ${table.name}?`)) {
-      deleteTableMutation.mutate(table.id, { context: { deletedId: table.id } } as any);
-    }
+    setShowDeleteConfirm(table);
   };
 
   const handleToggleStatus = async (table: any, mode?: 'TOGGLE' | 'CLEAR') => {
     if (mode === 'CLEAR') {
       if (!table.currentSessionId) return;
-      if (!window.confirm(`Force clear and archive session for Table ${table.name}?`)) return;
-      
-      try {
-        await api.post(`/sessions/${table.currentSessionId}/complete`, { 
-          paymentMethod: 'cash', 
-          shouldClose: true 
-        });
-        queryClient.invalidateQueries({ queryKey: ['zones'] });
-      } catch (err: any) {
-        alert(err?.response?.data?.error || 'Failed to clear session');
-      }
+      setShowClearConfirm(table);
       return;
     }
 
@@ -301,16 +296,10 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
           <button 
             onClick={() => {
               if (isLimitReached) {
-                if (confirm(`Your ${features.name} plan allows up to ${features.tables} tables. Upgrade to add more?`)) {
-                  navigate('/app/subscription');
-                }
+                setShowUpgradeModal(true);
                 return;
               }
-              const name = prompt('Table Number/Name (e.g., "12"):');
-              if (!name) return;
-              const seatsRaw = prompt('Table Capacity (default 4):');
-              const capacity = seatsRaw ? parseInt(seatsRaw, 10) : 4;
-              createTableMutation.mutate({ name, capacity });
+              setShowTablePrompt(true);
             }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${isLimitReached ? 'bg-slate-700 text-slate-300' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
           >
@@ -319,6 +308,54 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
           </button>
         </div>
       </div>
+
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        onUpgrade={() => navigate('/app/subscription')}
+        title="Table Limit Reached"
+        description={`Your ${features.name} plan allows up to ${features.tables} tables. Upgrade to add more capacity to your restaurant.`}
+        tierName={features.name}
+        limitText={`${features.tables} Table Limit`}
+      />
+
+      <PromptModal
+        isOpen={showTablePrompt}
+        onClose={() => setShowTablePrompt(false)}
+        onSubmit={(name) => createTableMutation.mutate({ name, capacity: 4 })}
+        title="Quick Table Add"
+        label="Table Number/Name"
+        placeholder="e.g. 101, T5, or Garden-1"
+      />
+
+      <ConfirmModal
+        isOpen={!!showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(null)}
+        onConfirm={() => deleteTableMutation.mutate(showDeleteConfirm.id, { context: { deletedId: showDeleteConfirm.id } } as any)}
+        variant="danger"
+        title="Delete Table"
+        description={`Are you sure you want to delete Table ${showDeleteConfirm?.name}? This action cannot be undone.`}
+        confirmLabel="Delete"
+      />
+
+      <ConfirmModal
+        isOpen={!!showClearConfirm}
+        onClose={() => setShowClearConfirm(null)}
+        onConfirm={async () => {
+          try {
+            await api.post(`/sessions/${showClearConfirm.currentSessionId}/complete`, { 
+              paymentMethod: 'cash', 
+              shouldClose: true 
+            });
+            queryClient.invalidateQueries({ queryKey: ['zones'] });
+          } catch (err) {
+            console.error('Failed to clear session', err);
+          }
+        }}
+        title="Clear Session"
+        description={`This will force close the current active session for Table ${showClearConfirm?.name}. All unpaid orders will be marked as paid via Cash.`}
+        confirmLabel="Clear & Archive"
+      />
       
       {/* Summary Stats Bar */}
       <div className="flex gap-4">
@@ -401,8 +438,8 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
                   selectedTable === 'roaming' 
                     ? `${customerAppUrl}/order/${tenantSlug}` 
                     : selectedSeatQR === 'FULL' 
-                      ? `${customerAppUrl}/order/${tenantSlug}/${selectedTable.id}`
-                      : `${customerAppUrl}/order/${tenantSlug}/${selectedTable.id}?seat=${selectedSeatQR}`
+                      ? `${customerAppUrl}/order/${tenantSlug}/${selectedTable.id}?qr=${encodeURIComponent(selectedTable.qrSecret)}`
+                      : `${customerAppUrl}/order/${tenantSlug}/${selectedTable.id}?seat=${selectedSeatQR}&qr=${encodeURIComponent(selectedTable.qrSecret)}`
                 } 
                 size={200}
                 level="H"

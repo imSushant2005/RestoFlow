@@ -10,10 +10,13 @@ const prisma_1 = require("../db/prisma");
 const env_1 = require("../config/env");
 const logger_1 = require("../utils/logger");
 const plans_1 = require("../config/plans");
-const razorpay = new razorpay_1.default({
-    key_id: env_1.env.RAZORPAY_KEY_ID || 'test_key',
-    key_secret: env_1.env.RAZORPAY_KEY_SECRET || 'test_secret',
-});
+const hasRazorpayConfig = Boolean(env_1.env.RAZORPAY_KEY_ID && env_1.env.RAZORPAY_KEY_SECRET);
+const razorpay = hasRazorpayConfig
+    ? new razorpay_1.default({
+        key_id: env_1.env.RAZORPAY_KEY_ID,
+        key_secret: env_1.env.RAZORPAY_KEY_SECRET,
+    })
+    : null;
 // Razorpay amounts use paise.
 const PLAN_PRICING = {
     MINI: 599 * 100,
@@ -23,6 +26,9 @@ const PLAN_PRICING = {
 };
 const createSubscriptionOrder = async (req, res) => {
     try {
+        if (!hasRazorpayConfig || !razorpay) {
+            return res.status(503).json({ success: false, error: 'Billing provider is not configured.' });
+        }
         const normalizedPlan = (0, plans_1.parsePlan)(req.body?.plan);
         if (!normalizedPlan) {
             return res.status(400).json({ success: false, error: 'Invalid plan selected' });
@@ -58,6 +64,9 @@ const createSubscriptionOrder = async (req, res) => {
 exports.createSubscriptionOrder = createSubscriptionOrder;
 const verifyPayment = async (req, res) => {
     try {
+        if (!hasRazorpayConfig) {
+            return res.status(503).json({ success: false, error: 'Billing provider is not configured.' });
+        }
         const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
         const normalizedPlan = (0, plans_1.parsePlan)(req.body?.plan);
         if (!normalizedPlan) {
@@ -65,17 +74,23 @@ const verifyPayment = async (req, res) => {
         }
         const body = `${razorpay_order_id}|${razorpay_payment_id}`;
         const expectedSignature = crypto_1.default
-            .createHmac('sha256', env_1.env.RAZORPAY_KEY_SECRET || 'test_secret')
+            .createHmac('sha256', env_1.env.RAZORPAY_KEY_SECRET)
             .update(body)
             .digest('hex');
         if (expectedSignature !== razorpay_signature) {
             return res.status(400).json({ success: false, error: 'Invalid payment signature. Potential fraudulent request.' });
         }
-        await prisma_1.prisma.tenant.update({
-            where: { id: req.tenantId },
-            data: { plan: normalizedPlan },
+        logger_1.logger.warn({
+            tenantId: req.tenantId,
+            plan: normalizedPlan,
+            razorpayOrderId: razorpay_order_id,
+            razorpayPaymentId: razorpay_payment_id,
+        }, 'Client-side billing verification blocked until webhook-backed settlement ledger is implemented');
+        res.status(409).json({
+            success: false,
+            error: 'Plan upgrades are applied only after verified webhook settlement.',
+            code: 'WEBHOOK_SETTLEMENT_REQUIRED',
         });
-        res.json({ success: true, message: 'Payment successful, plan upgraded.', plan: normalizedPlan });
     }
     catch (error) {
         logger_1.logger.error({ error }, 'Payment verification failure');
@@ -85,10 +100,13 @@ const verifyPayment = async (req, res) => {
 exports.verifyPayment = verifyPayment;
 const handleWebhook = async (req, res) => {
     try {
+        if (!hasRazorpayConfig) {
+            return res.status(503).json({ success: false, error: 'Billing provider is not configured.' });
+        }
         const signature = req.headers['x-razorpay-signature'];
         const bodyText = JSON.stringify(req.body);
         const expectedSignature = crypto_1.default
-            .createHmac('sha256', env_1.env.RAZORPAY_KEY_SECRET || 'test_secret')
+            .createHmac('sha256', env_1.env.RAZORPAY_KEY_SECRET)
             .update(bodyText)
             .digest('hex');
         if (expectedSignature !== signature) {
@@ -98,7 +116,7 @@ const handleWebhook = async (req, res) => {
         if (event.event === 'subscription.charged') {
             const notes = event.payload.subscription.entity.notes;
             if (notes && notes.tenantId) {
-                logger_1.logger.info(`Subscription charged successfully for tenant ${notes.tenantId}`);
+                logger_1.logger.info({ tenantId: notes.tenantId, plan: notes.plan, event: event.event }, 'Verified billing event received. No plan mutation applied without settlement ledger.');
             }
         }
         res.json({ status: 'ok' });

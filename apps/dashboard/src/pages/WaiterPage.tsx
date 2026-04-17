@@ -10,11 +10,13 @@ type WaiterCallType = 'WAITER' | 'BILL' | 'WATER' | 'EXTRA' | 'HELP';
 type LanguageKey = 'en' | 'hi' | 'hinglish';
 
 type WaiterCallAlert = {
-  id: number;
+  id: string;
+  dedupeKey: string;
   tableId?: string;
   tableName?: string;
   sessionId?: string;
   type?: WaiterCallType | string;
+  timestamp?: string;
 };
 
 type ReadyPickupCard = {
@@ -26,6 +28,7 @@ type ReadyPickupCard = {
   orderType: string;
   itemCount: number;
   readyAt?: string;
+  version?: number;
   items: Array<{ id: string; name: string; quantity: number }>;
 };
 
@@ -151,6 +154,7 @@ function normalizeReadyOrder(order: any): ReadyPickupCard | null {
     orderType,
     itemCount: Number(order?.itemCount) || (Array.isArray(order?.items) ? order.items.reduce((sum: number, item: any) => sum + Number(item?.quantity || 0), 0) : 0),
     readyAt: order?.readyAt || order?.updatedAt || undefined,
+    version: typeof order?.version === 'number' ? order.version : undefined,
     items: Array.isArray(order?.items)
       ? order.items.map((item: any) => ({
           id: String(item?.id || `${orderId}_${item?.menuItemId || item?.name || Math.random()}`),
@@ -168,12 +172,57 @@ function safeTime(value?: string) {
   return format(parsed, 'h:mm a');
 }
 
+function normalizeWaiterCall(call: any): WaiterCallAlert | null {
+  const sessionId = typeof call?.sessionId === 'string' ? call.sessionId : undefined;
+  const tableId = typeof call?.tableId === 'string' ? call.tableId : undefined;
+  const type = String(call?.type || 'WAITER').toUpperCase();
+  const timestamp = typeof call?.timestamp === 'string' ? call.timestamp : new Date().toISOString();
+  const dedupeKey = [sessionId || 'no-session', tableId || 'no-table', type].join(':');
+
+  return {
+    id: `${dedupeKey}:${timestamp}`,
+    dedupeKey,
+    sessionId,
+    tableId,
+    tableName: typeof call?.tableName === 'string' ? call.tableName : undefined,
+    type,
+    timestamp,
+  };
+}
+
+function mergeWaiterCalls(previous: WaiterCallAlert[] | undefined, incoming: WaiterCallAlert) {
+  const current = Array.isArray(previous) ? previous : [];
+  const deduped = current.filter((entry) => entry.dedupeKey !== incoming.dedupeKey);
+  return [incoming, ...deduped].slice(0, 10);
+}
+
+function mergeReadyAlerts(
+  previous: ReadyPickupCard[] | undefined,
+  incoming: ReadyPickupCard,
+  dismissedReadyOrderIds: string[],
+) {
+  if (dismissedReadyOrderIds.includes(incoming.orderId)) {
+    return Array.isArray(previous) ? previous : [];
+  }
+
+  const current = Array.isArray(previous) ? previous : [];
+  const existing = current.find((entry) => entry.orderId === incoming.orderId);
+  if (
+    existing &&
+    typeof existing.version === 'number' &&
+    typeof incoming.version === 'number' &&
+    incoming.version <= existing.version
+  ) {
+    return current;
+  }
+
+  return [{ ...incoming }, ...current.filter((entry) => entry.orderId !== incoming.orderId)].slice(0, 8);
+}
+
 export function WaiterPage() {
   const queryClient = useQueryClient();
-  const [waiterCalls, setWaiterCalls] = useState<WaiterCallAlert[]>([]);
-  const [readyAlerts, setReadyAlerts] = useState<ReadyPickupCard[]>([]);
   const [dismissedReadyOrderIds, setDismissedReadyOrderIds] = useState<string[]>([]);
-  const [resolvingCallId, setResolvingCallId] = useState<number | null>(null);
+  const [resolvingCallId, setResolvingCallId] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
 
   const { data: businessSettings } = useQuery<{ slug?: string }>({
@@ -206,6 +255,20 @@ export function WaiterPage() {
     refetchOnWindowFocus: false,
   });
 
+  const { data: waiterCalls = [] } = useQuery<WaiterCallAlert[]>({
+    queryKey: ['waiter-active-calls'],
+    queryFn: async () => [],
+    initialData: [],
+    staleTime: Infinity,
+  });
+
+  const { data: readyAlerts = [] } = useQuery<ReadyPickupCard[]>({
+    queryKey: ['waiter-ready-alerts'],
+    queryFn: async () => [],
+    initialData: [],
+    staleTime: Infinity,
+  });
+
   const resolveTenantSlug = useCallback(() => {
     const fromQuery = String(businessSettings?.slug || '').trim();
     if (fromQuery) return fromQuery;
@@ -216,14 +279,18 @@ export function WaiterPage() {
     mutationFn: (id: string) => api.patch(`/orders/${id}/status`, { status: 'SERVED' }),
     onSuccess: (_response, orderId) => {
       queryClient.invalidateQueries({ queryKey: ['waiter-ready-orders'] });
-      setReadyAlerts((prev) => prev.filter((alert) => alert.orderId !== orderId));
+      queryClient.setQueryData(['waiter-ready-alerts'], (prev: ReadyPickupCard[] | undefined) =>
+        (Array.isArray(prev) ? prev : []).filter((alert) => alert.orderId !== orderId),
+      );
       setDismissedReadyOrderIds((prev) => prev.filter((id) => id !== orderId));
     },
   });
 
-  const dismissWaiterCall = useCallback((id: number) => {
-    setWaiterCalls((prev) => prev.filter((call) => call.id !== id));
-  }, []);
+  const dismissWaiterCall = useCallback((id: string) => {
+    queryClient.setQueryData(['waiter-active-calls'], (prev: WaiterCallAlert[] | undefined) =>
+      (Array.isArray(prev) ? prev : []).filter((call) => call.id !== id),
+    );
+  }, [queryClient]);
 
   const acknowledgeWaiterCall = useCallback(async (call: WaiterCallAlert) => {
     if (!call.sessionId) {
@@ -249,8 +316,18 @@ export function WaiterPage() {
   const pushReadyAlert = useCallback((input: any) => {
     const nextAlert = normalizeReadyOrder(input);
     if (!nextAlert || dismissedReadyOrderIds.includes(nextAlert.orderId)) return;
-    setReadyAlerts((prev) => [{ ...nextAlert }, ...prev.filter((entry) => entry.orderId !== nextAlert.orderId)].slice(0, 8));
-  }, [dismissedReadyOrderIds]);
+    queryClient.setQueryData(['waiter-ready-alerts'], (prev: ReadyPickupCard[] | undefined) =>
+      mergeReadyAlerts(prev, nextAlert, dismissedReadyOrderIds),
+    );
+  }, [dismissedReadyOrderIds, queryClient]);
+
+  const pushWaiterCall = useCallback((input: any) => {
+    const normalizedCall = normalizeWaiterCall(input);
+    if (!normalizedCall) return;
+    queryClient.setQueryData(['waiter-active-calls'], (prev: WaiterCallAlert[] | undefined) =>
+      mergeWaiterCalls(prev, normalizedCall),
+    );
+  }, [queryClient]);
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -277,24 +354,38 @@ export function WaiterPage() {
       }
       if (['SERVED', 'RECEIVED', 'CANCELLED'].includes(normalizedStatus)) {
         const updatedId = String(updated?.id || updated?.orderId || '');
-        setReadyAlerts((prev) => prev.filter((alert) => alert.orderId !== updatedId));
+        queryClient.setQueryData(['waiter-ready-alerts'], (prev: ReadyPickupCard[] | undefined) =>
+          (Array.isArray(prev) ? prev : []).filter((alert) => alert.orderId !== updatedId),
+        );
         setDismissedReadyOrderIds((prev) => prev.filter((id) => id !== updatedId));
       }
     };
 
     socket.on('order:update', handleOrderUpdate);
     socket.on('waiter:pickup_ready', pushReadyAlert);
-    socket.on('waiter:call', (call: any) => setWaiterCalls((prev) => [{ ...call, id: Date.now() + prev.length }, ...prev].slice(0, 10)));
+    socket.on('waiter:call', pushWaiterCall);
+    socket.on('waiter:acknowledged', (payload: any) => {
+      const sessionId = typeof payload?.sessionId === 'string' ? payload.sessionId : undefined;
+      const tableId = typeof payload?.tableId === 'string' ? payload.tableId : undefined;
+      queryClient.setQueryData(['waiter-active-calls'], (prev: WaiterCallAlert[] | undefined) =>
+        (Array.isArray(prev) ? prev : []).filter((call) => {
+          if (sessionId && call.sessionId === sessionId) return false;
+          if (!sessionId && tableId && call.tableId === tableId) return false;
+          return true;
+        }),
+      );
+    });
     socket.on('connect_error', () => setConnectionState('reconnecting'));
     socket.on('disconnect', () => setConnectionState('reconnecting'));
     return () => {
       socket.disconnect();
     };
-  }, [pushReadyAlert, queryClient]);
+  }, [pushReadyAlert, pushWaiterCall, queryClient]);
 
   useEffect(() => {
-    setReadyAlerts((previous) => {
+    queryClient.setQueryData(['waiter-ready-alerts'], (previous: ReadyPickupCard[] | undefined) => {
       const merged = new Map<string, ReadyPickupCard>();
+      const previousAlerts = Array.isArray(previous) ? previous : [];
 
       readyOrders.forEach((order) => {
         if (!dismissedReadyOrderIds.includes(order.orderId)) {
@@ -302,15 +393,28 @@ export function WaiterPage() {
         }
       });
 
-      previous.forEach((order) => {
-        if (!dismissedReadyOrderIds.includes(order.orderId)) {
+      previousAlerts.forEach((order) => {
+        if (dismissedReadyOrderIds.includes(order.orderId)) {
+          return;
+        }
+
+        const serverOrder = merged.get(order.orderId);
+        if (!serverOrder) {
+          return;
+        }
+
+        if (
+          typeof order.version === 'number' &&
+          typeof serverOrder.version === 'number' &&
+          order.version > serverOrder.version
+        ) {
           merged.set(order.orderId, order);
         }
       });
 
       return Array.from(merged.values()).slice(0, 8);
     });
-  }, [dismissedReadyOrderIds, readyOrders]);
+  }, [dismissedReadyOrderIds, queryClient, readyOrders]);
 
   const readyQueue = useMemo(
     () => readyAlerts.filter((entry) => !dismissedReadyOrderIds.includes(entry.orderId)),

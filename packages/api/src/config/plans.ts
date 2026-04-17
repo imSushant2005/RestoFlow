@@ -21,9 +21,9 @@ const CANONICAL_PLAN_LIMITS: Record<CanonicalPlan, PlanLimit> = {
     price: 599,
     name: 'Mini',
     hasKDS: false,
-    hasWaiterRole: false,
+    hasWaiterRole: true,
     hasWaiterApp: false,
-    hasAdvancedAnalytics: false,
+    hasAdvancedAnalytics: true,
     maxFloors: 1,
   },
   CAFE: {

@@ -22,6 +22,7 @@ export const getZones = async (req: Request, res: Response) => {
               name: true,
               capacity: true,
               seats: true,
+              qrSecret: true,
               occupiedSeats: true,
               status: true,
               orders: {

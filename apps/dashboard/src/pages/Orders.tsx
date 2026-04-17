@@ -162,7 +162,7 @@ const TicketCard = memo(({
   return (
     <div
       className={`relative flex flex-col gap-4 rounded-2xl p-4 transition-all duration-300 ${isCancelled ? 'opacity-60' : ''} ${isUrgent ? 'ring-2 ring-red-500/50 shadow-xl shadow-red-500/20' : ''}`}
-      style={{ background: '#111318', border: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 8px 32px -4px rgba(0,0,0,0.5)' }}
+      style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
     >
       <div className={`absolute left-0 right-0 top-0 h-1.5 rounded-t-2xl ${isCancelled ? 'bg-red-500/50' : isUrgent ? 'bg-red-500' : 'bg-blue-600'}`} />
       
@@ -242,7 +242,7 @@ const TicketCard = memo(({
 
       <div className="space-y-3 mt-1">
         {ticketOrders.map((order: any, idx: number) => (
-          <div key={order.id} className="rounded-xl bg-black/30 border border-white/5 p-3 shadow-inner">
+          <div key={order.id} className="rounded-xl bg-[var(--surface-3)] border border-[var(--border)] p-3 shadow-inner">
             <div className="flex justify-between items-center mb-2">
                <span className="text-[10px] font-black text-slate-500 uppercase">Batch {idx + 1}</span>
                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${getStatusChipClass(String(order.status || '').toUpperCase())}`}>
@@ -364,7 +364,7 @@ const KanbanColumn = ({ id, label, color, bg, badge, children, pulse, isActive }
     <div 
       ref={setNodeRef} 
       className={`kanban-col flex-shrink-0 transition-all duration-300 min-h-[500px] rounded-3xl ${isOver ? 'ring-2 ring-blue-500/50 bg-blue-500/5' : ''}`}
-      style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}
+      style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
     >
       <div className={`kanban-col-header sticky top-0 shadow-sm z-20 rounded-t-3xl backdrop-blur-md ${bg}`}>
         <div className="flex items-center gap-2.5">
@@ -436,7 +436,7 @@ const PipelineCard = memo(({
     <div
       ref={setNodeRef}
       className={`relative flex flex-col gap-0 rounded-2xl transition-all duration-300 ${isUrgent ? 'ring-2 ring-red-500 shadow-xl shadow-red-500/20' : ''} ${isDragging ? 'shadow-2xl scale-105 rotate-1' : ''}`}
-      style={{ ...style, background: '#0F1115', border: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 8px 32px -4px rgba(0,0,0,0.5)' }}
+      style={{ ...style, background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
     >
       <div className={`absolute left-0 right-0 top-0 h-1 rounded-t-2xl opacity-80 ${stripeClass}`} />
       

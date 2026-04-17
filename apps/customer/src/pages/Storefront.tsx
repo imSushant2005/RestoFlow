@@ -79,7 +79,7 @@ export function Storefront() {
   const [intakeError, setIntakeError] = useState('');
 
   const deferredSearch = useDeferredValue(searchText.trim().toLowerCase());
-  const { items: cartItems, customerName, setCustomerInfo, setTenantScope } = useCartStore();
+  const { items: cartItems, customerName, setCustomerInfo, setTenantScope, setTenantPlan } = useCartStore();
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = cartItems.reduce((sum, item) => sum + item.totalPrice * item.quantity, 0);
 
@@ -112,7 +112,10 @@ export function Storefront() {
 
   useEffect(() => {
     setTenantScope(tenantSlug || undefined);
-  }, [setTenantScope, tenantSlug]);
+    if (menuData?.plan) {
+      setTenantPlan(menuData.plan);
+    }
+  }, [menuData?.plan, setTenantPlan, setTenantScope, tenantSlug]);
 
   useEffect(() => {
     if (!customerName && rfName && rfPhone) {
@@ -562,10 +565,10 @@ export function Storefront() {
         </div>
       </header>
 
-      <div className="mx-auto mt-6 flex w-full max-w-[1400px] lg:px-8">
+      <div className="mx-auto mt-8 flex w-full max-w-[1400px] gap-12 lg:px-10">
         <aside className="relative hidden w-72 flex-shrink-0 lg:block">
           <div
-            className="sticky top-[110px] overflow-hidden rounded-3xl shadow-xl"
+            className="sticky top-[120px] overflow-hidden rounded-[2.5rem] shadow-xl transition-all hover:shadow-2xl hover:shadow-black/5"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
           >
             <div
@@ -600,7 +603,7 @@ export function Storefront() {
           <div className="space-y-8 px-4 lg:px-0">
             <div className="space-y-12 py-4">
               {filteredCategories.map((category: any) => (
-                <div key={category.id} id={`category-${category.id}`} className="scroll-mt-40 lg:scroll-mt-24">
+                <div key={category.id} id={`category-${category.id}`} className="scroll-mt-[180px] lg:scroll-mt-[140px]">
                   <MenuSection category={category} />
                 </div>
               ))}

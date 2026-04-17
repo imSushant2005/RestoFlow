@@ -11,6 +11,10 @@ export interface PlanFeatures {
   hasWaiterRole: boolean;
   hasWaiterApp: boolean;
   hasAdvancedAnalytics: boolean;
+  analyticsLevel: 'BASIC' | 'STANDARD' | 'ADVANCED';
+  hasExpenseTracking: boolean;
+  hasAssistedDirectBill: boolean;
+  hasAssistedCustomerLookup: boolean;
   maxFloors: number;
 }
 
@@ -20,9 +24,13 @@ const PLAN_FEATURES_MAP: Record<PlanTier, PlanFeatures> = {
     tables: 3,
     staff: 1,
     hasKDS: false,
-    hasWaiterRole: false,
+    hasWaiterRole: true,
     hasWaiterApp: false,
-    hasAdvancedAnalytics: false,
+    hasAdvancedAnalytics: true,
+    analyticsLevel: 'STANDARD',
+    hasExpenseTracking: true,
+    hasAssistedDirectBill: true,
+    hasAssistedCustomerLookup: true,
     maxFloors: 1,
   },
   CAFE: {
@@ -33,16 +41,24 @@ const PLAN_FEATURES_MAP: Record<PlanTier, PlanFeatures> = {
     hasWaiterRole: true,
     hasWaiterApp: false,
     hasAdvancedAnalytics: false,
+    analyticsLevel: 'STANDARD',
+    hasExpenseTracking: false,
+    hasAssistedDirectBill: true,
+    hasAssistedCustomerLookup: false,
     maxFloors: 1,
   },
   DINEPRO: {
     name: 'DinePro',
     tables: 18,
-    staff: 200, // Practically unlimited for dine-in staff
+    staff: 200,
     hasKDS: true,
     hasWaiterRole: true,
     hasWaiterApp: true,
     hasAdvancedAnalytics: true,
+    analyticsLevel: 'ADVANCED',
+    hasExpenseTracking: true,
+    hasAssistedDirectBill: true,
+    hasAssistedCustomerLookup: true,
     maxFloors: 2,
   },
   PREMIUM: {
@@ -53,6 +69,10 @@ const PLAN_FEATURES_MAP: Record<PlanTier, PlanFeatures> = {
     hasWaiterRole: true,
     hasWaiterApp: true,
     hasAdvancedAnalytics: true,
+    analyticsLevel: 'ADVANCED',
+    hasExpenseTracking: true,
+    hasAssistedDirectBill: true,
+    hasAssistedCustomerLookup: true,
     maxFloors: 10,
   },
 };

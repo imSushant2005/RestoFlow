@@ -23,6 +23,7 @@ interface CartState {
   customerPhone?: string;
   orderType?: 'DINE_IN' | 'TAKEAWAY';
   tableSeat?: string;
+  tenantPlan?: string;
   setTenantScope: (tenantSlug?: string) => void;
   addItem: (item: CartItem) => void;
   removeItem: (id: string) => void;
@@ -30,6 +31,7 @@ interface CartState {
   clearCart: () => void;
   getCartTotal: () => number;
   setCustomerInfo: (info: { name: string; phone: string; type: 'DINE_IN' | 'TAKEAWAY', seat?: string }) => void;
+  setTenantPlan: (plan: string) => void;
 }
 
 const newStorageKey = 'restoflow-cart';
@@ -65,7 +67,7 @@ export const useCartStore = create<CartState>()(
             return { tenantSlug: nextTenant };
           }
           // Keep customer identity but isolate cart/session context per tenant.
-          return { tenantSlug: nextTenant, items: [], tableSeat: undefined };
+          return { tenantSlug: nextTenant, items: [], tableSeat: undefined, tenantPlan: undefined };
         }),
       addItem: (item) =>
         set((state) => {
@@ -112,7 +114,8 @@ export const useCartStore = create<CartState>()(
         const safeItems = Array.isArray(items) ? items : [];
         return safeItems.reduce((total, item) => total + ((Number(item.totalPrice) || 0) * (Number(item.quantity) || 1)), 0);
       },
-      setCustomerInfo: (info) => set({ customerName: info.name, customerPhone: info.phone, orderType: info.type, tableSeat: info.seat })
+      setCustomerInfo: (info) => set({ customerName: info.name, customerPhone: info.phone, orderType: info.type, tableSeat: info.seat }),
+      setTenantPlan: (plan) => set({ tenantPlan: plan }),
     }),
     {
       name: newStorageKey,

@@ -8,7 +8,7 @@ import { BILLING_VIEW_ROLES } from '../constants/rbac.js';
 const router: Router = Router();
 
 // Session lifecycle (public, customer-facing)
-router.post('/:tenantSlug/sessions', SessionController.createSession);
+router.post('/:tenantSlug/sessions', idempotencyMiddleware, SessionController.createSession);
 router.get('/:tenantSlug/sessions/:sessionId', SessionController.getSession);
 
 // C-5: idempotencyMiddleware added — prevents duplicate orders on double-tap / poor network

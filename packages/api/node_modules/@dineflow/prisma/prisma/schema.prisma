@@ -56,6 +56,7 @@ model Tenant {
   staffInvites    StaffInvite[]
   analytics       DailyAnalytics[]
   bills           Bill[]
+  expenses        Expense[]
   orderAuditLogs  OrderAuditLog[]
   gstin           String?
   fssai           String?
@@ -307,6 +308,7 @@ model DiningSession {
   @@index([tenantId, sessionStatus, tableId])
   @@index([tenantId, tableId, openedAt])
   @@index([tenantId, tableId, sessionStatus, openedAt])
+  @@index([customerId, sessionStatus, openedAt(sort: Desc)])
   @@index([tenantId, source])
   @@index([tableId])
   @@index([customerId])
@@ -398,6 +400,7 @@ model Order {
   @@unique([tenantId, orderNumber], map: "Order_tenantId_orderNumber_key") // prevents duplicate order numbers — P2002 on race
   @@index([diningSessionId])
   @@index([diningSessionId, createdAt])
+  @@index([tenantId, createdAt])
 }
 
 model OrderItem {
@@ -477,6 +480,21 @@ model DailyAnalytics {
   updatedAt       DateTime @updatedAt
 
   @@unique([tenantId, date])
+  @@index([tenantId, date])
+}
+
+// ─── EXPENSES (DinePro+) ──────────────────────────────────
+model Expense {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  description String
+  amount      Float
+  category    String   @default("General")
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   @@index([tenantId, date])
 }
 

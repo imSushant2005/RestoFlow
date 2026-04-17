@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import * as PublicController from '../controllers/public.controller';
-import * as TableController from '../controllers/table.controller';
 import { idempotencyMiddleware } from '../middlewares/idempotency.middleware';
+import { requireAuth } from '../middlewares/auth.middleware';
+import { requireRoles } from '../middlewares/role.middleware';
+import { ORDER_ACCESS_ROLES } from '../constants/rbac';
 // Lazy-load customer controller at request-time to avoid startup failure
 // if the compiled controller file is missing in some build contexts.
 
@@ -21,8 +23,12 @@ router.get('/:tenantSlug/orders/:id', PublicController.getOrderInfo);
 router.patch('/:tenantSlug/orders/:id/status', PublicController.updateOrderStatusPublic);
 router.post('/orders/:id/feedback', PublicController.submitFeedback);
 router.post('/:tenantSlug/waiter-call', PublicController.waiterCall);
-router.post('/:tenantSlug/waiter-call/acknowledge', PublicController.acknowledgeWaiterCall);
-router.post('/tables/:id/session', TableController.createSession);
+router.post(
+  '/:tenantSlug/waiter-call/acknowledge',
+  requireAuth,
+  requireRoles(ORDER_ACCESS_ROLES),
+  PublicController.acknowledgeWaiterCall,
+);
 router.post('/customer/login', async (req, res, next) => {
 	try {
 		const CustomerController = await import('../controllers/customer.controller.js');

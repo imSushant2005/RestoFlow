@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Check, Hand, HelpCircle, Loader2, Receipt, Sparkles, X } from 'lucide-react';
+import { useCartStore } from '../store/cartStore';
 import { publicApi } from '../lib/api';
 import { WAITER_ACK_EVENT } from './HandshakeListener';
 
@@ -11,16 +12,21 @@ const CALL_TYPES = [
   { id: 'HELP', label: 'Need Help', icon: <HelpCircle size={22} />, color: 'bg-orange-500', desc: 'Need assistance with something' },
 ];
 
+const GATED_PLANS = ['FREE', 'STARTER', 'GOLD', 'PLATINUM', 'MINI'];
+
 export function WaiterCall({
   tenantSlug,
   tableId: initialTableId,
-  sessionToken,
+  sessionId,
+  sessionAccessToken,
 }: {
   tenantSlug: string;
   tableId?: string;
-  sessionToken: string;
+  sessionId: string;
+  sessionAccessToken: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const tenantPlan = useCartStore((state) => state.tenantPlan);
   const [status, setStatus] = useState<'IDLE' | 'SENDING' | 'SENT' | 'ACCEPTED'>('IDLE');
   const [sentType, setSentType] = useState('');
   const [manualTable, setManualTable] = useState('');
@@ -31,7 +37,7 @@ export function WaiterCall({
     const onAcknowledged = (event: Event) => {
       if (!(event instanceof CustomEvent)) return;
       if (event.detail?.tenantSlug !== tenantSlug) return;
-      if (event.detail?.sessionToken !== sessionToken) return;
+      if (event.detail?.sessionId !== sessionId) return;
 
       setStatus('ACCEPTED');
       setIsOpen(true);
@@ -39,7 +45,7 @@ export function WaiterCall({
 
     window.addEventListener(WAITER_ACK_EVENT, onAcknowledged);
     return () => window.removeEventListener(WAITER_ACK_EVENT, onAcknowledged);
-  }, [sessionToken, tenantSlug]);
+  }, [sessionId, tenantSlug]);
 
   useEffect(() => {
     if (status !== 'SENT' && status !== 'ACCEPTED') return undefined;
@@ -67,7 +73,8 @@ export function WaiterCall({
       await publicApi.post(`/${tenantSlug}/waiter-call`, {
         tableId,
         type,
-        sessionId: sessionToken,
+        sessionId,
+        sessionAccessToken,
       });
       setStatus('SENT');
     } catch (error) {
@@ -76,6 +83,10 @@ export function WaiterCall({
       setSentType('');
     }
   };
+
+  if (!tenantPlan || GATED_PLANS.includes(tenantPlan.toUpperCase())) {
+    return null;
+  }
 
   return (
     <>

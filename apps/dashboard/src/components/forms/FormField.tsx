@@ -25,7 +25,7 @@ type TextareaFieldProps = BaseFieldProps & {
 };
 
 const fieldShellClassName =
-  'w-full rounded-2xl border border-white/10 bg-[#0f1728] px-4 py-3 text-sm font-medium text-slate-100 placeholder:text-slate-500 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60';
+  'w-full rounded-2xl border border-white/10 bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-[var(--input-text)] placeholder:text-[var(--input-placeholder)] transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60';
 
 export function FormField({
   label,
@@ -45,9 +45,9 @@ export function FormField({
 }: InputFieldProps) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-semibold text-slate-200">
+      <label className="mb-2 block text-sm font-semibold text-[var(--text-1)]">
         {label}
-        {required ? <span className="ml-1 text-blue-300">*</span> : null}
+        {required ? <span className="ml-1 text-blue-500">*</span> : null}
       </label>
       <input
         name={name}
@@ -84,9 +84,9 @@ export function TextareaField({
 }: TextareaFieldProps) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-semibold text-slate-200">
+      <label className="mb-2 block text-sm font-semibold text-[var(--text-1)]">
         {label}
-        {required ? <span className="ml-1 text-blue-300">*</span> : null}
+        {required ? <span className="ml-1 text-blue-500">*</span> : null}
       </label>
       <textarea
         name={name}

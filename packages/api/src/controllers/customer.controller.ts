@@ -171,50 +171,54 @@ export const getHistory = async (req: Request, res: Response) => {
 
     if (!customerId) return res.status(401).json({ error: 'Not authenticated' });
 
-    let tenantIdFilter: string | null = null;
-    if (scopedTenantSlug) {
-      const tenant = await prisma.tenant.findUnique({
-        where: { slug: scopedTenantSlug },
-        select: { id: true },
-      });
-      if (!tenant) {
-        return res.status(404).json({ error: 'Tenant not found' });
-      }
-      tenantIdFilter = tenant.id;
-    }
+    // Parallelize tenant lookup and session retrieval
+    const [tenant, sessions] = await Promise.all([
+      scopedTenantSlug 
+        ? prisma.tenant.findUnique({
+            where: { slug: scopedTenantSlug },
+            select: { id: true },
+          }) 
+        : Promise.resolve(null),
+      prisma.diningSession.findMany({
+        where: {
+          customerId,
+          ...(scopedTenantSlug ? { tenant: { slug: scopedTenantSlug } } : {}),
+          sessionStatus: { notIn: ['CANCELLED' as any] },
+        },
+        include: {
+          tenant: {
+            select: { businessName: true, slug: true, logoUrl: true },
+          },
+          table: { select: { name: true } },
+          bill: {
+            select: { totalAmount: true, paymentStatus: true, paidAt: true },
+          },
+          orders: {
+            select: {
+              id: true,
+              status: true,
+              totalAmount: true,
+              createdAt: true,
+              _count: {
+                select: { items: true }
+              }
+            },
+            orderBy: { createdAt: 'desc' },
+          },
+          review: {
+            select: {
+              overallRating: true,
+            },
+          },
+        },
+        orderBy: { openedAt: 'desc' },
+        take: 50,
+      })
+    ]);
 
-    const sessions = await prisma.diningSession.findMany({
-      where: {
-        customerId,
-        ...(tenantIdFilter ? { tenantId: tenantIdFilter } : {}),
-        sessionStatus: { notIn: ['CANCELLED' as any] },
-      },
-      include: {
-        tenant: {
-          select: { businessName: true, slug: true, logoUrl: true },
-        },
-        table: { select: { name: true } },
-        bill: true,
-        orders: {
-          include: {
-            items: true,
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-        review: {
-          select: {
-            overallRating: true,
-            foodRating: true,
-            serviceRating: true,
-            comment: true,
-            tipAmount: true,
-            serviceStaffName: true,
-          },
-        },
-      },
-      orderBy: { openedAt: 'desc' },
-      take: 50,
-    });
+    if (scopedTenantSlug && !tenant) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
 
     res.json(sessions);
   } catch (error) {

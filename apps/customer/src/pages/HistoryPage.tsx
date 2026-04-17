@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, useMemo, type ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Clock, 
@@ -13,8 +13,8 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { io } from 'socket.io-client';
-import { api } from '../lib/api';
-import { getCustomerTokenForTenant, getActiveSessionForTenant } from '../lib/tenantStorage';
+import { api, publicApi } from '../lib/api';
+import { getCustomerTokenForTenant, getActiveSessionForTenant, getSessionAccessTokenForTenant } from '../lib/tenantStorage';
 import { getSocketUrl } from '../lib/network';
 
 interface StepConfig {
@@ -59,8 +59,13 @@ export function HistoryPage() {
 
   const token = getCustomerTokenForTenant(tenantSlug);
   const activeSessionId = getActiveSessionForTenant(tenantSlug);
+  const sessionAccessToken = getSessionAccessTokenForTenant(tenantSlug);
+  const hasOpenSessions = useMemo(
+    () => sessions.some((session) => session?.sessionStatus !== 'CLOSED'),
+    [sessions],
+  );
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const { data } = await api.get('/customer/history', {
@@ -73,33 +78,25 @@ export function HistoryPage() {
       // but we still want to show the current active visit if it exists.
       if (activeSessionId) {
         try {
-          const { data } = await api.get(`/public/${tenantSlug}/sessions/${activeSessionId}`);
+          const { data } = await publicApi.get(`/${tenantSlug}/sessions/${activeSessionId}`);
           setSessions([data]);
         } catch { /* ignore */ }
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeSessionId, tenantSlug, token]);
 
   useEffect(() => {
-    fetchHistory();
-  }, [tenantSlug, token, activeSessionId]);
+    void fetchHistory();
+  }, [fetchHistory]);
 
   // Socket for Live Updates
   useEffect(() => {
-    if (!tenantSlug || sessions.length === 0) return;
-
-    const activeSessions = sessions.filter(s => s.sessionStatus !== 'CLOSED');
-    if (activeSessions.length === 0) return;
-
-    // Use token for auth if available, otherwise fallback to guest sessionToken
-    const auth: any = token 
-      ? { tenantSlug, token }
-      : { tenantSlug, sessionToken: activeSessionId };
+    if (!tenantSlug || !sessionAccessToken || !hasOpenSessions) return;
 
     const socket = io(getSocketUrl(), {
-      auth,
+      auth: { tenantSlug, sessionAccessToken, client: 'customer-history' },
       transports: ['websocket'],
     });
 
@@ -121,7 +118,7 @@ export function HistoryPage() {
     });
 
     return () => { socket.disconnect(); };
-  }, [tenantSlug, token, sessions.length > 0]);
+  }, [fetchHistory, hasOpenSessions, sessionAccessToken, tenantSlug]);
 
   const formatINR = (amt: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(
@@ -256,7 +253,7 @@ export function HistoryPage() {
           ) : (
             <div className="space-y-3">
               {pastVisits.map((s: any) => {
-                const totalItems = s.orders?.reduce((sum: number, o: any) => sum + (o.items?.length || 0), 0) || 0;
+                const totalItems = s.orders?.reduce((sum: number, o: any) => sum + (o._count?.items || 0), 0) || 0;
                 const paid = s.bill?.paymentStatus === 'PAID';
                 
                 return (

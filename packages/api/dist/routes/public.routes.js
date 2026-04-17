@@ -35,8 +35,10 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const PublicController = __importStar(require("../controllers/public.controller"));
-const TableController = __importStar(require("../controllers/table.controller"));
 const idempotency_middleware_1 = require("../middlewares/idempotency.middleware");
+const auth_middleware_1 = require("../middlewares/auth.middleware");
+const role_middleware_1 = require("../middlewares/role.middleware");
+const rbac_1 = require("../constants/rbac");
 // Lazy-load customer controller at request-time to avoid startup failure
 // if the compiled controller file is missing in some build contexts.
 const router = (0, express_1.Router)();
@@ -51,8 +53,7 @@ router.get('/:tenantSlug/orders/:id', PublicController.getOrderInfo);
 router.patch('/:tenantSlug/orders/:id/status', PublicController.updateOrderStatusPublic);
 router.post('/orders/:id/feedback', PublicController.submitFeedback);
 router.post('/:tenantSlug/waiter-call', PublicController.waiterCall);
-router.post('/:tenantSlug/waiter-call/acknowledge', PublicController.acknowledgeWaiterCall);
-router.post('/tables/:id/session', TableController.createSession);
+router.post('/:tenantSlug/waiter-call/acknowledge', auth_middleware_1.requireAuth, (0, role_middleware_1.requireRoles)(rbac_1.ORDER_ACCESS_ROLES), PublicController.acknowledgeWaiterCall);
 router.post('/customer/login', async (req, res, next) => {
     try {
         const CustomerController = await import('../controllers/customer.controller.js');

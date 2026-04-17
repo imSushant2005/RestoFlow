@@ -4,6 +4,9 @@ import { getIO, getSessionRoom, getTenantRoom } from '../socket';
 import { getCache, setCache, deleteCache, withCache } from '../services/cache.service';
 import { transitionOrderStatus } from '../services/order.service';
 import { generateOrderNumber } from '../services/order-number.service';
+import { buildServerPricedOrderPayload } from '../services/order-payload.service';
+import { cacheKeys } from '../utils/cache-keys';
+import { authorizeSessionAccess, generateSessionAccessToken } from '../utils/public-access';
 
 const WAITER_CALL_TYPES = new Set(['WAITER', 'BILL', 'WATER', 'EXTRA', 'HELP']);
 const ORDERABLE_SESSION_STATUSES = ['OPEN', 'PARTIALLY_SENT', 'ACTIVE'] as const;
@@ -91,7 +94,7 @@ function normalizeStarRating(value: unknown) {
 
 async function resolveTenantIdBySlug(tenantSlug: string) {
   return withCache(
-    `tenant_id_by_slug_${tenantSlug}`,
+    cacheKeys.tenantIdBySlug(tenantSlug),
     async () =>
       withPrismaRetry(
         async () => {
@@ -114,13 +117,13 @@ async function resolveTenantIdBySlug(tenantSlug: string) {
 
 async function resolveTenantBySlug(tenantSlug: string) {
   return withCache(
-    `tenant_meta_${tenantSlug}`, // 'tenant_meta' = short shape {id,taxRate}; distinct from 'tenant_full' in session.controller
+    cacheKeys.tenantMeta(tenantSlug),
     async () =>
       withPrismaRetry(
         async () => {
       const tenant = await prisma.tenant.findUnique({
         where: { slug: tenantSlug },
-        select: { id: true, taxRate: true },
+        select: { id: true, taxRate: true, plan: true },
       });
 
       if (!tenant) {
@@ -137,10 +140,10 @@ async function resolveTenantBySlug(tenantSlug: string) {
 
 async function invalidateOperationalCaches(tenantId: string, sessionId?: string | null) {
   await Promise.all([
-    deleteCache(`dashboard_live_orders_${tenantId}`),
-    deleteCache(`dashboard_order_history_${tenantId}_*`),
-    sessionId ? deleteCache(`public_session_${tenantId}_${sessionId}`) : Promise.resolve(),
-    sessionId ? deleteCache(`session_orders_${tenantId}_${sessionId}`) : Promise.resolve(),
+    deleteCache(cacheKeys.dashboardLiveOrders(tenantId)),
+    deleteCache(cacheKeys.dashboardOrderHistoryPattern(tenantId)),
+    sessionId ? deleteCache(cacheKeys.publicSession(tenantId, sessionId)) : Promise.resolve(),
+    sessionId ? deleteCache(cacheKeys.sessionOrders(tenantId, sessionId)) : Promise.resolve(),
   ]);
 }
 
@@ -204,6 +207,7 @@ export const getPublicMenu = async (req: Request, res: Response) => {
           accentColor: true,
           taxRate: true,
           businessHours: true,
+          plan: true,
         },
       });
 
@@ -248,6 +252,7 @@ export const getPublicMenu = async (req: Request, res: Response) => {
         accentColor: tenant.accentColor,
         taxRate: tenant.taxRate,
         businessHours: tenant.businessHours,
+        plan: tenant.plan,
       };
     }, `public-menu:${tenantSlug}`), 1800); // 30-minute cache
 
@@ -263,7 +268,7 @@ export const resolveCustomDomain = async (req: Request, res: Response) => {
     const domain = req.query.domain as string;
     if (!domain) return res.status(400).json({ error: 'Domain missing' });
 
-    const cacheKey = `custom_domain_res_${domain}`;
+    const cacheKey = cacheKeys.customDomainResolution(domain);
     const resolution = await withCache(cacheKey, async () => {
       const tenant = await prisma.tenant.findFirst({
         where: { website: { contains: domain } },
@@ -296,7 +301,7 @@ export const createOrder = async (req: Request, res: Response) => {
     }
 
     if (requestIdempotencyKey) {
-      const cachedResponse = await getCache<any>(`public_order_idempotency_${tenant.id}_${requestIdempotencyKey}`);
+      const cachedResponse = await getCache<any>(cacheKeys.publicOrderIdempotency(tenant.id, requestIdempotencyKey));
       if (cachedResponse) {
         return res.status(200).json(cachedResponse);
       }
@@ -350,8 +355,16 @@ export const createOrder = async (req: Request, res: Response) => {
 
     const isDineInTableFlow = Boolean(safeTableId || staleSession?.tableId);
 
+    if (resolvedSession) {
+      authorizeSessionAccess(req, {
+        tenantId: tenant.id,
+        sessionId: resolvedSession.id,
+        customerId: resolvedSession.customerId,
+      });
+    }
+
     if (!resolvedSession && safeTableId) {
-      resolvedSession = await prisma.diningSession.findFirst({
+      const activeTableSession = await prisma.diningSession.findFirst({
         where: {
           tenantId: tenant.id,
           tableId: safeTableId,
@@ -365,6 +378,15 @@ export const createOrder = async (req: Request, res: Response) => {
           sessionStatus: true,
         },
       });
+
+      if (activeTableSession) {
+        authorizeSessionAccess(req, {
+          tenantId: tenant.id,
+          sessionId: activeTableSession.id,
+          customerId: activeTableSession.customerId,
+        });
+        resolvedSession = activeTableSession;
+      }
     }
 
     if (!resolvedSession && isDineInTableFlow) {
@@ -417,100 +439,7 @@ export const createOrder = async (req: Request, res: Response) => {
         },
       });
     }
-
-    const menuItemIds = items
-      .map((item: any) => item?.menuItemId || item?.menuItem?.id)
-      .filter((id: any) => typeof id === 'string');
-    if (menuItemIds.length === 0) {
-      return res.status(400).json({ error: 'Order must include valid menu item ids' });
-    }
-
-    const menuItems = await prisma.menuItem.findMany({
-      where: { tenantId: tenant.id, id: { in: menuItemIds } },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        price: true,
-        images: true,
-        modifierGroups: {
-          select: {
-            id: true,
-            name: true,
-            modifiers: {
-              where: { isAvailable: true },
-              select: {
-                id: true,
-                name: true,
-                priceAdjustment: true,
-              },
-            },
-          },
-        },
-      },
-    });
-    const menuMap = new Map(menuItems.map((m) => [m.id, m]));
-
-    let subtotal = 0;
-    const orderItemsCreate = items.map((item: any) => {
-      const menuItemId = item?.menuItemId || item?.menuItem?.id;
-      const menuItem = menuMap.get(menuItemId);
-      if (!menuItem) {
-        throw new Error(`Menu item not found: ${menuItemId}`);
-      }
-
-      const modifiers = Array.isArray(item.selectedModifiers)
-        ? item.selectedModifiers
-        : Array.isArray(item.modifiers)
-          ? item.modifiers
-          : [];
-      const quantity = Number(item.quantity) || 0;
-      if (quantity <= 0) {
-        throw new Error('Invalid item quantity');
-      }
-
-      let unitPrice = menuItem.price;
-      const modifierMap = new Map(
-        (menuItem.modifierGroups || [])
-          .flatMap((group) =>
-            (group.modifiers || []).map((modifier) => [
-              modifier.id,
-              {
-                id: modifier.id,
-                name: modifier.name,
-                groupName: group.name,
-                priceAdjustment: Number(modifier.priceAdjustment || 0),
-              },
-            ])
-          )
-      );
-
-      const selectedMods = modifiers.map((mod: any) => {
-        const dbModifier = mod?.id ? modifierMap.get(mod.id) : null;
-        if (!dbModifier) return null;
-        unitPrice += dbModifier.priceAdjustment;
-        return {
-          id: dbModifier.id,
-          name: dbModifier.name,
-          groupName: dbModifier.groupName,
-          priceAdjustment: dbModifier.priceAdjustment,
-        };
-      }).filter(Boolean);
-      const totalPrice = unitPrice * quantity;
-      subtotal += totalPrice;
-      
-      return {
-        menuItemId: menuItem.id,
-        name: menuItem.name,
-        description: menuItem.description || '',
-        imageUrl: menuItem.images?.[0] || null,
-        unitPrice,
-        quantity,
-        totalPrice,
-        specialNote: item.notes || '',
-        selectedModifiers: selectedMods
-      };
-    });
+    const { subtotal, orderItems: orderItemsCreate } = await buildServerPricedOrderPayload(prisma, tenant.id, items);
 
     const taxAmount = subtotal * (tenant.taxRate / 100);
     const totalAmount = subtotal + taxAmount;
@@ -596,10 +525,16 @@ export const createOrder = async (req: Request, res: Response) => {
     await Promise.all([
       invalidateOperationalCaches(tenant.id, resolvedSession.id),
       requestIdempotencyKey
-        ? setCache(`public_order_idempotency_${tenant.id}_${requestIdempotencyKey}`, {
+        ? setCache(cacheKeys.publicOrderIdempotency(tenant.id, requestIdempotencyKey), {
             ...order,
             sessionId: resolvedSession.id,
             diningSessionId: resolvedSession.id,
+            sessionAccessToken: generateSessionAccessToken({
+              tenantId: tenant.id,
+              sessionId: resolvedSession.id,
+              customerId: resolvedSession.customerId,
+              tableId: resolvedSession.tableId || null,
+            }),
           }, 600)
         : Promise.resolve(),
     ]);
@@ -608,10 +543,31 @@ export const createOrder = async (req: Request, res: Response) => {
       ...order,
       sessionId: resolvedSession.id,
       diningSessionId: resolvedSession.id,
+      sessionAccessToken: generateSessionAccessToken({
+        tenantId: tenant.id,
+        sessionId: resolvedSession.id,
+        customerId: resolvedSession.customerId,
+        tableId: resolvedSession.tableId || null,
+      }),
     });
   } catch (error) {
     console.error('createOrder error:', error);
     const message = error instanceof Error ? error.message : 'Failed to create order';
+    if (message === 'ORDER_ITEMS_REQUIRED' || message === 'ORDER_ITEMS_INVALID') {
+      return res.status(400).json({ error: 'Order items are missing or invalid. Refresh the menu and try again.' });
+    }
+    if (
+      error instanceof Error &&
+      ['SESSION_ACCESS_REQUIRED', 'SESSION_ACCESS_MISMATCH', 'INVALID_SESSION_ACCESS_TOKEN'].includes(error.message)
+    ) {
+      return res.status(401).json({ error: 'Session access token is required for dine-in orders.' });
+    }
+    if (error instanceof Error && error.message.startsWith('MENU_ITEM_NOT_FOUND:')) {
+      return res.status(400).json({ error: 'One or more items are unavailable. Refresh the menu and try again.' });
+    }
+    if (error instanceof Error && error.message.startsWith('MODIFIER_')) {
+      return res.status(400).json({ error: 'One or more modifier selections are invalid. Review the order and try again.' });
+    }
     res.status(500).json({
       error: process.env.NODE_ENV === 'production' ? 'Failed to create order' : message
     });
@@ -627,31 +583,74 @@ export const getOrderInfo = async (req: Request, res: Response) => {
     // and live updates are handled by Socket.io anyway.
     const cacheKey = `order_info_${tenant.id}_${id}`;
     const cachedOrder = await getCache(cacheKey);
-    if (cachedOrder) return res.json(cachedOrder);
+    if (cachedOrder) {
+      if (cachedOrder.diningSession) {
+        authorizeSessionAccess(req, {
+          tenantId: tenant.id,
+          sessionId: cachedOrder.diningSession.id,
+          customerId: cachedOrder.diningSession.customerId,
+        });
+      }
+      return res.json(cachedOrder);
+    }
 
     const order = await withPrismaRetry(
       () =>
         prisma.order.findFirst({
       where: { id, tenantId: tenant.id },
-      include: { table: true, items: { include: { menuItem: true } } }
+      include: {
+        table: true,
+        items: true,
+        diningSession: {
+          select: {
+            id: true,
+            customerId: true,
+          },
+        },
+      }
         }),
       `public-order-info:${tenant.id}:${id}`,
     );
     if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (order.diningSession) {
+      authorizeSessionAccess(req, {
+        tenantId: tenant.id,
+        sessionId: order.diningSession.id,
+        customerId: order.diningSession.customerId,
+      });
+    }
     
     await setCache(cacheKey, order, 120);
     res.json(order);
   } catch (error) {
+    if (
+      error instanceof Error &&
+      ['SESSION_ACCESS_REQUIRED', 'SESSION_ACCESS_MISMATCH', 'INVALID_SESSION_ACCESS_TOKEN'].includes(error.message)
+    ) {
+      return res.status(401).json({ error: 'Session access token is required for this order.' });
+    }
     res.status(500).json({ error: 'Failed to fetch order' });
   }
 };
 
 export const getSessionOrders = async (req: Request, res: Response) => {
   try {
-    const { tenantSlug, sessionToken } = req.params;
+    const { tenantSlug, sessionToken: sessionId } = req.params;
     const tenant = await resolveTenantBySlug(tenantSlug);
 
-    const cacheKey = `session_orders_${tenant.id}_${sessionToken}`;
+    const session = await prisma.diningSession.findFirst({
+      where: { id: sessionId, tenantId: tenant.id },
+      select: { id: true, customerId: true },
+    });
+
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    authorizeSessionAccess(req, {
+      tenantId: tenant.id,
+      sessionId: session.id,
+      customerId: session.customerId,
+    });
+
+    const cacheKey = cacheKeys.sessionOrders(tenant.id, sessionId);
     const cachedOrders = await getCache(cacheKey);
     if (cachedOrders) return res.json(cachedOrders);
 
@@ -660,12 +659,12 @@ export const getSessionOrders = async (req: Request, res: Response) => {
         prisma.order.findMany({
           where: {
             tenantId: tenant.id,
-            diningSessionId: sessionToken,
+            diningSessionId: sessionId,
           },
-          include: { table: true, items: { include: { menuItem: true } } },
+          include: { table: true, items: true },
           orderBy: { createdAt: 'desc' }
         }),
-      `session-orders:${tenant.id}:${sessionToken}`,
+      `session-orders:${tenant.id}:${sessionId}`,
     );
     
     // Parse JSON modifiers before sending
@@ -680,6 +679,12 @@ export const getSessionOrders = async (req: Request, res: Response) => {
     await setCache(cacheKey, parsedOrders, 30); // 30-second cache
     res.json(parsedOrders);
   } catch (error) {
+    if (
+      error instanceof Error &&
+      ['SESSION_ACCESS_REQUIRED', 'SESSION_ACCESS_MISMATCH', 'INVALID_SESSION_ACCESS_TOKEN'].includes(error.message)
+    ) {
+      return res.status(401).json({ error: 'Session access token is required for this session.' });
+    }
     res.status(500).json({ error: 'Failed to fetch session orders' });
   }
 };
@@ -832,22 +837,52 @@ export const waiterCall = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid waiter call type' });
     }
 
+    if (!sessionId) {
+      return res.status(401).json({ error: 'Session access token is required.' });
+    }
+
     const tenantId = await resolveTenantIdBySlug(tenantSlug);
-    const tableName = await resolveWaiterTableName(tenantId, tableId);
+    const session = await prisma.diningSession.findFirst({
+      where: { id: sessionId, tenantId },
+      select: { id: true, customerId: true, tableId: true },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    authorizeSessionAccess(req, {
+      tenantId,
+      sessionId: session.id,
+      customerId: session.customerId,
+    });
+
+    if (tableId && session.tableId && tableId !== session.tableId) {
+      return res.status(400).json({ error: 'Waiter call table mismatch. Please refresh the session and try again.' });
+    }
+
+    const resolvedTableId = session.tableId || tableId;
+    const tableName = await resolveWaiterTableName(tenantId, resolvedTableId || undefined);
     const payload = {
-      tableId,
+      tableId: resolvedTableId,
       tableName,
       type,
-      sessionId,
+      sessionId: session.id,
       timestamp: new Date().toISOString(),
     };
 
     getIO().to(getTenantRoom(tenantId)).emit('waiter:call', payload);
 
-    res.json({ success: true, table: tableName, sessionId });
+    res.json({ success: true, table: tableName, sessionId: session.id });
   } catch (error) {
     console.error('waiterCall error:', error);
     const message = error instanceof Error ? error.message : 'Internal server error';
+    if (
+      error instanceof Error &&
+      ['SESSION_ACCESS_REQUIRED', 'SESSION_ACCESS_MISMATCH', 'INVALID_SESSION_ACCESS_TOKEN'].includes(error.message)
+    ) {
+      return res.status(401).json({ error: 'Session access token is required.' });
+    }
     res.status(message === 'Restaurant not found' ? 404 : 500).json({ error: message });
   }
 };
@@ -867,14 +902,24 @@ export const acknowledgeWaiterCall = async (req: Request, res: Response) => {
     }
 
     const tenantId = await resolveTenantIdBySlug(tenantSlug);
-    const sessionRoom = getSessionRoom(tenantId, sessionId);
+    const session = await prisma.diningSession.findFirst({
+      where: { id: sessionId, tenantId },
+      select: { id: true },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const sessionRoom = getSessionRoom(tenantId, session.id);
     getIO().to(sessionRoom).emit('waiter:acknowledged', {
+      sessionId: session.id,
       tableId,
       status: 'ACCEPTED',
       timestamp: new Date().toISOString(),
     });
 
-    res.json({ success: true, sessionId });
+    res.json({ success: true, sessionId: session.id });
   } catch (error) {
     console.error('acknowledgeWaiterCall error:', error);
     const message = error instanceof Error ? error.message : 'Failed to notify guest';
@@ -885,34 +930,46 @@ export const acknowledgeWaiterCall = async (req: Request, res: Response) => {
 export const updateOrderStatusPublic = async (req: Request, res: Response) => {
   try {
     const { tenantSlug, id } = req.params;
-    const { status, sessionToken, version } = req.body;
+    const { status, version } = req.body;
 
     if (status !== 'SERVED') {
       return res.status(400).json({ error: 'Customers can only mark orders as served (received).' });
-    }
-
-    if (!sessionToken) {
-      return res.status(401).json({ error: 'Session token is required to update order status.' });
     }
 
     const tenantId = await resolveTenantIdBySlug(tenantSlug);
     
     // Verify order belongs to this session
     const order = await prisma.order.findFirst({
-      where: { id, tenantId, diningSessionId: sessionToken },
-      select: { id: true, version: true }
+      where: { id, tenantId },
+      select: {
+        id: true,
+        version: true,
+        diningSessionId: true,
+        diningSession: {
+          select: {
+            id: true,
+            customerId: true,
+          },
+        },
+      }
     });
 
-    if (!order) {
+    if (!order || !order.diningSessionId || !order.diningSession) {
       return res.status(404).json({ error: 'Order not found in this session.' });
     }
+
+    authorizeSessionAccess(req, {
+      tenantId,
+      sessionId: order.diningSession.id,
+      customerId: order.diningSession.customerId,
+    });
 
     const updatedOrder = await transitionOrderStatus({
       orderId: id,
       tenantId,
       expectedVersion: version || order.version,
       newStatus: 'SERVED' as any,
-      actorId: sessionToken,
+      actorId: order.diningSessionId,
       actorType: 'CUSTOMER',
     });
 
@@ -920,14 +977,20 @@ export const updateOrderStatusPublic = async (req: Request, res: Response) => {
     getIO().to(getTenantRoom(tenantId)).emit('order:update', updatedOrder);
     
     // Notify Session Socket
-    getIO().to(getSessionRoom(tenantId, sessionToken)).emit('order:update', updatedOrder);
+    getIO().to(getSessionRoom(tenantId, order.diningSessionId)).emit('order:update', updatedOrder);
 
-    await invalidateOperationalCaches(tenantId, sessionToken);
+    await invalidateOperationalCaches(tenantId, order.diningSessionId);
 
     res.json(updatedOrder);
   } catch (error) {
     console.error('updateOrderStatusPublic error:', error);
     const message = error instanceof Error ? error.message : 'Failed to update order status';
+    if (
+      error instanceof Error &&
+      ['SESSION_ACCESS_REQUIRED', 'SESSION_ACCESS_MISMATCH', 'INVALID_SESSION_ACCESS_TOKEN'].includes(error.message)
+    ) {
+      return res.status(401).json({ error: 'Session access token is required to update this order.' });
+    }
     res.status(500).json({ error: message });
   }
 };

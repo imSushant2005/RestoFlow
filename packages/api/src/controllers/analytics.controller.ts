@@ -32,7 +32,8 @@ export const getAnalytics = async (req: Request, res: Response) => {
           totalSessions,
           topItems,
           peakHoursRaw,
-          dailyRevenueRaw
+          dailyRevenueRaw,
+          expensesSummary
         ] = await Promise.all([
           // 1. Core Summary: Aggregated counts and sums
           prisma.order.aggregate({
@@ -101,7 +102,16 @@ export const getAnalytics = async (req: Request, res: Response) => {
               AND "createdAt" <= ${toDate}
             GROUP BY date 
             ORDER BY date ASC
-          `
+          `,
+
+          // 6. Expenses Summary
+          prisma.expense.aggregate({
+            where: {
+              tenantId,
+              date: { gte: fromDate, lte: toDate }
+            },
+            _sum: { amount: true }
+          })
         ]);
 
         // Data Transformation for UI consumption
@@ -124,6 +134,7 @@ export const getAnalytics = async (req: Request, res: Response) => {
 
         const totalOrders = (summary._count as any)?.id || 0;
         const totalRevenue = (summary._sum as any)?.totalAmount || 0;
+        const totalExpenses = (expensesSummary._sum as any)?.amount || 0;
 
         // Funnel Logic
         const funnelSteps = [
@@ -135,6 +146,8 @@ export const getAnalytics = async (req: Request, res: Response) => {
           summary: { 
             totalOrders, 
             totalRevenue,
+            totalExpenses,
+            netProfit: totalRevenue - totalExpenses,
             conversionRate: totalSessions > 0 ? ((totalOrders / totalSessions) * 100).toFixed(1) : 0
           },
           topItems: formattedTopItems,

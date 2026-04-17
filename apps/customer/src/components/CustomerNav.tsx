@@ -31,10 +31,11 @@ export function CustomerNav() {
 
   return (
     <nav
-      className="customer-bottom-nav fixed bottom-0 left-0 right-0 z-[40] flex items-center justify-around px-6 pt-2 backdrop-blur-xl border-t shadow-[0_-10px_30px_rgba(0,0,0,0.18)]"
+      className="customer-bottom-nav fixed bottom-0 left-0 right-0 z-[40] flex items-center justify-around px-6 pt-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-3xl border-t shadow-[0_-15px_40px_rgba(0,0,0,0.3)] transition-all animate-in slide-in-from-bottom"
       style={{
-        background: 'rgba(10, 11, 15, 0.92)',
-        borderColor: 'rgba(148, 163, 184, 0.2)',
+        background: 'rgba(10, 11, 15, 0.96)',
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        minHeight: 'calc(72px + env(safe-area-inset-bottom, 0px))',
       }}
     >
       {navItems.map((item) => {

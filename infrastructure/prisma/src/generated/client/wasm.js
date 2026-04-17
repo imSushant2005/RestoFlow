@@ -436,6 +436,17 @@ exports.Prisma.DailyAnalyticsScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.ExpenseScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  description: 'description',
+  amount: 'amount',
+  category: 'category',
+  date: 'date',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.OrderAuditLogScalarFieldEnum = {
   id: 'id',
   tenantId: 'tenantId',
@@ -571,6 +582,7 @@ exports.Prisma.ModelName = {
   OrderItem: 'OrderItem',
   Review: 'Review',
   DailyAnalytics: 'DailyAnalytics',
+  Expense: 'Expense',
   OrderAuditLog: 'OrderAuditLog'
 };
 

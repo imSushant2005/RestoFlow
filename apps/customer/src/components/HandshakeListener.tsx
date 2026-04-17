@@ -5,15 +5,23 @@ import { useNotifications } from './Notifications';
 
 export const WAITER_ACK_EVENT = 'rf:waiter-acknowledged';
 
-export function HandshakeListener({ tenantSlug, sessionToken }: { tenantSlug: string; sessionToken: string }) {
+export function HandshakeListener({
+  tenantSlug,
+  sessionId,
+  sessionAccessToken,
+}: {
+  tenantSlug: string;
+  sessionId: string;
+  sessionAccessToken: string;
+}) {
   const { notify } = useNotifications();
 
   useEffect(() => {
-    if (!tenantSlug || !sessionToken) return;
+    if (!tenantSlug || !sessionId || !sessionAccessToken) return;
 
     const socket = io(getSocketUrl(), {
       transports: ['websocket', 'polling'],
-      auth: { tenantSlug, sessionToken }
+      auth: { tenantSlug, sessionAccessToken }
     });
 
     socket.on('waiter:acknowledged', (data) => {
@@ -28,7 +36,7 @@ export function HandshakeListener({ tenantSlug, sessionToken }: { tenantSlug: st
           detail: {
             ...data,
             tenantSlug,
-            sessionToken,
+            sessionId,
           },
         }),
       );
@@ -45,7 +53,7 @@ export function HandshakeListener({ tenantSlug, sessionToken }: { tenantSlug: st
     return () => {
       socket.disconnect();
     };
-  }, [notify, sessionToken, tenantSlug]);
+  }, [notify, sessionAccessToken, sessionId, tenantSlug]);
 
   return null;
 }

@@ -17,7 +17,7 @@ import {
 import { publicApi } from '../lib/api';
 import { formatINR } from '../lib/currency';
 import { getSocketUrl } from '../lib/network';
-import { getActiveSessionForTenant, setLastTableIdForTenant } from '../lib/tenantStorage';
+import { getActiveSessionForTenant, getSessionAccessTokenForTenant, setLastTableIdForTenant } from '../lib/tenantStorage';
 import { useNotifications } from '../components/Notifications';
 
 interface StepConfig {
@@ -84,6 +84,7 @@ export function OrderStatus() {
   const [feedback, setFeedback] = useState('');
   const [tab, setTab] = useState<'TRACKING' | 'HISTORY'>('TRACKING');
   const sessionToken = getActiveSessionForTenant(tenantSlug);
+  const sessionAccessToken = getSessionAccessTokenForTenant(tenantSlug);
   const shouldRedirectToTracker = Boolean(tenantSlug && sessionToken);
   const queryKey = useMemo(
     () => ['session-orders', sessionToken || 'no-session', tenantSlug || 'no-tenant'],
@@ -141,10 +142,10 @@ export function OrderStatus() {
   });
 
   useEffect(() => {
-    if (!tenantSlug || !sessionToken || shouldRedirectToTracker) return;
+    if (!tenantSlug || !sessionToken || !sessionAccessToken || shouldRedirectToTracker) return;
 
     const socket = io(getSocketUrl(), {
-      auth: { tenantSlug, sessionToken, client: 'customer-status' },
+      auth: { tenantSlug, sessionAccessToken, client: 'customer-status' },
       transports: ['websocket'],
       rememberUpgrade: true,
       reconnection: true,
@@ -214,7 +215,7 @@ export function OrderStatus() {
       socket.off('session:completed', handleSessionCompleted);
       socket.disconnect();
     };
-  }, [navigate, notify, queryClient, queryKey, sessionToken, shouldRedirectToTracker, tenantSlug]);
+  }, [navigate, notify, queryClient, queryKey, sessionAccessToken, sessionToken, shouldRedirectToTracker, tenantSlug]);
 
   useEffect(() => {
     if (activeOrders.length === 0 && historyOrders.length > 0) {

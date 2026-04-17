@@ -20,7 +20,7 @@ Sentry.init({
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 15,
+      staleTime: 1000 * 60, // 60 seconds (data stays fresh while switching tabs)
       retry: 1,
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,

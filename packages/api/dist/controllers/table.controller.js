@@ -23,6 +23,7 @@ const getZones = async (req, res) => {
                             name: true,
                             capacity: true,
                             seats: true,
+                            qrSecret: true,
                             occupiedSeats: true,
                             status: true,
                             orders: {
