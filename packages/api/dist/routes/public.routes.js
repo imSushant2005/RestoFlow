@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const PublicController = __importStar(require("../controllers/public.controller"));
 const TableController = __importStar(require("../controllers/table.controller"));
+const idempotency_middleware_1 = require("../middlewares/idempotency.middleware");
 // Lazy-load customer controller at request-time to avoid startup failure
 // if the compiled controller file is missing in some build contexts.
 const router = (0, express_1.Router)();
@@ -43,7 +44,8 @@ const router = (0, express_1.Router)();
 router.get('/resolve-domain', PublicController.resolveCustomDomain);
 // Public Menu (No Auth Required)
 router.get('/:tenantSlug/menu', PublicController.getPublicMenu);
-router.post('/:tenantSlug/orders', PublicController.createOrder);
+// C-5: idempotencyMiddleware added — prevents duplicate orders on double-tap / poor network
+router.post('/:tenantSlug/orders', idempotency_middleware_1.idempotencyMiddleware, PublicController.createOrder);
 router.get('/:tenantSlug/sessions/:sessionToken/orders', PublicController.getSessionOrders);
 router.get('/:tenantSlug/orders/:id', PublicController.getOrderInfo);
 router.patch('/:tenantSlug/orders/:id/status', PublicController.updateOrderStatusPublic);

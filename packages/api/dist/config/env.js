@@ -128,8 +128,13 @@ const data = parsed.success ? parsed.data : {
 };
 // Extra safety for production
 if (process.env.NODE_ENV === 'production') {
-    if (data.ADMIN_SECRET_KEY === 'temporary-insecure-admin-secret-unblocked') {
-        console.warn('🚨 WARNING: Using default ADMIN_SECRET_KEY in production! This is insecure.');
+    if (!data.ADMIN_SECRET_KEY ||
+        data.ADMIN_SECRET_KEY === 'temporary-insecure-admin-secret-unblocked') {
+        // HARD FAIL — an insecure admin secret in production is a critical vulnerability.
+        // Set ADMIN_SECRET_KEY in Railway environment variables before deploying.
+        console.error('\n🚨 FATAL: ADMIN_SECRET_KEY is unset or uses the insecure default in production.\n' +
+            '   Set a strong, unique ADMIN_SECRET_KEY environment variable in Railway and redeploy.\n');
+        process.exit(1);
     }
 }
 const allowedOrigins = Array.from(new Set([

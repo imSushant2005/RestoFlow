@@ -5,6 +5,7 @@ const prisma_1 = require("../db/prisma");
 const socket_1 = require("../socket");
 const cache_service_1 = require("../services/cache.service");
 const order_service_1 = require("../services/order.service");
+const order_number_service_1 = require("../services/order-number.service");
 const WAITER_CALL_TYPES = new Set(['WAITER', 'BILL', 'WATER', 'EXTRA', 'HELP']);
 const ORDERABLE_SESSION_STATUSES = ['OPEN', 'PARTIALLY_SENT', 'ACTIVE'];
 const publicOrderSelect = {
@@ -99,7 +100,8 @@ async function resolveTenantIdBySlug(tenantSlug) {
     }, `resolve-tenant-id:${tenantSlug}`), 86400);
 }
 async function resolveTenantBySlug(tenantSlug) {
-    return (0, cache_service_1.withCache)(`tenant_by_slug_${tenantSlug}`, async () => (0, prisma_1.withPrismaRetry)(async () => {
+    return (0, cache_service_1.withCache)(`tenant_meta_${tenantSlug}`, // 'tenant_meta' = short shape {id,taxRate}; distinct from 'tenant_full' in session.controller
+    async () => (0, prisma_1.withPrismaRetry)(async () => {
         const tenant = await prisma_1.prisma.tenant.findUnique({
             where: { slug: tenantSlug },
             select: { id: true, taxRate: true },
@@ -452,18 +454,8 @@ const createOrder = async (req, res) => {
         });
         const taxAmount = subtotal * (tenant.taxRate / 100);
         const totalAmount = subtotal + taxAmount;
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        const countForDay = await prisma_1.prisma.order.count({
-            where: {
-                tenantId: tenant.id,
-                createdAt: { gte: startOfDay },
-            },
-        });
-        const nextNumber = countForDay + 1;
         const orderType = safeTableId ? 'DINE_IN' : 'TAKEAWAY';
-        const prefix = orderType === 'DINE_IN' ? 'D-' : 'T-';
-        const orderNumber = `${prefix}${nextNumber}`;
+        const orderNumber = (0, order_number_service_1.generateOrderNumber)(orderType); // Collision-resistant — replaces COUNT+1 race
         let order;
         try {
             order = await prisma_1.prisma.$transaction(async (tx) => {

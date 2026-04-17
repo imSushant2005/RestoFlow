@@ -1,10 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createAssistedOrder = exports.lookupAssistedCustomer = exports.updateOrderStatus = exports.getOrder = exports.getOrderHistory = exports.getOrders = void 0;
+const crypto_1 = require("crypto");
 const prisma_1 = require("../db/prisma");
 const socket_1 = require("../socket");
 const cache_service_1 = require("../services/cache.service");
 const order_service_1 = require("../services/order.service");
+const order_number_service_1 = require("../services/order-number.service");
 const VALID_ORDER_STATUSES = new Set([
     'NEW',
     'ACCEPTED',
@@ -242,26 +244,9 @@ async function resolveStaffName(db, userId) {
     });
     return user?.name?.trim() || 'Staff';
 }
-async function generateOrderNumberForTenant(tenantId, orderType) {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const countForDay = await prisma_1.prisma.order.count({
-        where: {
-            tenantId,
-            createdAt: { gte: startOfDay },
-        },
-    });
-    const nextNumber = countForDay + 1;
-    const uppercaseType = String(orderType || '').toUpperCase();
-    let prefix = 'T-'; // Default Takeaway
-    if (uppercaseType === 'DINE_IN')
-        prefix = 'D-';
-    else if (uppercaseType === 'ZOMATO')
-        prefix = 'Z-';
-    else if (uppercaseType === 'SWIGGY')
-        prefix = 'S-';
-    return `${prefix}${nextNumber}`;
-}
+// generateOrderNumberForTenant removed — replaced by generateOrderNumber() from order-number.service.
+// The old COUNT+1 approach had a TOCTOU race: two concurrent requests both read the same count
+// and generated duplicate order numbers. The new approach is synchronous and collision-resistant.
 async function buildServerPricedOrderPayload(db, tenantId, items) {
     if (!Array.isArray(items) || items.length === 0) {
         throw new Error('ORDER_ITEMS_REQUIRED');
@@ -575,11 +560,11 @@ const updateOrderStatus = async (req, res) => {
         (0, socket_1.getIO)().to(tenantRoom).emit('order:update', order);
         if (order.diningSessionId) {
             (0, socket_1.getIO)().to((0, socket_1.getSessionRoom)(req.tenantId, order.diningSessionId)).emit('order:update', order);
-            (0, socket_1.getIO)().to(tenantRoom).emit('session:update', {
-                sessionId: order.diningSessionId,
-                status: order.status,
-                updatedAt: new Date().toISOString(),
-            });
+            // NOTE: session:update is intentionally NOT emitted here.
+            // Order status changes do NOT change the DiningSession.sessionStatus.
+            // Emitting session:update with order.status (wrong payload) caused the frontend
+            // to display the order status as the session status. Session events are only
+            // emitted by session.controller when session.sessionStatus actually changes.
         }
         if (normalizedStatus === 'READY') {
             (0, socket_1.getIO)().to((0, socket_1.getRoleRoom)(req.tenantId, 'WAITER')).emit('waiter:pickup_ready', buildWaiterPickupPayload(order));
@@ -754,7 +739,7 @@ const createAssistedOrder = async (req, res) => {
                     select: { id: true, isActive: true, name: true, phone: true },
                 });
             }
-            const orderNumber = await generateOrderNumberForTenant(tenant.id, orderType);
+            const orderNumber = (0, order_number_service_1.generateOrderNumber)(orderType); // Synchronous \u2014 no DB call, collision-resistant
             const isDirectBill = fulfillmentMode === 'DIRECT_BILL';
             const shouldSettleImmediately = isDirectBill && (markPaid || Boolean(paymentMethod));
             const sessionStatus = isDirectBill
@@ -816,7 +801,7 @@ const createAssistedOrder = async (req, res) => {
                         taxAmount,
                         discountAmount: 0,
                         totalAmount,
-                        invoiceNumber: `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`,
+                        invoiceNumber: `INV-${(0, crypto_1.randomUUID)().replace(/-/g, '').slice(0, 16).toUpperCase()}`, // UUID-based — no collision risk
                         paymentStatus: shouldSettleImmediately ? 'PAID' : 'UNPAID',
                         paymentMethod: shouldSettleImmediately ? paymentMethod || 'cash' : null,
                         paidAt: shouldSettleImmediately ? new Date() : null,

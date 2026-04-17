@@ -497,8 +497,10 @@ async function initSocket(server) {
         allowEIO3: false,
         serveClient: false,
         connectionStateRecovery: {
-            maxDisconnectionDuration: 2 * 60 * 1000,
-            skipMiddlewares: true,
+            // 30s: long enough for a network blip, short enough to prevent ghost sessions on expired JWTs
+            maxDisconnectionDuration: 30 * 1000,
+            // MUST be false: auth middleware must re-validate token on every reconnect
+            skipMiddlewares: false,
         },
     });
     await setupRedisAdapter();

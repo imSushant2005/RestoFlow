@@ -68,6 +68,7 @@ const socket_1 = require("./socket");
 const logger_1 = require("./utils/logger");
 const tracing_middleware_1 = require("./middlewares/tracing.middleware");
 const tenant_rate_limit_middleware_1 = require("./middlewares/tenant-rate-limit.middleware");
+const cache_service_1 = require("./services/cache.service");
 // Instrumentation handled by ./instrumentation
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
@@ -89,10 +90,29 @@ function buildAllowedOrigins() {
     return [];
 }
 const allowedOrigins = buildAllowedOrigins();
+// Trusted origin patterns — used as fallback when CLIENT_URL / CORS_ORIGIN are not set.
+// These match any subdomain of Vercel and Railway deployments (standard indie stack).
+const TRUSTED_ORIGIN_PATTERNS = [
+    /\.vercel\.app$/,
+    /\.railway\.app$/,
+    /\.up\.railway\.app$/,
+];
 function isOriginAllowed(origin) {
+    // No origin header — server-to-server or same-origin request, always allow
     if (!origin)
-        return !isProduction || allowedOrigins.length === 0;
-    return allowedOrigins.includes(origin);
+        return true;
+    // Explicit allow-list takes priority
+    if (allowedOrigins.includes(origin))
+        return true;
+    // Localhost always allowed (dev)
+    if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))
+        return true;
+    // If no explicit list is configured, fall back to trusted deployment patterns
+    // This prevents the silent "all origins blocked" state when CLIENT_URL is missing.
+    if (allowedOrigins.length === 0) {
+        return TRUSTED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin));
+    }
+    return false;
 }
 app.disable('x-powered-by');
 if (env_1.env.TRUST_PROXY) {
@@ -107,6 +127,21 @@ const apiLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000,
     max: env_1.env.PUBLIC_RATE_LIMIT_MAX,
     message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+// C-7: Auth routes are brute-force targets — rate-limit them independently
+const authLimiter = (0, express_rate_limit_1.default)({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // 20 auth requests per 15 min per IP
+    message: { error: 'Too many authentication attempts. Please try again in 15 minutes.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+const strictAuthLimiter = (0, express_rate_limit_1.default)({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5, // Only 5 password reset attempts per hour per IP
+    message: { error: 'Too many password reset attempts. Please try again in 1 hour.' },
     standardHeaders: true,
     legacyHeaders: false,
 });
@@ -133,23 +168,41 @@ app.get('/health/live', (_req, res) => {
     res.json({ status: 'ok', uptimeSec: Math.round(process.uptime()) });
 });
 app.get('/health/ready', async (_req, res) => {
+    const checks = {};
+    let overallStatus = 'ready';
+    let httpStatus = 200;
+    // DB check
     try {
         await (0, prisma_1.checkPrismaReadiness)();
-        res.json({
-            status: 'ready',
-            db: 'ok',
-            sockets: (0, socket_1.getSocketMetrics)(),
-            version: '1.0.0',
-        });
+        checks.db = 'ok';
     }
     catch (error) {
-        res.status(503).json({
-            status: 'degraded',
-            db: 'unavailable',
-            sockets: (0, socket_1.getSocketMetrics)(),
-            error: error instanceof Error ? error.message : 'Database readiness failed',
-        });
+        checks.db = 'unavailable';
+        overallStatus = 'degraded';
+        httpStatus = 503;
     }
+    // Redis check (non-fatal — degrades caching and rate limiting but doesn't crash API)
+    const redis = (0, cache_service_1.getRedisClient)();
+    if (redis) {
+        try {
+            await redis.ping();
+            checks.redis = 'ok';
+        }
+        catch {
+            checks.redis = 'unavailable';
+            if (overallStatus === 'ready')
+                overallStatus = 'degraded';
+        }
+    }
+    else {
+        checks.redis = 'not_configured';
+    }
+    res.status(httpStatus).json({
+        status: overallStatus,
+        ...checks,
+        sockets: (0, socket_1.getSocketMetrics)(),
+        version: '1.0.0',
+    });
 });
 app.get('/health', async (_req, res) => {
     try {
@@ -160,6 +213,10 @@ app.get('/health', async (_req, res) => {
         res.status(503).json({ status: 'degraded', version: '1.0.0', sockets: (0, socket_1.getSocketMetrics)() });
     }
 });
+// C-7: Auth rate limiters applied BEFORE the auth router
+app.use('/auth/login', authLimiter);
+app.use('/auth/register', authLimiter);
+app.use('/auth/forgot-password/reset', strictAuthLimiter);
 app.use('/auth', auth_routes_1.default);
 app.use('/menus', menu_routes_1.default);
 app.use('/venue', table_routes_1.default);
