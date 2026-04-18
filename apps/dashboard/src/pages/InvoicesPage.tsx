@@ -165,10 +165,24 @@ export function InvoicesPage() {
         <ReceiptText size={32} className="text-blue-600" /> Billing
       </h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <MetricCard label="Today's Invoices" value={totalInvoices.toString()} />
-        <MetricCard label="Total Invoice Value" value={formatINR(grandTotal)} />
-        <MetricCard label="Tax Collected" value={formatINR(taxCollected)} />
+      <div className="mb-8 overflow-hidden rounded-[2rem] sm:rounded-[2.5rem] border shadow-xl lg:shadow-2xl" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+        <div className="grid grid-cols-3 md:grid-cols-3 divide-x md:divide-y-0" style={{ borderColor: 'var(--border)' }}>
+          <div className="p-3 sm:p-8 text-center md:text-left">
+            <p className="text-[8px] sm:text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--text-3)' }}>Volume</p>
+            <p className="mt-1 sm:mt-2 text-xl sm:text-4xl font-black tracking-tighter" style={{ color: 'var(--text-1)' }}>{totalInvoices}</p>
+            <p className="mt-1 text-[8px] sm:text-xs font-bold uppercase tracking-widest text-blue-500">Invoices</p>
+          </div>
+          <div className="p-3 sm:p-8 text-center md:text-left">
+            <p className="text-[8px] sm:text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--text-3)' }}>Revenue</p>
+            <p className="mt-1 sm:mt-2 text-xl sm:text-4xl font-black tracking-tighter" style={{ color: 'var(--text-1)' }}>{formatINR(grandTotal).split('.')[0]}</p>
+            <p className="mt-1 text-[8px] sm:text-xs font-bold uppercase tracking-widest text-emerald-500">Gross</p>
+          </div>
+          <div className="p-3 sm:p-8 text-center md:text-left">
+            <p className="text-[8px] sm:text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--text-3)' }}>Tax</p>
+            <p className="mt-1 sm:mt-2 text-xl sm:text-4xl font-black tracking-tighter" style={{ color: 'var(--text-1)' }}>{formatINR(taxCollected).split('.')[0]}</p>
+            <p className="mt-1 text-[8px] sm:text-xs font-bold uppercase tracking-widest text-amber-500">GST</p>
+          </div>
+        </div>
       </div>
 
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-5 py-4" style={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)', boxShadow: 'var(--card-shadow)' }}>
@@ -203,42 +217,64 @@ export function InvoicesPage() {
             {invoiceRows.map((order) => {
               const invoiceTotal = Number(order.totalAmount || order.total || 0);
               return (
-                <div key={order.id} className="p-5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
-                  <div>
-                    <p className="font-bold" style={{ color: 'var(--text-1)' }}>Invoice #{order.orderNumber || order.id.slice(-8).toUpperCase()}</p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>
-                      {format(new Date(order.createdAt), 'dd MMM yyyy, hh:mm a')} | {order.table?.name ? `Table ${order.table.name}` : 'Takeaway'}
+                <div
+                  key={order.id}
+                  className="p-4 sm:p-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between hover:bg-white/5 transition-colors"
+                  style={{ borderBottom: '1px solid var(--border)' }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-black text-base sm:text-lg" style={{ color: 'var(--text-1)' }}>
+                        #{order.orderNumber || order.id.slice(-8).toUpperCase()}
+                      </p>
+                      <span className="rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-black text-blue-500 uppercase tracking-tighter">
+                        Paid
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[10px] sm:text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>
+                      {format(new Date(order.createdAt), 'dd MMM | hh:mm a')}
                     </p>
-                    <p className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
-                      {order.customerName || 'Walk-in'}
-                      {order.customerPhone ? ` | ${order.customerPhone}` : ''}
-                    </p>
+                    <div className="mt-2 flex items-center gap-3">
+                      <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-semibold" style={{ color: 'var(--text-2)' }}>
+                        <Users size={10} className="text-slate-400" />
+                        {order.customerName || 'Walk-in'}
+                      </div>
+                      <div className="h-1 w-1 rounded-full bg-slate-700" />
+                      <div className="text-[10px] sm:text-xs font-black text-blue-400">
+                        {order.table?.name ? `T${order.table.name}` : 'T/W'}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-black text-blue-600">{formatINR(invoiceTotal)}</span>
-                    <button
-                      onClick={() => setSelectedInvoice(order)}
-                      className="px-3 py-2 rounded-lg font-semibold text-sm transition hover:bg-slate-200"
-                      style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}
-                    >
-                      Open Invoice
-                    </button>
-                    {order.diningSessionId && order.status !== 'RECEIVED' && order.diningSession?.bill?.paymentStatus === 'PAID' && (
+                  <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 border-t pt-3 sm:border-t-0 sm:pt-0" style={{ borderColor: 'var(--border)' }}>
+                    <div className="text-right">
+                      <p className="text-[8px] sm:text-[10px] font-black uppercase text-slate-500 tracking-widest leading-none">Total</p>
+                      <p className="mt-1 text-lg sm:text-xl font-black" style={{ color: 'var(--text-1)' }}>{formatINR(invoiceTotal)}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => {
-                          completeSessionMutation.mutate({ 
-                            sessionId: order.diningSessionId!, 
-                            paymentMethod: (order.diningSession?.bill?.paymentMethod || 'cash').toLowerCase() as any,
-                            shouldClose: true 
-                          });
-                        }}
-                        disabled={completeSessionMutation.isPending}
-                        className="p-2 rounded-lg bg-emerald-600/10 text-emerald-600 hover:bg-emerald-600/20 transition-all active:scale-95"
-                        title="Clear Session & Archive"
+                        onClick={() => setSelectedInvoice(order)}
+                        className="flex items-center justify-center gap-1.5 rounded-lg sm:rounded-xl bg-blue-600 px-3 py-2 sm:px-4 sm:py-2.5 text-[10px] sm:text-xs font-black text-white transition hover:bg-blue-500"
                       >
-                        <CheckCircle size={18} />
+                        <FileText size={12} />
+                        OPEN
                       </button>
-                    )}
+                      {order.diningSessionId && order.status !== 'RECEIVED' && order.diningSession?.bill?.paymentStatus === 'PAID' && (
+                        <button
+                          onClick={() => {
+                            completeSessionMutation.mutate({
+                              sessionId: order.diningSessionId!,
+                              paymentMethod: (order.diningSession?.bill?.paymentMethod || 'cash').toLowerCase() as any,
+                              shouldClose: true
+                            });
+                          }}
+                          disabled={completeSessionMutation.isPending}
+                          className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-emerald-600/10 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all active:scale-95"
+                          title="Clear Session & Archive"
+                        >
+                          <CheckCircle size={16} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -257,15 +293,6 @@ export function InvoicesPage() {
           onClose={() => setSelectedInvoice(null)}
         />
       )}
-    </div>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="p-5 rounded-2xl" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}>
-      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-3)' }}>{label}</p>
-      <p className="text-2xl font-black mt-1" style={{ color: 'var(--text-1)' }}>{value}</p>
     </div>
   );
 }
@@ -404,51 +431,51 @@ export function InvoiceModal({
 
           {/* Financials */}
           <div className="flex flex-col md:flex-row justify-end gap-12 pt-4">
-             <div className="w-full md:w-80 space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold text-[color:var(--text-3)] uppercase tracking-wide">Subtotal</span>
-                  <span className="text-sm font-black text-[color:var(--text-1)]">{formatINR(inferredSubtotal)}</span>
+            <div className="w-full md:w-80 space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-[color:var(--text-3)] uppercase tracking-wide">Subtotal</span>
+                <span className="text-sm font-black text-[color:var(--text-1)]">{formatINR(inferredSubtotal)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-[color:var(--text-3)] uppercase tracking-wide">Taxes ({taxRate}%)</span>
+                <span className="text-sm font-black text-[color:var(--text-1)]">{formatINR(inferredTax)}</span>
+              </div>
+              {inferredDiscount > 0 && (
+                <div className="flex justify-between items-center text-emerald-600">
+                  <span className="text-sm font-bold uppercase tracking-wide">Discounts</span>
+                  <span className="text-sm font-black">-{formatINR(inferredDiscount)}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold text-[color:var(--text-3)] uppercase tracking-wide">Taxes ({taxRate}%)</span>
-                  <span className="text-sm font-black text-[color:var(--text-1)]">{formatINR(inferredTax)}</span>
+              )}
+              <div className="pt-4 mt-2 border-t-2 border-[color:var(--border)] flex justify-between items-end">
+                <div>
+                  <p className="text-[10px] font-black text-[color:var(--text-3)] uppercase tracking-[0.2em]">Net Receivable</p>
+                  <p className="text-3xl font-black text-[color:var(--text-1)] tracking-tighter mt-1">{formatINR(total)}</p>
                 </div>
-                {inferredDiscount > 0 && (
-                  <div className="flex justify-between items-center text-emerald-600">
-                    <span className="text-sm font-bold uppercase tracking-wide">Discounts</span>
-                    <span className="text-sm font-black">-{formatINR(inferredDiscount)}</span>
-                  </div>
-                )}
-                <div className="pt-4 mt-2 border-t-2 border-[color:var(--border)] flex justify-between items-end">
-                   <div>
-                      <p className="text-[10px] font-black text-[color:var(--text-3)] uppercase tracking-[0.2em]">Net Receivable</p>
-                      <p className="text-3xl font-black text-[color:var(--text-1)] tracking-tighter mt-1">{formatINR(total)}</p>
-                   </div>
-                   <div className="pb-1">
-                      <span className="px-2 py-1 rounded bg-blue-600 text-white text-[10px] font-black uppercase">PAID</span>
-                   </div>
+                <div className="pb-1">
+                  <span className="px-2 py-1 rounded bg-blue-600 text-white text-[10px] font-black uppercase">PAID</span>
                 </div>
-             </div>
+              </div>
+            </div>
           </div>
 
           {/* Action Group */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 border-t border-[color:var(--border)]">
-             <button onClick={() => setShowSplit(true)} className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-[color:var(--surface-3)] hover:brightness-95 transition-all text-[color:var(--text-2)]">
-                <Users size={20} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Split</span>
-             </button>
-             <div className="flex flex-col items-center justify-center gap-2 p-3 rounded-2xl bg-emerald-600/10 text-emerald-700 border border-emerald-500/20">
-                <ReceiptText size={20} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Settled</span>
-             </div>
-             <button onClick={downloadInvoice} className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-blue-600/20 bg-blue-50/50 hover:bg-blue-50 transition-all text-blue-600">
-                <Download size={20} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Save</span>
-             </button>
-             <button onClick={shareInvoice} className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-slate-900 text-white hover:brightness-110 transition-all">
-                <Share2 size={20} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Share</span>
-             </button>
+            <button onClick={() => setShowSplit(true)} className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-[color:var(--surface-3)] hover:brightness-95 transition-all text-[color:var(--text-2)]">
+              <Users size={20} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Split</span>
+            </button>
+            <div className="flex flex-col items-center justify-center gap-2 p-3 rounded-2xl bg-emerald-600/10 text-emerald-700 border border-emerald-500/20">
+              <ReceiptText size={20} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Settled</span>
+            </div>
+            <button onClick={downloadInvoice} className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-blue-600/20 bg-blue-50/50 hover:bg-blue-50 transition-all text-blue-600">
+              <Download size={20} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Save</span>
+            </button>
+            <button onClick={shareInvoice} className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-slate-900 text-white hover:brightness-110 transition-all">
+              <Share2 size={20} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Share</span>
+            </button>
           </div>
         </div>
 

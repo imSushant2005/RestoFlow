@@ -39,6 +39,7 @@ import { ProductPage } from './pages/ProductPage';
 import { SignupPage } from './pages/SignupPage';
 import { SetupFlowPage } from './pages/SetupFlowPage';
 import { DashboardErrorBoundary } from './components/DashboardErrorBoundary';
+import { LanguageProvider } from './contexts/LanguageContext';
 import { VendorTopNav, type OpsNotification } from './components/VendorTopNav';
 import { useRealtimeSocket } from './hooks/useRealtimeSocket';
 import { usePlanFeatures } from './hooks/usePlanFeatures';
@@ -121,10 +122,10 @@ function logoutAndReload() {
 
 function ScreenLoader({ message }: { message: string }) {
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--shell-bg)' }}>
       <div className="flex flex-col items-center gap-4">
         <Loader2 size={30} className="animate-spin text-blue-500" />
-        <p className="text-sm font-medium text-slate-400">{message}</p>
+        <p className="text-sm font-medium" style={{ color: 'var(--text-3)' }}>{message}</p>
       </div>
     </div>
   );
@@ -612,7 +613,7 @@ function DashboardShell() {
       : []),
     ...(canAccessDashboard ? [{ to: '/app', label: 'Dashboard', icon: <LayoutDashboard size={18} /> }] : []),
     ...(canAccessMenu ? [{ to: '/app/menu', label: 'Menu', icon: <UtensilsCrossed size={18} /> }] : []),
-    ...(canAccessTables ? [{ to: '/app/tables', label: 'Tables & QR', icon: <Store size={18} /> }] : []),
+    ...(canAccessTables ? [{ to: '/app/tables', label: 'Tables & QR', icon: <Store size={18} />, isLocked: features.maxFloors === 0 }] : []),
     ...(canAccessOrders && role !== 'WAITER' ? [{ to: '/app/orders', label: 'Live Orders', icon: <Receipt size={18} />, badge: liveOrderCount }] : []),
     ...(canAccessAssistedOrdering ? [{ to: '/app/assisted-ordering', label: 'Assisted Ordering', icon: <Receipt size={18} />, isLocked: !features.hasWaiterRole }] : []),
     ...(canAccessBilling ? [{ to: '/app/billing', label: 'Billing', icon: <CreditCard size={18} /> }] : []),
@@ -950,4 +951,15 @@ function App() {
   );
 }
 
-export default App;
+const _AppWithLanguage = App;
+export { _AppWithLanguage as AppInner };
+
+function AppWithLanguage() {
+  return (
+    <LanguageProvider>
+      <App />
+    </LanguageProvider>
+  );
+}
+
+export default AppWithLanguage;

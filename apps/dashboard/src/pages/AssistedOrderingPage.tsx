@@ -246,6 +246,7 @@ export function AssistedOrderingPage() {
   const [paymentPreset, setPaymentPreset] = useState<'UNPAID' | 'cash' | 'upi' | 'card' | 'online'>('UNPAID');
   const [lineItems, setLineItems] = useState<AssistedLineItem[]>([]);
   const [activeModalItem, setActiveModalItem] = useState<any | null>(null);
+  const [isIntakeOpen, setIsIntakeOpen] = useState(false);
   const [lookupResult, setLookupResult] = useState<any>(null);
   const [lookupError, setLookupError] = useState('');
   const [result, setResult] = useState<AssistedResult | null>(null);
@@ -257,10 +258,11 @@ export function AssistedOrderingPage() {
     staleTime: 1000 * 60,
   });
 
-  const { data: zonesResponse } = useQuery({
-    queryKey: ['assist-order-zones'],
+  const { data: floorsResponse } = useQuery<any>({
+    queryKey: ['floors-overview'],
     queryFn: async () => (await api.get('/venue/zones')).data,
-    staleTime: 1000 * 60,
+    staleTime: 1000 * 20,
+    retry: false,
   });
 
   const { data: menuResponse, isLoading: menuLoading, refetch: refetchMenu } = useQuery({
@@ -325,10 +327,10 @@ export function AssistedOrderingPage() {
 
   const allTables = useMemo(
     () =>
-      (Array.isArray(zonesResponse?.zones) ? zonesResponse.zones : []).flatMap((zone: any) =>
-        (Array.isArray(zone?.tables) ? zone.tables : []).map((table: any) => ({ ...table, zoneName: zone.name })),
+      (Array.isArray(floorsResponse?.zones) ? floorsResponse.zones : []).flatMap((zone: any) =>
+        (Array.isArray(zone?.tables) ? zone.tables : []).map((table: any) => ({ ...table, floorName: zone.name })),
       ),
-    [zonesResponse?.zones],
+    [floorsResponse?.zones],
   );
 
   const filteredCategories = useMemo(() => {
@@ -393,7 +395,7 @@ export function AssistedOrderingPage() {
     );
   };
 
-  const totalItems = useMemo(() => lineItems.reduce((sum, item) => sum + item.quantity, 0), [lineItems]);
+
   const lookupAllowed = customerPhone.trim().length >= 8;
 
   const removeLineItem = (id: string) => {
@@ -413,29 +415,33 @@ export function AssistedOrderingPage() {
   return (
     <div className="space-y-6 pb-10">
       <section
-        className="rounded-[32px] border p-6 lg:p-8"
+        className="rounded-[32px] border p-5 lg:p-8"
         style={{ borderColor: 'var(--border)', background: 'linear-gradient(135deg, rgba(15,23,42,0.96), rgba(30,41,59,0.9))' }}
       >
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-300">Staff-assisted ordering</p>
-            <h1 className="mt-3 text-3xl font-black tracking-tight text-white lg:text-4xl">Take an order for a guest, then route it to kitchen or bill it directly.</h1>
-            <p className="mt-3 max-w-3xl text-sm font-medium leading-relaxed text-slate-300">
-              This mode is separate from public self-ordering. Staff can capture guest details quickly, build the basket with server-validated pricing, and choose whether the order should enter the live kitchen flow or go straight to an invoice-ready bill.
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Staff-assisted ordering</p>
+              <div className="h-1 w-1 rounded-full bg-cyan-700" />
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-500/50">{business?.businessName}</p>
+            </div>
+            <h1 className="mt-2 text-2xl font-black tracking-tight text-white lg:text-3xl">Venue Point of Sale</h1>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-white/50">Mode</p>
-              <p className="mt-2 text-sm font-black text-white">{fulfillmentMode === 'DIRECT_BILL' ? 'Direct bill' : 'Kitchen workflow'}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-3 rounded-2xl bg-white/5 border border-white/10 px-4 py-2">
+               <div className="flex flex-col">
+                  <span className="text-[9px] font-black text-white/40 uppercase tracking-widest">Pricing Mode</span>
+                  <span className="text-xs font-black text-emerald-400 uppercase">{fulfillmentMode === 'DIRECT_BILL' ? 'Instant Bill' : 'Kitchen Flow'}</span>
+               </div>
+               <div className="w-[1px] h-6 bg-white/10 mx-1" />
+               <div className="flex flex-col">
+                  <span className="text-[9px] font-black text-white/40 uppercase tracking-widest">Guest Context</span>
+                  <span className="text-xs font-black text-white truncate max-w-[100px]">{customerName.trim() || 'Walk-in'}</span>
+               </div>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-white/50">Guest</p>
-              <p className="mt-2 text-sm font-black text-white">{customerName.trim() || 'Walk-in guest'}</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-white/50">Preview total</p>
-              <p className="mt-2 text-sm font-black text-white">{formatINR(previewTotal)}</p>
+            <div className="flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 shadow-lg shadow-blue-500/20">
+               <ShoppingBag size={14} className="text-blue-100" />
+               <span className="text-sm font-black text-white">{formatINR(previewTotal)}</span>
             </div>
           </div>
         </div>
@@ -443,198 +449,225 @@ export function AssistedOrderingPage() {
 
       <div className="grid gap-6 lg:grid-cols-[1.35fr,0.65fr]">
         <div className="space-y-6">
-          <section className="rounded-[28px] border p-5" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>Guest intake</p>
-                <h2 className="mt-2 text-xl font-black" style={{ color: 'var(--text-1)' }}>Capture customer details before ordering.</h2>
+          <section className="rounded-[28px] border overflow-hidden shadow-sm" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+            <div 
+              className="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer hover:bg-white/5 transition-colors"
+              onClick={() => setIsIntakeOpen(!isIntakeOpen)}
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
+                  <Users size={18} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>Step 1</p>
+                  <h2 className="text-base font-black" style={{ color: 'var(--text-1)' }}>Guest Intake & Config</h2>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                 <button
-                  type="button"
-                  onClick={() => setFulfillmentMode('SEND_TO_KITCHEN')}
-                  className={`rounded-full px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${fulfillmentMode === 'SEND_TO_KITCHEN' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 ring-2 ring-blue-500/10' : 'bg-transparent border'}`}
-                  style={fulfillmentMode === 'SEND_TO_KITCHEN' ? {} : { borderColor: 'var(--border)', color: 'var(--text-3)' }}
-                >
-                  Send to kitchen
-                </button>
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex flex-wrap gap-1.5 mr-2">
+                   {customerName && <span className="bg-slate-500/10 px-2 py-0.5 rounded text-[9px] font-bold" style={{ color: 'var(--text-2)' }}>{customerName}</span>}
+                   {orderType && <span className="bg-slate-500/10 px-2 py-0.5 rounded text-[9px] font-bold" style={{ color: 'var(--text-2)' }}>{orderType}</span>}
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (features.hasAssistedDirectBill) {
-                      setFulfillmentMode('DIRECT_BILL');
-                    } else {
-                      window.alert(`Direct billing is a ${features.name === 'Mini' ? 'Café' : 'Pro'} feature. Please upgrade your plan.`);
-                    }
-                  }}
-                  className={`rounded-full px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 relative overflow-hidden group ${fulfillmentMode === 'DIRECT_BILL' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 ring-2 ring-blue-500/10' : 'bg-transparent border'}`}
-                  style={fulfillmentMode === 'DIRECT_BILL' ? {} : { borderColor: 'var(--border)', color: 'var(--text-3)', opacity: features.hasAssistedDirectBill ? 1 : 0.6 }}
+                  className={`p-1.5 rounded-lg transition-transform ${isIntakeOpen ? 'rotate-180' : ''}`}
+                  style={{ color: 'var(--text-3)' }}
                 >
-                  {!features.hasAssistedDirectBill && <span className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                  Direct bill {!features.hasAssistedDirectBill && <Sparkles size={10} className="inline ml-1 text-blue-500 animate-pulse" />}
+                  <ArrowRight size={18} className="rotate-90" />
                 </button>
               </div>
             </div>
-            <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr,0.9fr]">
-              <div className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                    Guest name
-                    <input
-                      value={customerName}
-                      onChange={(event) => setCustomerName(event.target.value)}
-                      placeholder="Walk-in guest"
-                      className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
-                      style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
-                    />
-                  </label>
-                  <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                    Mobile number
-                    <div className="mt-2 flex items-center gap-2 rounded-2xl border px-3 py-2" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-                      <Phone size={16} style={{ color: 'var(--text-3)' }} />
-                      <input
-                        value={customerPhone}
-                        onChange={(event) => setCustomerPhone(event.target.value)}
-                        placeholder="10-digit phone"
-                        className="w-full bg-transparent text-sm font-semibold outline-none"
-                        style={{ color: 'var(--text-1)' }}
-                      />
-                      <button
-                        type="button"
-                        disabled={!lookupAllowed || lookupMutation.isPending || !features.hasAssistedCustomerLookup}
-                        onClick={() => {
-                          if (features.hasAssistedCustomerLookup) {
-                            lookupMutation.mutate(customerPhone);
-                          } else {
-                            window.alert('Returning guest insights are only available on the DinePro plan.');
-                          }
-                        }}
-                        className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-[0.15em] transition-all relative overflow-hidden group shadow-md ${lookupAllowed && features.hasAssistedCustomerLookup ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-60'}`}
-                      >
-                        {lookupMutation.isPending ? (
-                          <RefreshCw size={14} className="animate-spin" />
-                        ) : (
-                          <>
-                            {features.hasAssistedCustomerLookup ? 'Lookup' : 'Pro Gated'}
-                            {!features.hasAssistedCustomerLookup && <Sparkles size={10} className="ml-1.5 inline text-blue-500" />}
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </label>
-                </div>
-                {lookupError ? <p className="text-sm font-semibold text-red-500">{lookupError}</p> : null}
-                {lookupResult ? (
-                  <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-black" style={{ color: 'var(--text-1)' }}>{lookupResult.name || 'Known guest'}</p>
-                        <p className="mt-1 text-xs font-semibold" style={{ color: 'var(--text-2)' }}>Visits: {lookupResult.visitCount || 0}</p>
+            
+            <div className={`transition-all duration-300 ease-in-out ${isIntakeOpen ? 'max-h-[1200px] opacity-100 border-t' : 'max-h-0 opacity-0'} overflow-hidden`} style={{ borderColor: 'var(--border)' }}>
+               <div className="px-5 py-6">
+                 <div className="flex flex-wrap gap-2 mb-6">
+                    <button
+                      type="button"
+                      onClick={() => setFulfillmentMode('SEND_TO_KITCHEN')}
+                      className={`rounded-full px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${fulfillmentMode === 'SEND_TO_KITCHEN' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 ring-2 ring-blue-500/10' : 'bg-transparent border'}`}
+                      style={fulfillmentMode === 'SEND_TO_KITCHEN' ? {} : { borderColor: 'var(--border)', color: 'var(--text-3)' }}
+                    >
+                      Send to kitchen
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (features.hasAssistedDirectBill) {
+                          setFulfillmentMode('DIRECT_BILL');
+                        } else {
+                          window.alert(`Direct billing is a ${features.name === 'Mini' ? 'Café' : 'Pro'} feature. Please upgrade your plan.`);
+                        }
+                      }}
+                      className={`rounded-full px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 relative overflow-hidden group ${fulfillmentMode === 'DIRECT_BILL' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 ring-2 ring-blue-500/10' : 'bg-transparent border'}`}
+                      style={fulfillmentMode === 'DIRECT_BILL' ? {} : { borderColor: 'var(--border)', color: 'var(--text-3)', opacity: features.hasAssistedDirectBill ? 1 : 0.6 }}
+                    >
+                      {!features.hasAssistedDirectBill && <span className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                      Direct bill {!features.hasAssistedDirectBill && <Sparkles size={10} className="inline ml-1 text-blue-500 animate-pulse" />}
+                    </button>
+                  </div>
+
+                  <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr,0.9fr]">
+                    <div className="space-y-4">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                          Guest name
+                          <input
+                            value={customerName}
+                            onChange={(event) => setCustomerName(event.target.value)}
+                            placeholder="Walk-in guest"
+                            className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
+                            style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
+                          />
+                        </label>
+                        <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                          Mobile number
+                          <div className="mt-2 flex items-center gap-2 rounded-2xl border px-3 py-2" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
+                            <Phone size={16} style={{ color: 'var(--text-3)' }} />
+                            <input
+                              value={customerPhone}
+                              onChange={(event) => setCustomerPhone(event.target.value)}
+                              placeholder="10-digit phone"
+                              className="w-full bg-transparent text-sm font-semibold outline-none"
+                              style={{ color: 'var(--text-1)' }}
+                            />
+                            <button
+                              type="button"
+                              disabled={!lookupAllowed || lookupMutation.isPending || !features.hasAssistedCustomerLookup}
+                              onClick={() => {
+                                if (features.hasAssistedCustomerLookup) {
+                                  lookupMutation.mutate(customerPhone);
+                                } else {
+                                  window.alert('Returning guest insights are only available on the DinePro plan.');
+                                }
+                              }}
+                              className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-[0.15em] transition-all relative overflow-hidden group shadow-md ${lookupAllowed && features.hasAssistedCustomerLookup ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-60'}`}
+                            >
+                              {lookupMutation.isPending ? (
+                                <RefreshCw size={14} className="animate-spin" />
+                              ) : (
+                                <>
+                                  {features.hasAssistedCustomerLookup ? 'Lookup' : 'Pro Gated'}
+                                  {!features.hasAssistedCustomerLookup && <Sparkles size={10} className="ml-1.5 inline text-blue-500" />}
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </label>
                       </div>
-                      <span className="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>
-                        Returning
-                      </span>
+                      {lookupError ? <p className="text-sm font-semibold text-red-500">{lookupError}</p> : null}
+                      {lookupResult ? (
+                        <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-black" style={{ color: 'var(--text-1)' }}>{lookupResult.name || 'Known guest'}</p>
+                              <p className="mt-1 text-xs font-semibold" style={{ color: 'var(--text-2)' }}>Visits: {lookupResult.visitCount || 0}</p>
+                            </div>
+                            <span className="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>
+                              Returning
+                            </span>
+                          </div>
+                          <div className="mt-3 grid gap-2 text-xs font-semibold" style={{ color: 'var(--text-2)' }}>
+                            <span>Last visit: {lookupResult.lastSessionAt ? new Date(lookupResult.lastSessionAt).toLocaleDateString() : 'Unknown'}</span>
+                            <span>Last table: {lookupResult.lastTableName || 'N/A'}</span>
+                            <span>Last source: {lookupResult.lastSource || 'N/A'}</span>
+                          </div>
+                        </div>
+                      ) : null}
+                      <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                        Guest note
+                        <textarea
+                          value={note}
+                          onChange={(event) => setNote(event.target.value)}
+                          placeholder="Allergies, seating note, delivery detail"
+                          rows={3}
+                          className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
+                          style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
+                        />
+                      </label>
                     </div>
-                    <div className="mt-3 grid gap-2 text-xs font-semibold" style={{ color: 'var(--text-2)' }}>
-                      <span>Last visit: {lookupResult.lastSessionAt ? new Date(lookupResult.lastSessionAt).toLocaleDateString() : 'Unknown'}</span>
-                      <span>Last table: {lookupResult.lastTableName || 'N/A'}</span>
-                      <span>Last source: {lookupResult.lastSource || 'N/A'}</span>
+                    <div className="space-y-4">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                          Order type
+                          <select
+                            value={orderType}
+                            onChange={(event) => setOrderType(event.target.value as any)}
+                            className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
+                            style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
+                          >
+                            <option value="TAKEAWAY">Takeaway (T-)</option>
+                            <option value="DINE_IN">Dine in (D-)</option>
+                            <option value="ZOMATO">Zomato (Z-)</option>
+                            <option value="SWIGGY">Swiggy (S-)</option>
+                          </select>
+                        </label>
+                        <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                          Guest count
+                          <input
+                            type="number"
+                            min={1}
+                            max={24}
+                            value={guestCount}
+                            onChange={(event) => setGuestCount(Math.max(1, Math.min(24, Number(event.target.value) || 1)))}
+                            className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
+                            style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
+                          />
+                        </label>
+                      </div>
+                      <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                        Table selection
+                        <select
+                          value={selectedTableId}
+                          onChange={(event) => setSelectedTableId(event.target.value)}
+                          disabled={orderType !== 'DINE_IN'}
+                          className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none disabled:opacity-60"
+                          style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
+                        >
+                          <option value="">Select table</option>
+                          {allTables.map((table: any) => (
+                            <option key={table.id} value={table.id}>
+                              {table.floorName ? `${table.floorName} • ` : ''}{table.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                        Seat / reference
+                        <input
+                          value={seat}
+                          onChange={(event) => setSeat(event.target.value)}
+                          placeholder="Seat or counter info"
+                          className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
+                          style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
+                        />
+                      </label>
+                      {fulfillmentMode === 'DIRECT_BILL' ? (
+                        <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                          Payment status
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            {[
+                              { value: 'UNPAID', label: 'Unpaid' },
+                              { value: 'cash', label: 'Cash' },
+                              { value: 'upi', label: 'UPI' },
+                              { value: 'card', label: 'Card' },
+                              { value: 'online', label: 'Online' },
+                            ].map((entry) => (
+                              <button
+                                key={entry.value}
+                                type="button"
+                                onClick={() => setPaymentPreset(entry.value as any)}
+                                className="rounded-2xl border px-4 py-3 text-left text-xs font-black uppercase tracking-[0.14em]"
+                                style={{ borderColor: paymentPreset === entry.value ? 'var(--brand)' : 'var(--border)', background: paymentPreset === entry.value ? 'var(--brand-soft)' : 'var(--bg)', color: paymentPreset === entry.value ? 'var(--brand)' : 'var(--text-2)' }}
+                              >
+                                {entry.label}
+                              </button>
+                            ))}
+                          </div>
+                        </label>
+                      ) : null}
                     </div>
                   </div>
-                ) : null}
-                <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                  Guest note
-                  <textarea
-                    value={note}
-                    onChange={(event) => setNote(event.target.value)}
-                    placeholder="Allergies, seating note, delivery detail"
-                    rows={3}
-                    className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
-                    style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
-                  />
-                </label>
-              </div>
-              <div className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                    Order type
-                    <select
-                      value={orderType}
-                      onChange={(event) => setOrderType(event.target.value as any)}
-                      className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
-                      style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
-                    >
-                      <option value="TAKEAWAY">Takeaway (T-)</option>
-                      <option value="DINE_IN">Dine in (D-)</option>
-                      <option value="ZOMATO">Zomato (Z-)</option>
-                      <option value="SWIGGY">Swiggy (S-)</option>
-                    </select>
-                  </label>
-                  <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                    Guest count
-                    <input
-                      type="number"
-                      min={1}
-                      max={24}
-                      value={guestCount}
-                      onChange={(event) => setGuestCount(Math.max(1, Math.min(24, Number(event.target.value) || 1)))}
-                      className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
-                      style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
-                    />
-                  </label>
-                </div>
-                <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                  Table selection
-                  <select
-                    value={selectedTableId}
-                    onChange={(event) => setSelectedTableId(event.target.value)}
-                    disabled={orderType !== 'DINE_IN'}
-                    className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none disabled:opacity-60"
-                    style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
-                  >
-                    <option value="">Select table</option>
-                    {allTables.map((table: any) => (
-                      <option key={table.id} value={table.id}>
-                        {table.zoneName ? `${table.zoneName} • ` : ''}{table.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                  Seat / reference
-                  <input
-                    value={seat}
-                    onChange={(event) => setSeat(event.target.value)}
-                    placeholder="Seat or counter info"
-                    className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
-                    style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
-                  />
-                </label>
-                {fulfillmentMode === 'DIRECT_BILL' ? (
-                  <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                    Payment status
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                      {[
-                        { value: 'UNPAID', label: 'Unpaid' },
-                        { value: 'cash', label: 'Cash' },
-                        { value: 'upi', label: 'UPI' },
-                        { value: 'card', label: 'Card' },
-                        { value: 'online', label: 'Online' },
-                      ].map((entry) => (
-                        <button
-                          key={entry.value}
-                          type="button"
-                          onClick={() => setPaymentPreset(entry.value as any)}
-                          className="rounded-2xl border px-4 py-3 text-left text-xs font-black uppercase tracking-[0.14em]"
-                          style={{ borderColor: paymentPreset === entry.value ? 'var(--brand)' : 'var(--border)', background: paymentPreset === entry.value ? 'var(--brand-soft)' : 'var(--bg)', color: paymentPreset === entry.value ? 'var(--brand)' : 'var(--text-2)' }}
-                        >
-                          {entry.label}
-                        </button>
-                      ))}
-                    </div>
-                  </label>
-                ) : null}
-              </div>
+               </div>
             </div>
           </section>
 
@@ -749,16 +782,13 @@ export function AssistedOrderingPage() {
           </section>
         </div>
 
-        <aside className="space-y-6">
-          <section className="rounded-[28px] border p-5" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+        <aside className={`${lineItems.length > 0 ? 'block' : 'hidden lg:block'} space-y-6 lg:sticky lg:top-8 self-start`}>
+          <section className="rounded-[28px] border p-5 shadow-sm" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>Order summary</p>
-                <h2 className="mt-2 text-xl font-black" style={{ color: 'var(--text-1)' }}>Items in this assisted order</h2>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>Step 3</p>
+                <h2 className="mt-1 text-xl font-black" style={{ color: 'var(--text-1)' }}>BASKET</h2>
               </div>
-              <span className="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>
-                {totalItems} items
-              </span>
             </div>
             <div className="mt-4 space-y-4">
               {lineItems.length === 0 ? (
@@ -815,18 +845,11 @@ export function AssistedOrderingPage() {
             <div className="mt-4 flex flex-col gap-2">
               <button
                 type="button"
-                disabled={lineItems.length === 0 || submitMutation.isPending}
-                onClick={() => submitMutation.mutate()}
-                className="flex items-center justify-center gap-2 rounded-2xl px-4 py-4 text-sm font-black text-white disabled:opacity-60"
-                style={{ background: 'var(--brand)' }}
-              >
-                <ReceiptText size={16} />
-                {submitMutation.isPending ? 'Submitting...' : fulfillmentMode === 'DIRECT_BILL' ? 'Generate bill now' : 'Send order to kitchen'}
-              </button>
-              <button
-                type="button"
+                onClick={() => {
+                  submitMutation.mutate();
+                  resetSession();
+                }}
                 disabled={lineItems.length === 0}
-                onClick={resetSession}
                 className="rounded-2xl border px-4 py-3 text-xs font-black uppercase tracking-[0.14em] disabled:opacity-60"
                 style={{ borderColor: 'var(--border)', color: 'var(--text-2)' }}
               >

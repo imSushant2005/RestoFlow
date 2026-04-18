@@ -12,7 +12,6 @@ import {
   Store,
   UtensilsCrossed,
   WifiOff,
-  LayoutDashboard,
   Utensils,
   X,
 } from 'lucide-react';
@@ -28,14 +27,15 @@ import {
 import { MenuSection } from '../components/MenuSection';
 import { CartDrawer } from '../components/CartDrawer';
 import { useCartStore } from '../store/cartStore';
+import { useLanguage } from '../contexts/LanguageContext';
 
 type FoodFilter = 'ALL' | 'VEG' | 'NON_VEG' | 'EGG';
 
-const FILTER_OPTIONS: Array<{ key: FoodFilter; label: string }> = [
-  { key: 'ALL', label: 'All' },
-  { key: 'VEG', label: 'Veg' },
-  { key: 'NON_VEG', label: 'Non-Veg' },
-  { key: 'EGG', label: 'Egg' },
+const FILTER_OPTIONS: Array<{ key: FoodFilter; labelKey: string }> = [
+  { key: 'ALL', labelKey: 'filter.all' },
+  { key: 'VEG', labelKey: 'filter.veg' },
+  { key: 'NON_VEG', labelKey: 'filter.nonveg' },
+  { key: 'EGG', labelKey: 'filter.egg' },
 ];
 
 function matchesFoodFilter(filter: FoodFilter, item: any) {
@@ -80,6 +80,7 @@ export function Storefront() {
 
   const deferredSearch = useDeferredValue(searchText.trim().toLowerCase());
   const { items: cartItems, customerName, setCustomerInfo, setTenantScope, setTenantPlan } = useCartStore();
+  const { lang, setLang, t } = useLanguage();
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = cartItems.reduce((sum, item) => sum + item.totalPrice * item.quantity, 0);
 
@@ -294,11 +295,10 @@ export function Storefront() {
           </div>
 
           <h1 className="mb-2 text-4xl font-black tracking-tight" style={{ color: 'var(--text-1)' }}>
-            Order from {restaurantName}
+            {t('entry.orderFrom')} {restaurantName}
           </h1>
           <p className="mb-10 text-lg font-medium leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            Start with your name and phone number so the restaurant can keep your menu, tracker, and bill linked to the
-            right session.
+            {t('entry.startWith')}
           </p>
 
           <div className="space-y-6">
@@ -307,7 +307,7 @@ export function Storefront() {
                 className="absolute left-4 top-[-10px] z-10 px-1 text-[10px] font-black uppercase tracking-widest"
                 style={{ color: 'var(--brand)', background: 'var(--bg)' }}
               >
-                Display Name
+                {t('entry.displayName')}
               </label>
               <input
                 type="text"
@@ -324,7 +324,7 @@ export function Storefront() {
                 className="absolute left-4 top-[-10px] z-10 px-1 text-[10px] font-black uppercase tracking-widest"
                 style={{ color: 'var(--brand)', background: 'var(--bg)' }}
               >
-                Phone Number
+                {t('entry.phone')}
               </label>
               <input
                 type="tel"
@@ -348,7 +348,7 @@ export function Storefront() {
                   color: type === 'DINE_IN' ? 'var(--brand)' : 'var(--text-3)',
                 }}
               >
-                <Utensils size={24} className="mb-2" /> Dine In
+                <Utensils size={24} className="mb-2" /> {t('entry.dineIn')}
               </button>
               <button
                 onClick={() => setType('TAKEAWAY')}
@@ -361,7 +361,7 @@ export function Storefront() {
                   color: type === 'TAKEAWAY' ? 'var(--brand)' : 'var(--text-3)',
                 }}
               >
-                <Package size={24} className="mb-2" /> Takeaway
+                <Package size={24} className="mb-2" /> {t('entry.takeaway')}
               </button>
             </div>
 
@@ -420,7 +420,7 @@ export function Storefront() {
               disabled={intakeSubmitting}
               className="mt-4 flex w-full items-center justify-center gap-3 rounded-3xl bg-[#1a1c23] py-4 font-black text-white shadow-2xl transition-all hover:bg-black disabled:opacity-60"
             >
-              {intakeSubmitting ? 'Signing you in...' : 'Continue to menu'} <ChevronRight size={20} />
+              {intakeSubmitting ? t('entry.signingIn') : t('entry.continue')} <ChevronRight size={20} />
             </button>
           </div>
         </div>
@@ -445,20 +445,7 @@ export function Storefront() {
         />
       </Helmet>
 
-      {activeSessionId ? (
-        <div
-          onClick={() => navigate(`/order/${tenantSlug}/session/${activeSessionId}`)}
-          className="relative z-30 flex cursor-pointer items-center justify-between bg-gradient-to-r from-blue-500 to-indigo-600 px-5 py-3 shadow-lg"
-        >
-          <span className="flex items-center gap-2 text-xs font-black text-white">
-            <span className="h-2 w-2 rounded-full bg-white shadow-[0_0_8px_white] animate-pulse" />
-            ACTIVE SESSION | Add more items any time
-          </span>
-          <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
-            Open tracker
-          </span>
-        </div>
-      ) : null}
+
 
       <header
         className="sticky top-0 z-20 shadow-sm transition-all duration-300"
@@ -477,7 +464,7 @@ export function Storefront() {
               )}
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-base font-black leading-tight" style={{ color: 'var(--text-1)' }}>
+              <h1 className="truncate text-lg sm:text-xl font-black leading-tight tracking-tight" style={{ color: 'var(--text-1)' }}>
                 {restaurantName}
               </h1>
               <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -487,8 +474,8 @@ export function Storefront() {
                     {seatParam ? ` | Seat ${seatParam}` : ''}
                   </span>
                 ) : (
-                  <span className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: 'var(--brand)' }}>
-                    Pickup ordering
+                  <span className="text-xs font-black uppercase tracking-widest bg-orange-500/10 text-orange-600 px-2.5 py-0.5 rounded-md">
+                    {t('header.pickupOrdering')}
                   </span>
                 )}
                 {todayHours ? (
@@ -500,29 +487,36 @@ export function Storefront() {
             </div>
           </div>
 
+
+          {/* Language toggle */}
           <button
-            onClick={() => navigate(activeSessionId ? `/order/${tenantSlug}/session/${activeSessionId}` : `/order/${tenantSlug}/history`)}
-            className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-black uppercase tracking-[0.14em] hover:bg-black/5"
-            style={{ color: 'var(--text-3)', background: 'var(--surface-3)' }}
+            onClick={() => setLang(lang === 'en' ? 'hi' : 'en')}
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all hover:bg-black/5 border"
+            style={{ color: 'var(--text-2)', background: lang === 'hi' ? 'rgba(249,115,22,0.1)' : 'var(--surface-3)', borderColor: lang === 'hi' ? 'rgba(249,115,22,0.3)' : 'var(--border)' }}
+            title={lang === 'en' ? 'Switch to Hinglish' : 'Switch to English'}
           >
-            <LayoutDashboard size={16} />
-            {activeSessionId ? 'Tracker' : 'History'}
+            {lang === 'en' ? '🙏 HI' : '🇬🇧 EN'}
           </button>
         </div>
 
         <div className="px-5 pb-4">
           <div
-            className="relative flex items-center gap-2 rounded-2xl border px-3.5 py-3 transition-all focus-within:shadow-lg"
-            style={{ background: 'var(--surface-3)', borderColor: 'var(--border)' }}
+            className="relative flex items-center gap-2 rounded-2xl border px-4 py-3.5 transition-all focus-within:shadow-[0_0_15px_rgba(0,0,0,0.05)] focus-within:bg-[var(--surface-2)]"
+            style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)' }}
           >
-            <Search size={18} style={{ color: 'var(--text-3)' }} />
+            <Search size={18} className="text-blue-500" />
             <input
               value={searchText}
               onChange={(event) => startTransition(() => setSearchText(event.target.value))}
-              className="w-full bg-transparent text-sm font-bold outline-none placeholder:font-medium"
+              className="w-full bg-transparent text-sm font-bold outline-none placeholder:font-semibold placeholder:text-slate-400"
               style={{ color: 'var(--text-1)' }}
-              placeholder="Search dishes, ingredients, combos..."
+              placeholder={t('search.placeholder')}
             />
+            {searchText && (
+              <button onClick={() => setSearchText('')} className="p-1 text-slate-400 hover:text-slate-600">
+                <X size={14} />
+              </button>
+            )}
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {FILTER_OPTIONS.map((option) => {
@@ -531,16 +525,16 @@ export function Storefront() {
                 <button
                   key={option.key}
                   onClick={() => setFoodFilter(option.key)}
-                  className={`rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] transition-all ${
-                    selected ? 'shadow-md' : ''
+                  className={`rounded-xl border px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all ${
+                    selected ? 'shadow-[0_4px_12px_rgba(37,99,235,0.2)] scale-105' : 'hover:bg-slate-100 hover:scale-105'
                   }`}
                   style={{
-                    borderColor: selected ? 'var(--brand)' : 'var(--border)',
-                    color: selected ? 'white' : 'var(--text-3)',
-                    background: selected ? 'var(--brand)' : 'var(--surface)',
+                    borderColor: selected ? '#2563eb' : 'var(--border)',
+                    color: selected ? 'white' : 'var(--text-600)',
+                    background: selected ? '#2563eb' : 'var(--surface-raised)',
                   }}
                 >
-                  {option.label}
+                  {t(option.labelKey)}
                 </button>
               );
             })}
@@ -619,10 +613,10 @@ export function Storefront() {
                     </div>
                   </div>
                   <p className="text-lg font-black" style={{ color: 'var(--text-2)' }}>
-                    No matching dishes found
+                    {t('search.noResults')}
                   </p>
                   <p className="font-medium" style={{ color: 'var(--text-3)' }}>
-                    Try a different ingredient, dish name, or category.
+                    {t('search.tryDiff')}
                   </p>
                 </div>
               ) : null}
@@ -637,7 +631,7 @@ export function Storefront() {
             onClick={() => setIsMenuModalOpen(true)}
             className="pointer-events-auto flex items-center gap-2 rounded-full border border-white/10 bg-[#1a1c23] px-6 py-3 text-xs font-black text-white shadow-2xl transition-all active:scale-95 hover:bg-black lg:hidden"
           >
-            <MenuIcon size={14} /> Categories
+            <MenuIcon size={14} /> {t('cart.categories')}
           </button>
 
           {totalItems > 0 ? (
@@ -649,9 +643,9 @@ export function Storefront() {
               <div className="flex items-center gap-3">
                 <div className="cart-badge rounded-lg bg-white/20 px-2 py-0.5 text-sm font-black">{totalItems}</div>
                 <div className="text-left">
-                  <span className="block text-base tracking-tight">Review order</span>
+                  <span className="block text-base tracking-tight">{t('cart.reviewOrder')}</span>
                   <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-white/70">
-                    GST and ETA included
+                    {t('cart.gstEta')}
                   </span>
                 </div>
               </div>

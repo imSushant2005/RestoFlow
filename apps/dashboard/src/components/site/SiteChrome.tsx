@@ -18,22 +18,22 @@ const navItems = [
   { label: 'Contact', to: '/contact' },
 ];
 
-export function SiteChrome({ children, onLoginClick, onSignupClick }: SiteChromeProps) {
+export function SiteChrome({ children, onLoginClick, onSignupClick, onContactClick }: SiteChromeProps) {
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--shell-bg)', color: 'var(--text-1)' }}>
-      <div className="pointer-events-none fixed inset-0 z-0" style={{ background: 'radial-gradient(circle at top, rgba(59,130,246,0.12), transparent 42%), linear-gradient(180deg, rgba(15,23,42,0.28), rgba(15,23,42,0))' }} />
+      <div className="pointer-events-none fixed inset-0 z-0" style={{ background: 'radial-gradient(circle at top, rgba(59,130,246,0.08), transparent 50%)' }} />
 
       {mobileNavOpen ? (
         <div
           onClick={() => setMobileNavOpen(false)}
-          className="fixed inset-0 z-30 bg-black/40 lg:hidden animate-in fade-in duration-300"
+          className="fixed inset-0 z-20 bg-black/40 lg:hidden animate-in fade-in duration-300"
         />
       ) : null}
 
-      <div className="relative z-10 mx-auto max-w-[1240px] px-4 py-4 sm:px-6 sm:py-6">
+      <div className="relative z-30 mx-auto max-w-[1240px] px-4 py-4 sm:px-6 sm:py-6">
         <header
           className="mb-10 rounded-[28px] border px-4 py-3 sm:px-5 transition-all shadow-lg"
           style={{ borderColor: 'var(--border)', background: 'var(--surface-opaque, rgba(15, 23, 42, 0.78))', backdropFilter: 'blur(16px)' }}
@@ -54,6 +54,24 @@ export function SiteChrome({ children, onLoginClick, onSignupClick }: SiteChrome
             <nav className="hidden items-center gap-2 lg:flex">
               {navItems.map((item) => {
                 const active = location.pathname === item.to;
+                // If the contact handler is provided, call it instead of navigating
+                if (item.to === '/contact' && typeof onContactClick === 'function') {
+                  return (
+                    <button
+                      key={item.to}
+                      type="button"
+                      onClick={onContactClick}
+                      className="rounded-full px-4 py-2 text-sm font-bold transition-all hover:brightness-110 active:scale-95"
+                      style={{
+                        color: active ? 'var(--text-1)' : 'var(--text-3)',
+                        background: active ? 'rgba(59, 130, 246, 0.12)' : 'transparent',
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                }
+
                 return (
                   <Link
                     key={item.to}
@@ -74,7 +92,7 @@ export function SiteChrome({ children, onLoginClick, onSignupClick }: SiteChrome
               <button
                 type="button"
                 onClick={onLoginClick}
-                className="hidden lg:block rounded-full px-5 py-2.5 text-sm font-black transition-all hover:brightness-105 active:scale-95"
+                className="hidden sm:inline-flex rounded-full px-5 py-2.5 text-sm font-black transition-all hover:brightness-105 active:scale-95"
                 style={{ border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)' }}
               >
                 Login
@@ -135,12 +153,37 @@ export function SiteChrome({ children, onLoginClick, onSignupClick }: SiteChrome
           <div className="space-y-4">
             {navItems.map((item) => {
               const active = location.pathname === item.to;
+              if (item.to === '/contact' && typeof onContactClick === 'function') {
+                return (
+                  <button
+                    key={item.to}
+                    type="button"
+                    onClick={() => {
+                      setMobileNavOpen(false);
+                      onContactClick();
+                    }}
+                    className={`flex items-center justify-between w-full rounded-2xl px-5 py-4 text-sm font-black transition-all active:scale-[0.98] ${
+                      active ? 'shadow-lg shadow-blue-500/10' : ''
+                    }`}
+                    style={{
+                      color: active ? 'var(--text-1)' : 'var(--text-2)',
+                      background: active ? 'rgba(59, 130, 246, 0.12)' : 'var(--surface-2)',
+                      border: '1px solid',
+                      borderColor: active ? 'rgba(59, 130, 246, 0.25)' : 'var(--border)',
+                    }}
+                  >
+                    {item.label}
+                    <ArrowRight size={14} className={active ? 'opacity-100 translate-x-0' : 'opacity-40 -translate-x-2 transition-transform'} />
+                  </button>
+                );
+              }
+
               return (
                 <Link
                   key={item.to}
                   to={item.to}
                   onClick={() => setMobileNavOpen(false)}
-                  className={`flex items-center justify-between rounded-2xl px-5 py-4 text-sm font-black transition-all active:scale-[0.98] ${
+                  className={`flex items-center justify-between w-full rounded-2xl px-5 py-4 text-sm font-black transition-all active:scale-[0.98] ${
                     active ? 'shadow-lg shadow-blue-500/10' : ''
                   }`}
                   style={{

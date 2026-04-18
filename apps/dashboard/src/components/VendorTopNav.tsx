@@ -1,29 +1,24 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell,
   ChevronDown,
-  Copy,
   CreditCard,
   ExternalLink,
-  Globe2,
   IndianRupee,
-  Loader2,
-  Lock,
   Mail,
   Phone,
   Settings,
-  ShieldCheck,
   UserCircle2,
   Zap,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { getCustomerAppUrl } from '../lib/network';
+import { useLanguage } from '../contexts/LanguageContext';
 
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER' | 'UNKNOWN';
-type ProfileLanguage = 'en' | 'hi' | 'hinglish';
 
 export type OpsNotification = {
   id: string;
@@ -125,12 +120,7 @@ function formatMoney(symbol: string, amount?: number) {
   return `${symbol}${safeAmount.toFixed(0)}`;
 }
 
-function normalizeLanguage(value?: string): ProfileLanguage {
-  const normalized = String(value || '').toLowerCase();
-  if (normalized === 'hi') return 'hi';
-  if (normalized === 'hinglish') return 'hinglish';
-  return 'en';
-}
+
 
 export function VendorTopNav({
   path,
@@ -148,19 +138,10 @@ export function VendorTopNav({
   onLogout,
 }: VendorTopNavProps) {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const { lang, setLang, t } = useLanguage();
   const [now, setNow] = useState(() => new Date());
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [securityOpen, setSecurityOpen] = useState(false);
-  const [profileName, setProfileName] = useState('');
-  const [preferredLanguage, setPreferredLanguage] = useState<ProfileLanguage>('en');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [securityQuestion, setSecurityQuestion] = useState('');
-  const [securityAnswer, setSecurityAnswer] = useState('');
-  const [profileFeedback, setProfileFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
-  const [securityFeedback, setSecurityFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const profileRef = useRef<HTMLDivElement | null>(null);
   const notificationRef = useRef<HTMLDivElement | null>(null);
   const headerLabel = ROUTE_LABELS[path] || 'Overview';
@@ -172,52 +153,6 @@ export function VendorTopNav({
     queryFn: async () => (await api.get('/auth/me')).data,
     staleTime: 1000 * 60,
     retry: false,
-  });
-
-  const updateProfileMutation = useMutation({
-    mutationFn: async () =>
-      (
-        await api.patch('/auth/profile', {
-          name: profileName.trim(),
-          preferredLanguage,
-        })
-      ).data,
-    onSuccess: async () => {
-      setProfileFeedback({ tone: 'success', message: 'Profile updated.' });
-      await queryClient.invalidateQueries({ queryKey: ['auth-me'] });
-    },
-    onError: (error: any) => {
-      setProfileFeedback({
-        tone: 'error',
-        message: error?.response?.data?.error || 'Could not update profile right now.',
-      });
-    },
-  });
-
-  const changePasswordMutation = useMutation({
-    mutationFn: async () =>
-      (
-        await api.post('/auth/change-password', {
-          currentPassword,
-          newPassword,
-          securityQuestion: securityQuestion.trim() || undefined,
-          securityAnswer: securityAnswer.trim() || undefined,
-        })
-      ).data,
-    onSuccess: async () => {
-      setSecurityFeedback({ tone: 'success', message: 'Security settings updated.' });
-      setCurrentPassword('');
-      setNewPassword('');
-      setSecurityQuestion('');
-      setSecurityAnswer('');
-      await queryClient.invalidateQueries({ queryKey: ['auth-me'] });
-    },
-    onError: (error: any) => {
-      setSecurityFeedback({
-        tone: 'error',
-        message: error?.response?.data?.error || 'Could not update password right now.',
-      });
-    },
   });
 
   useEffect(() => {
@@ -248,17 +183,11 @@ export function VendorTopNav({
     onMarkNotificationsRead();
   }, [notificationsOpen, onMarkNotificationsRead, unreadNotificationCount]);
 
-  useEffect(() => {
-    setProfileName(authMe?.user?.name || '');
-    setPreferredLanguage(normalizeLanguage(authMe?.user?.preferredLanguage));
-  }, [authMe?.user?.name, authMe?.user?.preferredLanguage]);
-
   const orderLink = useMemo(() => {
     const slug = business?.slug?.trim() || authMe?.tenant?.slug?.trim();
     if (!slug) return '';
     return `${getCustomerAppUrl()}/order/${slug}`;
   }, [authMe?.tenant?.slug, business?.slug]);
-  const assistedLink = '/app/assisted-ordering';
 
   const visibleNotifications = useMemo(() => notifications.slice(0, 20), [notifications]);
   const currencySymbol = authMe?.tenant?.currencySymbol || '₹';
@@ -267,42 +196,29 @@ export function VendorTopNav({
   const workspacePhone = business?.phone?.trim() || 'No phone set';
   const securityPending = Boolean(authMe?.user?.securitySetupPending);
 
-  const copyOrderLink = async () => {
-    if (!orderLink) {
-      alert('Ordering link unavailable. Complete business setup first.');
-      return;
-    }
-    try {
-      await navigator.clipboard?.writeText(orderLink);
-      alert('Ordering link copied.');
-    } catch {
-      alert('Could not copy link on this browser.');
-    }
-  };
-
   return (
     <header
-      className="relative z-[100] flex flex-wrap items-center justify-between gap-3 rounded-2xl px-2 py-2 sm:px-3 shadow-sm backdrop-blur-md"
+      className="relative z-[100] flex flex-wrap items-center justify-between gap-2 rounded-xl px-2 py-1.5 sm:px-3 sm:py-2 shadow-sm backdrop-blur-md"
       style={{ border: '1px solid var(--border)', background: 'var(--sidebar-bg)' }}
     >
-      <div className="min-w-0">
+      <div className="min-w-0 py-0.5">
         <h1
-          className="truncate text-lg font-black tracking-tight sm:text-xl"
+          className="truncate text-base font-black tracking-tight sm:text-xl leading-tight"
           style={{ color: 'var(--text-1)', fontFamily: 'var(--font-main)' }}
         >
           {headerLabel}
         </h1>
         <p
-          className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em]"
+          className="mt-0 flex flex-wrap items-center gap-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.1em]"
           style={{ color: 'var(--text-3)' }}
         >
-          <span>{formattedNow}</span>
-          <span className="rounded-full px-2 py-0.5" style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>
-            Live Orders {liveOrderCount}
+          <span className="hidden xs:inline">{formattedNow}</span>
+          <span className="rounded-full px-1.5 py-0.5" style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>
+            LIVE: {liveOrderCount}
           </span>
           {role === 'WAITER' && (
-            <span className="rounded-full px-2 py-0.5" style={{ background: '#dcfce7', color: '#166534' }}>
-              Waiter Console
+            <span className="rounded-full px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+              WAITER
             </span>
           )}
         </p>
@@ -417,7 +333,7 @@ export function VendorTopNav({
 
           {profileOpen && (
             <div
-              className="absolute right-0 top-12 z-50 w-[min(380px,calc(100vw-1rem))] overflow-hidden rounded-2xl border shadow-xl"
+              className="absolute right-0 top-12 z-50 w-[min(380px,calc(100vw-1rem))] overflow-y-auto max-h-[calc(100vh-80px)] rounded-2xl border shadow-xl custom-scrollbar"
               style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
             >
               <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
@@ -442,54 +358,7 @@ export function VendorTopNav({
               </div>
 
               <div className="space-y-4 px-5 py-4">
-                <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
-                  <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
-                    Staff Name
-                  </label>
-                  <input
-                    value={profileName}
-                    onChange={(event) => setProfileName(event.target.value)}
-                    className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none"
-                    style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-1)' }}
-                  />
-                  <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
-                    <div>
-                      <label className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
-                        <Globe2 size={12} /> Language
-                      </label>
-                      <select
-                        value={preferredLanguage}
-                        onChange={(event) => setPreferredLanguage(normalizeLanguage(event.target.value))}
-                        className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none"
-                        style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-1)' }}
-                      >
-                        <option value="en">English</option>
-                        <option value="hi">Hindi</option>
-                        <option value="hinglish">Hinglish</option>
-                      </select>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setProfileFeedback(null);
-                        updateProfileMutation.mutate();
-                      }}
-                      disabled={updateProfileMutation.isPending}
-                      className="inline-flex items-center justify-center gap-2 self-end rounded-xl px-4 py-2.5 text-sm font-black text-white disabled:opacity-60"
-                      style={{ background: 'var(--brand)' }}
-                    >
-                      {updateProfileMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : null}
-                      Save
-                    </button>
-                  </div>
-                  {profileFeedback && (
-                    <p
-                      className="mt-3 text-xs font-bold"
-                      style={{ color: profileFeedback.tone === 'success' ? '#059669' : '#dc2626' }}
-                    >
-                      {profileFeedback.message}
-                    </p>
-                  )}
-                </div>
+
 
                 <div className="space-y-2 rounded-2xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
                   <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-2)' }}>
@@ -532,110 +401,6 @@ export function VendorTopNav({
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <button
-                    onClick={() => setSecurityOpen((prev) => !prev)}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition"
-                    style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-2)' }}
-                  >
-                    <ShieldCheck size={14} />
-                    Password & Security
-                  </button>
-
-                  {securityOpen && (
-                    <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
-                      <div className="grid gap-3">
-                        <div>
-                          <label className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
-                            <Lock size={12} /> Current Password
-                          </label>
-                          <input
-                            type="password"
-                            value={currentPassword}
-                            onChange={(event) => setCurrentPassword(event.target.value)}
-                            className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none"
-                            style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-1)' }}
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
-                            New Password
-                          </label>
-                          <input
-                            type="password"
-                            value={newPassword}
-                            onChange={(event) => setNewPassword(event.target.value)}
-                            className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none"
-                            style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-1)' }}
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
-                            Security Question
-                          </label>
-                          <input
-                            value={securityQuestion}
-                            onChange={(event) => setSecurityQuestion(event.target.value)}
-                            placeholder="Optional update"
-                            className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none"
-                            style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-1)' }}
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
-                            Security Answer
-                          </label>
-                          <input
-                            value={securityAnswer}
-                            onChange={(event) => setSecurityAnswer(event.target.value)}
-                            placeholder="Optional update"
-                            className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none"
-                            style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-1)' }}
-                          />
-                        </div>
-                        <button
-                          onClick={() => {
-                            setSecurityFeedback(null);
-                            changePasswordMutation.mutate();
-                          }}
-                          disabled={changePasswordMutation.isPending}
-                          className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black text-white disabled:opacity-60"
-                          style={{ background: '#059669' }}
-                        >
-                          {changePasswordMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : null}
-                          Save Security
-                        </button>
-                        {securityFeedback && (
-                          <p
-                            className="text-xs font-bold"
-                            style={{ color: securityFeedback.tone === 'success' ? '#059669' : '#dc2626' }}
-                          >
-                            {securityFeedback.message}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2 px-5 pb-5">
-                <button
-                  onClick={copyOrderLink}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition"
-                  style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-2)' }}
-                >
-                  <Copy size={14} />
-                  Copy Ordering Link
-                </button>
-                <button
-                  onClick={() => navigate(assistedLink)}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition"
-                  style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-2)' }}
-                >
-                  <ExternalLink size={14} />
-                  Open Assisted Ordering
-                </button>
                 <button
                   onClick={() => orderLink && window.open(orderLink, '_blank', 'noopener,noreferrer')}
                   disabled={!orderLink}
@@ -665,12 +430,35 @@ export function VendorTopNav({
                     Plans
                   </button>
                 </div>
+                <div className="px-5 pb-2">
+                  <p className="mb-2 text-[9px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>Language / Bhasha</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setLang('en')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-black transition-all ${
+                        lang === 'en' ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' : ''
+                      }`}
+                      style={lang !== 'en' ? { borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-2)' } : {}}
+                    >
+                      🇬🇧 English
+                    </button>
+                    <button
+                      onClick={() => setLang('hi')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-black transition-all ${
+                        lang === 'hi' ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20' : ''
+                      }`}
+                      style={lang !== 'hi' ? { borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-2)' } : {}}
+                    >
+                      🙏 Hinglish
+                    </button>
+                  </div>
+                </div>
                 <button
                   onClick={onLogout}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-black text-white transition"
+                  className="mx-5 mb-5 inline-flex w-[calc(100%-2.5rem)] items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-black text-white transition"
                   style={{ background: '#ef4444' }}
                 >
-                  Logout
+                  {t('nav.logout')}
                 </button>
               </div>
             </div>

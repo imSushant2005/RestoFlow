@@ -161,39 +161,39 @@ const TicketCard = memo(({
 
   return (
     <div
-      className={`relative flex flex-col gap-4 rounded-2xl p-4 transition-all duration-300 ${isCancelled ? 'opacity-60' : ''} ${isUrgent ? 'ring-2 ring-red-500/50 shadow-xl shadow-red-500/20' : ''}`}
+      className={`relative flex flex-col gap-4 rounded-2xl p-4 overflow-hidden transition-all duration-300 ${isCancelled ? 'opacity-60' : ''} ${isUrgent ? 'ring-2 ring-red-500/50 shadow-xl shadow-red-500/20' : ''}`}
       style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
     >
       <div className={`absolute left-0 right-0 top-0 h-1.5 rounded-t-2xl ${isCancelled ? 'bg-red-500/50' : isUrgent ? 'bg-red-500' : 'bg-blue-600'}`} />
       
-      <div className="flex justify-between items-start mt-2">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
+      <div className="flex justify-between items-start mt-2 gap-2">
+        <div className="flex flex-col gap-1 min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0">
             {ticket.table?.name ? (
-              <UtensilsCrossed size={14} className="text-blue-400" />
+              <UtensilsCrossed size={14} className="text-blue-500 shrink-0" />
             ) : (
-              <ShoppingBag size={14} className="text-amber-400" />
+              <ShoppingBag size={14} className="text-amber-500 shrink-0" />
             )}
-            <h3 className="text-xl font-black text-white tracking-tight leading-none">
+            <h3 className="text-xl font-black text-[var(--text-1)] tracking-tight leading-none truncate">
               {getTableLabel(ticket)}
             </h3>
           </div>
-          <div className="inline-flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1.5">
-             <span>{ticket.isSession ? 'Tab' : `#${asOrderCode(ticketOrders?.[0]?.id)}`}</span>
-             <span className="text-slate-700">|</span>
-             <span className="flex items-center gap-1.5 bg-slate-800/50 px-2 py-0.5 rounded-md border border-slate-700/50">
-               <Clock size={10} className="text-slate-500" />
-               {formatTimeValue(ticket?.createdAt)}
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-[var(--text-3)] uppercase tracking-widest mt-1.5">
+             <span className="shrink-0 text-[var(--text-2)]">{ticket.isSession ? 'Tab' : `#${asOrderCode(ticketOrders?.[0]?.id)}`}</span>
+             <span className="text-[var(--text-3)] opacity-50 shrink-0">|</span>
+             <span className="flex items-center gap-1.5 bg-[var(--surface-3)] px-2 py-0.5 rounded-md border border-[var(--border)] shrink-0 min-w-0 max-w-full">
+               <Clock size={10} className="text-[var(--text-3)] shrink-0" />
+               <span className="truncate">{formatTimeValue(ticket?.createdAt)}</span>
                {elapsedMin > 0 && (
-                 <span className={isUrgent ? 'text-red-400' : 'text-slate-400'}>
+                 <span className={`${isUrgent ? 'text-red-500' : 'text-[var(--text-3)]'} whitespace-nowrap`}>
                    <TimeElapsedBadge createdAtMs={createdAtMs} isUrgentThreshold={15} />
                  </span>
                )}
              </span>
           </div>
         </div>
-        <div className="text-right flex flex-col items-end gap-1">
-          <div className="flex items-center gap-3">
+        <div className="text-right flex flex-col items-end gap-1 shrink-0 max-w-[45%]">
+          <div className="flex items-center gap-2">
              {ticket.isSession && sessionStatus !== 'CLOSED' && (
                <button 
                  onClick={() => {
@@ -205,31 +205,31 @@ const TicketCard = memo(({
                      onCompleteSession(ticket.sessionId, (ticket.session?.bill?.paymentMethod || 'cash').toLowerCase() as any);
                    }
                  }}
-                 className="p-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+                 className="p-1 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all shrink-0"
                  title="Force Clear Session"
                >
-                 <Trash2 size={14} />
+                 <Trash2 size={12} />
                </button>
              )}
-            <span className="text-xl font-black text-blue-500">{formatINR(ticket.totalAmount || 0)}</span>
+            <span className="text-xl font-black text-blue-600 truncate max-w-full">{formatINR(ticket.totalAmount || 0)}</span>
           </div>
           {ticket.isSession && sessionStatus && (
-            <div className="flex flex-col items-end gap-1">
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${
-                sessionStatus === 'CLOSED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                sessionStatus === 'AWAITING_BILL' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 
-                'bg-slate-800 text-slate-400 border-slate-700'
+            <div className="flex flex-col items-end gap-1 w-full">
+              <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border shrink-0 ${
+                sessionStatus === 'CLOSED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 flex-shrink-0' : 
+                sessionStatus === 'AWAITING_BILL' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 flex-shrink-0' : 
+                'bg-[var(--surface-3)] text-[var(--text-3)] border-[var(--border)] flex-shrink-0'
               }`}>
                 {sessionStatus.replace(/_/g, ' ')}
               </span>
               {ticket.session?.bill?.invoiceNumber && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-bold text-slate-500 tracking-tight">
+                <div className="flex items-center gap-1.5 w-full justify-end min-w-0">
+                  <span className="text-[9px] font-bold text-[var(--text-3)] tracking-tight truncate">
                     {ticket.session.bill.invoiceNumber}
                   </span>
                   <button 
                     onClick={() => onViewInvoice(ticket)}
-                    className="p-1 rounded bg-slate-800 text-slate-500 hover:text-white transition-colors"
+                    className="p-1 rounded flex-shrink-0 bg-[var(--surface-3)] text-[var(--text-2)] hover:bg-slate-200 hover:text-slate-800 transition-colors"
                   >
                     <FileText size={10} />
                   </button>
@@ -421,7 +421,8 @@ const PipelineCard = memo(({
     isDragging
   } = useDraggable({
     id: order.id,
-    data: { order }
+    data: { order },
+    disabled: isStatusPending || isCompletePending || order.status === 'CANCELLED'
   });
 
   const style = transform ? {
@@ -545,7 +546,10 @@ const PipelineCard = memo(({
               {currentStatus === 'NEW' && canSetKitchenStages && (
                 <div className="grid grid-cols-5 gap-2">
                     <button
-                      onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, hasKDS ? 'ACCEPTED' : 'READY'); }}
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        onUpdateStatus(order.id, (plan === 'MINI' || !hasKDS) ? 'READY' : 'ACCEPTED'); 
+                      }}
                       disabled={isStatusPending}
                       className={`col-span-3 rounded-xl py-3 text-xs font-black text-white transition-all active:scale-[0.97] disabled:opacity-50 ${plan === 'MINI' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20' : 'bg-blue-600 hover:bg-blue-500'}`}
                     >
@@ -837,7 +841,8 @@ export function Orders({ role }: { role?: string }) {
 
     // Intercept Settle for Mini Plan to ask for Payment Method
     const isPaid = order.diningSession?.bill?.paymentStatus === 'PAID';
-    if (plan === 'MINI' && !isPaid && (status === 'READY' || status === 'COMPLETE_SETTLE') && order.diningSessionId) {
+    const isSettleRequired = (status === 'READY' || status === 'SERVED' || status === 'COMPLETE_SETTLE');
+    if (plan === 'MINI' && !isPaid && isSettleRequired && order.diningSessionId) {
       setPendingMiniSettle({ id, status, order });
       return;
     }
@@ -970,7 +975,8 @@ export function Orders({ role }: { role?: string }) {
       // Intercept Drag for Mini Plan to ask for Payment Method
       // ONLY IF NOT ALREADY PAID
       const isPaid = order.diningSession?.bill?.paymentStatus === 'PAID';
-      if (plan === 'MINI' && order.status === 'NEW' && newStatus === 'READY' && order.diningSessionId && !isPaid) {
+      const isSettleRequired = (newStatus === 'READY' || newStatus === 'SERVED' || newStatus === 'COMPLETE_SETTLE');
+      if (plan === 'MINI' && !isPaid && isSettleRequired && order.diningSessionId) {
         setPendingMiniSettle({ id: orderId, status: newStatus, order });
         return;
       }
@@ -1017,16 +1023,25 @@ export function Orders({ role }: { role?: string }) {
                     const { id, status, order } = pendingMiniSettle;
                     setPendingMiniSettle(null);
                     const shouldClose = status === 'COMPLETE_SETTLE';
+                    
                     completeSessionMutation.mutate({ 
                       sessionId: order.diningSessionId, 
                       paymentMethod: 'cash', 
                       shouldClose 
+                    }, {
+                      onSuccess: () => {
+                        // For MINI plan, we also want to mark the order as terminal (READY or SERVED) 
+                        // so it moves/archives correctly
+                        statusMutation.mutate({ 
+                          id, 
+                          status: shouldClose ? 'SERVED' : 'READY', 
+                          expectedVersion: order.version || 0 
+                        });
+                      }
                     });
-                    if (!shouldClose) {
-                      statusMutation.mutate({ id, status: 'READY', expectedVersion: order.version || 0 });
-                    }
                   }}
-                  className="group flex items-center justify-between w-full h-16 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                  disabled={completeSessionMutation.isPending}
+                  className="group flex items-center justify-between w-full h-16 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black transition-all active:scale-95 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
                 >
                   <div className="flex items-center gap-4">
                     <ReceiptText size={20} className="group-hover:scale-110 transition-transform" />
@@ -1040,16 +1055,23 @@ export function Orders({ role }: { role?: string }) {
                     const { id, status, order } = pendingMiniSettle;
                     setPendingMiniSettle(null);
                     const shouldClose = status === 'COMPLETE_SETTLE';
+
                     completeSessionMutation.mutate({ 
                       sessionId: order.diningSessionId, 
                       paymentMethod: 'online', 
                       shouldClose 
+                    }, {
+                      onSuccess: () => {
+                        statusMutation.mutate({ 
+                          id, 
+                          status: shouldClose ? 'SERVED' : 'READY', 
+                          expectedVersion: order.version || 0 
+                        });
+                      }
                     });
-                    if (!shouldClose) {
-                      statusMutation.mutate({ id, status: 'READY', expectedVersion: order.version || 0 });
-                    }
                   }}
-                  className="group flex items-center justify-between w-full h-16 px-6 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black transition-all active:scale-95 shadow-lg shadow-blue-500/20"
+                  disabled={completeSessionMutation.isPending}
+                  className="group flex items-center justify-between w-full h-16 px-6 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black transition-all active:scale-95 shadow-lg shadow-blue-500/20 disabled:opacity-50"
                 >
                   <div className="flex items-center gap-4">
                     <Signal size={20} className="group-hover:scale-110 transition-transform" />
@@ -1211,7 +1233,7 @@ export function Orders({ role }: { role?: string }) {
                       isStatusPending={statusMutation.isPending && statusMutation.variables?.id === order.id}
                       onUpdateStatus={handleUpdateStatus}
                       onCompleteSession={(sid, method, close) => completeSessionMutation.mutate({ sessionId: sid, paymentMethod: method, shouldClose: close })}
-                      isCompletePending={completeSessionMutation.isPending}
+                      isCompletePending={completeSessionMutation.isPending && completeSessionMutation.variables?.sessionId === order.diningSessionId}
                       plan={plan}
                     />
                   ))}

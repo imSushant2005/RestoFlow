@@ -14,6 +14,7 @@ import { HistoryPage } from './pages/HistoryPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { publicApi } from './lib/api';
 import { clearLegacyCustomerStorage } from './lib/tenantStorage';
+import { LanguageProvider } from './contexts/LanguageContext';
 
 function App() {
   useEffect(() => {
@@ -52,6 +53,7 @@ function App() {
   }, []);
 
   return (
+    <LanguageProvider>
     <div
       className="min-h-[100dvh] flex flex-col font-sans antialiased"
       style={{ background: 'var(--bg)', color: 'var(--text-1)' }}
@@ -85,6 +87,7 @@ function App() {
         </main>
       </NotificationsProvider>
     </div>
+    </LanguageProvider>
   );
 }
 

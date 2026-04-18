@@ -43,8 +43,8 @@ export function DashboardOverview() {
     staleTime: 1000 * 20,
   });
 
-  const { data: zonesResponse } = useQuery<any>({
-    queryKey: ['zones-overview'],
+  const { data: floorsResponse } = useQuery<any>({
+    queryKey: ['floors-overview'],
     queryFn: async () => (await api.get('/venue/zones')).data,
     staleTime: 1000 * 20,
     retry: false,
@@ -55,8 +55,8 @@ export function DashboardOverview() {
     [historyResponse?.data],
   );
   const tables = useMemo(
-    () => (zonesResponse?.zones || []).flatMap((zone: any) => (Array.isArray(zone.tables) ? zone.tables : [])),
-    [zonesResponse?.zones],
+    () => (floorsResponse?.zones || []).flatMap((zone: any) => (Array.isArray(zone.tables) ? zone.tables : [])),
+    [floorsResponse?.zones],
   );
 
   const stats = useMemo(() => {

@@ -52,7 +52,7 @@ export function SetupFlowPage({ onLoginClick, onSignupClick, onContactClick }: S
             { icon: Store, title: '1. Create workspace', body: 'Start the restaurant, business identity, and base admin access.' },
             { icon: Settings2, title: '2. Add business details', body: 'Finish GST, phone, invoice identity, and profile essentials.' },
             { icon: Users, title: '3. Load menu and staff', body: 'Import dishes, categories, modifiers, and role-specific access.' },
-            { icon: QrCode, title: '4. Map tables and QR', body: 'Attach dine-in sessions to the right zone, table, and live floor plan.' },
+            { icon: QrCode, title: '4. Map tables and QR', body: 'Attach dine-in sessions to the right floor, table, and live floor plan.' },
             { icon: CheckCircle2, title: '5. Run a full test', body: 'Walk one sample order from customer to kitchen to billing before launch.' },
           ].map((step) => {
             const Icon = step.icon;

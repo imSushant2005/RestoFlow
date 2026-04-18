@@ -34,7 +34,7 @@ const copy = {
     scenes: [
       'Guests scan, browse, and order from mobile.',
       'Kitchen, waiter, and cash desk stay aligned in real time.',
-      'Tables, zones, and QR access stay mapped to service.',
+      'Tables, floors, and QR access stay mapped to service.',
       'Owners get cleaner billing, exports, and reporting.',
     ],
     problemTitle: 'What RestoFlow fixes',
@@ -81,7 +81,7 @@ const copy = {
     scenes: [
       'गेस्ट मोबाइल से scan करके browse और order करते हैं।',
       'Kitchen, waiter और cash desk real time में sync रहते हैं।',
-      'Tables, zones और QR access service से जुड़े रहते हैं।',
+      'Tables, floors और QR access service से जुड़े रहते हैं।',
       'Owners को cleaner billing, exports और reporting मिलती है।',
     ],
     problemTitle: 'RestoFlow क्या सुधारता है',
@@ -128,7 +128,7 @@ const copy = {
     scenes: [
       'Guest mobile se scan karke browse aur order karta hai.',
       'Kitchen, waiter aur cash desk real time me sync rehte hain.',
-      'Tables, zones aur QR access service se linked rehte hain.',
+      'Tables, floors aur QR access service se linked rehte hain.',
       'Owners ko cleaner billing, exports aur reporting milti hai.',
     ],
     problemTitle: 'RestoFlow kya solve karta hai',

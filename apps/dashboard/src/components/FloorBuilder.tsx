@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { Plus, QrCode, Trash2, Power, Lock, CheckCircle } from 'lucide-react';
 import { usePlanFeatures } from '../hooks/usePlanFeatures';
@@ -13,7 +13,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { io } from 'socket.io-client';
 import { getCustomerAppUrl, getSocketUrl } from '../lib/network';
 
-const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus, highlight }: any) => {
+const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus, highlight, plan }: any) => {
   const [showActions, setShowActions] = useState(false);
   const actionRef = useRef<HTMLDivElement | null>(null);
 
@@ -28,10 +28,8 @@ const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus, highligh
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, [showActions]);
   const occupiedList = table.occupiedSeats || [];
-  const isAllSeatsTaken = occupiedList.length >= (table.seats || table.capacity || 4);
   const isGloballyOccupied = table.status === 'OCCUPIED';
   
-  const isOccupied = isGloballyOccupied || isAllSeatsTaken || table.orders?.length > 0;
   const isReserved = table.status === 'RESERVED';
   const isCleaning = table.status === 'CLEANING';
   const isOrdering = table.status === 'ORDERING';
@@ -42,65 +40,52 @@ const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus, highligh
   let badgeText = occupiedList.length > 0 ? 'Partially Full' : 'Available';
   let badgeColor = occupiedList.length > 0 ? 'bg-gradient-to-r from-green-600 to-green-500 text-white' : 'bg-gradient-to-r from-emerald-500 to-emerald-400 text-white';
   
-  if (isReserved) {
-    statusColor = 'bg-[var(--surface-raised)] border-purple-500/50 text-purple-700 shadow-lg';
-    badgeText = 'Reserved';
-    badgeColor = 'bg-gradient-to-r from-purple-500 to-pink-500 text-white';
-  } else if (isOrdering) {
-    statusColor = 'bg-[var(--surface-raised)] border-blue-500/50 text-blue-700 shadow-lg';
-    badgeText = 'Ordering...';
-    badgeColor = 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white animate-pulse';
-  } else if (isActiveMeal) {
-    statusColor = 'bg-[var(--surface-raised)] border-orange-500/50 text-orange-700 shadow-lg';
-    badgeText = 'Active Meal';
-    badgeColor = 'bg-gradient-to-r from-orange-500 to-amber-500 text-white';
-  } else if (isAwaitingBill) {
-    statusColor = 'bg-[var(--surface-raised)] border-yellow-500/50 text-yellow-700 shadow-lg';
-    badgeText = 'Awaiting Bill';
-    badgeColor = 'bg-gradient-to-r from-yellow-500 to-amber-400 text-white animate-pulse';
-  } else if (isOccupied) {
-    statusColor = 'bg-[var(--surface-raised)] border-red-500/50 text-red-700 shadow-lg';
-    badgeText = 'Occupied';
-    badgeColor = 'bg-gradient-to-r from-red-500 to-rose-500 text-white animate-pulse';
-  } else if (isCleaning) {
-    statusColor = 'bg-[var(--surface-raised)] border-gray-500/50 text-gray-400 shadow-lg opacity-80';
-    badgeText = 'Cleaning';
-    badgeColor = 'bg-gradient-to-r from-gray-500 to-slate-400 text-white';
+  if (plan !== 'MINI') {
+    if (isReserved) {
+      statusColor = 'bg-[var(--surface-raised)] border-purple-500/50 text-purple-700 shadow-lg';
+      badgeText = 'Reserved';
+      badgeColor = 'bg-gradient-to-r from-purple-500 to-pink-500 text-white';
+    } else if (isOrdering) {
+      statusColor = 'bg-[var(--surface-raised)] border-blue-500/50 text-blue-700 shadow-lg';
+      badgeText = 'Ordering...';
+      badgeColor = 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white animate-pulse';
+    } else if (isActiveMeal) {
+      statusColor = 'bg-[var(--surface-raised)] border-orange-500/50 text-orange-700 shadow-lg';
+      badgeText = 'Active Meal';
+      badgeColor = 'bg-gradient-to-r from-orange-500 to-amber-500 text-white';
+    } else if (isAwaitingBill) {
+      statusColor = 'bg-[var(--surface-raised)] border-yellow-500/50 text-yellow-700 shadow-lg';
+      badgeText = 'Awaiting Bill';
+      badgeColor = 'bg-gradient-to-r from-yellow-500 to-amber-400 text-white animate-pulse';
+    } else if (isGloballyOccupied) {
+      statusColor = 'bg-[var(--surface-raised)] border-red-500/50 text-red-700 shadow-lg';
+      badgeText = 'Occupied';
+      badgeColor = 'bg-gradient-to-r from-red-500 to-rose-500 text-white animate-pulse';
+    } else if (isCleaning) {
+      statusColor = 'bg-[var(--surface-raised)] border-gray-500/50 text-gray-400 shadow-lg opacity-80';
+      badgeText = 'Cleaning';
+      badgeColor = 'bg-gradient-to-r from-gray-500 to-slate-400 text-white';
+    }
+  } else {
+    // For Mini Plan, no sophisticated states.
+    statusColor = 'bg-[var(--surface-raised)] border-gray-200/50 text-slate-800 shadow-sm';
+    badgeText = '';
   }
 
-  const seatsTotal = table.seats || table.capacity || 4;
-  const seatsArray = Array.from({ length: seatsTotal }, (_, i) => i + 1);
-  const cols = Math.ceil(Math.sqrt(seatsTotal));
 
   return (
     <div
       className={`relative min-w-[120px] min-h-[120px] rounded-2xl flex flex-col items-center justify-center hover:scale-105 group border-2 backdrop-blur-xl transition-all duration-300 ${statusColor} overflow-hidden ${highlight ? 'ring-4 ring-blue-500/50 animate-pulse' : ''}`}
       onClick={() => setShowActions((v) => !v)}
     >
-      <div className="absolute inset-0 grid gap-1 p-1.5 pointer-events-none" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-        {seatsArray.map(seat => {
-          const isSeatOccupied = occupiedList.includes(seat.toString()) || isGloballyOccupied;
-          const seatColor = isSeatOccupied 
-            ? 'bg-red-500/30 border-red-500/40' 
-            : 'bg-emerald-500/20 border-emerald-500/30';
-            
-          return (
-            <div key={seat} className={`border rounded-lg flex items-center justify-center ${seatColor} transition-all`}>
-              <span className="text-[11px] font-black text-[var(--text-1)] mix-blend-overlay opacity-60">{seat}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      <span className="font-bold text-3xl mb-1 z-10" style={{ color: 'var(--text-1)' }}>{table.name}</span>
-      <span className="text-xs font-medium opacity-80 z-10" style={{ color: 'var(--text-2)' }}>{seatsTotal} Seats</span>
-      <span className={`text-[10px] font-bold uppercase tracking-wider mt-1 px-3 py-1 rounded-full z-10 shadow-lg ${badgeColor}`}>
+      <span className="font-bold text-4xl mb-1 z-10" style={{ color: 'var(--text-1)' }}>{table.name}</span>
+      <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full ${plan === 'MINI' ? 'hidden' : badgeColor}`}>
         {badgeText}
       </span>
       
       {showActions && (
     <div ref={actionRef} className="absolute bottom-2 left-2 right-2 z-20 border rounded-xl shadow-2xl p-2 space-y-1 backdrop-blur-3xl" style={{ background: 'var(--surface-raised)', borderColor: 'var(--border)' }}>
-          {table.currentSessionId && (
+          {plan !== 'MINI' && table.currentSessionId && (
             <button
               onClick={(e) => { e.stopPropagation(); onToggleStatus(table, 'CLEAR'); setShowActions(false); }}
               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-emerald-500/10 text-xs font-bold text-emerald-600 flex items-center gap-2 transition-colors"
@@ -109,14 +94,16 @@ const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus, highligh
               Clear Session
             </button>
           )}
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleStatus(table); setShowActions(false); }}
-            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-500/10 text-xs font-bold flex items-center gap-2 transition-colors"
-            style={{ color: 'var(--text-1)' }}
-          >
-            <Power size={13} className={table.status === 'OCCUPIED' ? 'text-red-500' : 'text-emerald-500'} />
-            {table.status === 'OCCUPIED' ? 'Mark Available' : 'Mark Occupied'}
-          </button>
+          {plan !== 'MINI' && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleStatus(table); setShowActions(false); }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-500/10 text-xs font-bold flex items-center gap-2 transition-colors"
+              style={{ color: 'var(--text-1)' }}
+            >
+              <Power size={13} className={table.status === 'OCCUPIED' ? 'text-red-500' : 'text-emerald-500'} />
+              {table.status === 'OCCUPIED' ? 'Mark Available' : 'Mark Occupied'}
+            </button>
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); setSelectedTable(table); setShowActions(false); }}
             className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-blue-500/10 text-xs font-bold text-blue-500 flex items-center gap-2 transition-colors"
@@ -140,13 +127,20 @@ const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus, highligh
 export function FloorBuilder({ zone, tenantSlug }: any) {
   const queryClient = useQueryClient();
   const [selectedTable, setSelectedTable] = useState<any>(null);
-  const [selectedSeatQR, setSelectedSeatQR] = useState<number | 'FULL'>('FULL');
+  
+  // Custom QR settings from Settings > QR Studio
+  const qrConfig = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('rf_qr_style') || '{"fgColor":"#0f172a", "bgColor":"#ffffff", "watermarkText":"", "includeLogo":true}') : { fgColor: '#0f172a', bgColor: '#ffffff', watermarkText: '', includeLogo: true };
+
+  const { data: business } = useQuery({
+    queryKey: ['settings-business'],
+    queryFn: async () => (await api.get('/settings/business')).data
+  });
   const [highlightedTableId, setHighlightedTableId] = useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showTablePrompt, setShowTablePrompt] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<any>(null);
   const [showClearConfirm, setShowClearConfirm] = useState<any>(null);
-  const { features } = usePlanFeatures();
+  const { features, plan } = usePlanFeatures();
   const navigate = useNavigate();
 
   const currentTablesCount = zone.tables?.length || 0;
@@ -265,10 +259,7 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
     if (!qrRef.current || !selectedTable) return;
     const dataUrl = await toPng(qrRef.current, { quality: 1, backgroundColor: '#ffffff', skipFonts: true });
     const link = document.createElement('a');
-    let filename = `table-${selectedTable.name}-qr.png`;
-    if (selectedSeatQR !== 'FULL') {
-      filename = `table-${selectedTable.name}-seat-${selectedSeatQR}-qr.png`;
-    }
+    const filename = `table-${selectedTable.name}-qr.png`;
     link.download = filename;
     link.href = dataUrl;
     link.click();
@@ -284,14 +275,14 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
   return (
     <div className="flex flex-col h-full gap-4">
       {/* Header Bar */}
-      <div className="flex justify-between items-center p-4 rounded-xl shadow-sm border border-transparent backdrop-blur-md" style={{ background: 'var(--surface-raised)', borderColor: 'var(--border)' }}>
-        <h2 className="text-xl font-bold" style={{ color: 'var(--text-1)' }}>{zone.name} Details</h2>
-        <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-4 rounded-xl shadow-sm border border-transparent backdrop-blur-md" style={{ background: 'var(--surface-raised)', borderColor: 'var(--border)' }}>
+        <h2 className="text-xl font-bold truncate" style={{ color: 'var(--text-1)' }}>{zone.name} Floor</h2>
+        <div className="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-3">
           <button 
             onClick={() => setSelectedTable('roaming')}
-            className="flex items-center gap-2 bg-purple-100 text-purple-700 px-4 py-2 rounded-lg font-medium hover:bg-purple-200 transition-colors"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-purple-100 text-purple-700 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg font-bold text-xs sm:text-sm hover:bg-purple-200 transition-colors shrink-0 whitespace-nowrap"
           >
-            <QrCode size={18} /> Roaming QR
+            <QrCode size={16} /> Roaming QR
           </button>
           <button 
             onClick={() => {
@@ -301,9 +292,9 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
               }
               setShowTablePrompt(true);
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${isLimitReached ? 'bg-slate-700 text-slate-300' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg font-bold text-xs sm:text-sm transition-colors shrink-0 whitespace-nowrap ${isLimitReached ? 'bg-slate-700 text-slate-300' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
           >
-            {isLimitReached ? <Lock size={18} /> : <Plus size={18} />} 
+            {isLimitReached ? <Lock size={16} /> : <Plus size={16} />} 
             Add Table
           </button>
         </div>
@@ -325,7 +316,7 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
         onSubmit={(name) => createTableMutation.mutate({ name, capacity: 4 })}
         title="Quick Table Add"
         label="Table Number/Name"
-        placeholder="e.g. 101, T5, or Garden-1"
+        placeholder="e.g. 1, 2, 101, T5"
       />
 
       <ConfirmModal
@@ -358,36 +349,40 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
       />
       
       {/* Summary Stats Bar */}
-      <div className="flex gap-4">
-        <div className="border-l-4 border-green-500 shadow-sm px-5 py-3 rounded-r-xl font-medium flex-1 flex flex-col" style={{ background: 'var(--surface-raised)' }}>
-          <span className="text-xs" style={{ color: 'var(--text-3)' }}>Available</span>
-          <span className="text-2xl font-bold" style={{ color: 'var(--text-1)' }}>{availableCount}</span>
+      {plan !== 'MINI' && (
+        <div className="flex flex-wrap gap-2 sm:gap-4 mb-2">
+          <div className="border-l-4 border-green-500 shadow-sm px-5 py-3 rounded-r-xl font-medium flex-1 flex flex-col" style={{ background: 'var(--surface-raised)' }}>
+            <span className="text-xs" style={{ color: 'var(--text-3)' }}>Available</span>
+            <span className="text-2xl font-bold" style={{ color: 'var(--text-1)' }}>{availableCount}</span>
+          </div>
+          <div className="border-l-4 border-red-500 shadow-sm px-5 py-3 rounded-r-xl font-medium flex-1 flex flex-col" style={{ background: 'var(--surface-raised)' }}>
+            <span className="text-xs" style={{ color: 'var(--text-3)' }}>Occupied</span>
+            <span className="text-2xl font-bold" style={{ color: 'var(--text-1)' }}>{occupiedCount}</span>
+          </div>
+          <div className="border-l-4 border-yellow-500 shadow-sm px-5 py-3 rounded-r-xl font-medium flex-1 flex flex-col" style={{ background: 'var(--surface-raised)' }}>
+            <span className="text-xs" style={{ color: 'var(--text-3)' }}>Reserved</span>
+            <span className="text-2xl font-bold" style={{ color: 'var(--text-1)' }}>{reservedCount}</span>
+          </div>
         </div>
-        <div className="border-l-4 border-red-500 shadow-sm px-5 py-3 rounded-r-xl font-medium flex-1 flex flex-col" style={{ background: 'var(--surface-raised)' }}>
-          <span className="text-xs" style={{ color: 'var(--text-3)' }}>Occupied</span>
-          <span className="text-2xl font-bold" style={{ color: 'var(--text-1)' }}>{occupiedCount}</span>
-        </div>
-        <div className="border-l-4 border-yellow-500 shadow-sm px-5 py-3 rounded-r-xl font-medium flex-1 flex flex-col" style={{ background: 'var(--surface-raised)' }}>
-          <span className="text-xs" style={{ color: 'var(--text-3)' }}>Reserved</span>
-          <span className="text-2xl font-bold" style={{ color: 'var(--text-1)' }}>{reservedCount}</span>
-        </div>
-      </div>
+      )}
 
-      <div className="rounded-xl p-3 flex flex-wrap gap-3 text-xs font-semibold shadow-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)', borderWidth: 1, color: 'var(--text-2)' }}>
-        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Available</span>
-        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Occupied</span>
-        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Ordering</span>
-        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Active Meal</span>
-        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500" /> Awaiting Bill</span>
-        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-500" /> Cleaning</span>
-      </div>
+      {plan !== 'MINI' && (
+        <div className="rounded-xl p-3 flex flex-wrap gap-3 text-xs font-semibold shadow-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)', borderWidth: 1, color: 'var(--text-2)' }}>
+          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Available</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Occupied</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Ordering</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Active Meal</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500" /> Awaiting Bill</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-500" /> Cleaning</span>
+        </div>
+      )}
 
       {/* CSS Grid Floor Plan */}
       <div className="rounded-xl p-6 flex-1 overflow-y-auto" style={{ background: 'var(--shell-bg)', border: '1px solid var(--border)', boxShadow: 'inset 0 2px 4px 0 rgba(0,0,0,0.02)' }}>
         {zone.tables?.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center" style={{ color: 'var(--text-3)' }}>
             <Plus size={48} className="mb-2 opacity-20" />
-            <p className="font-semibold text-lg">No tables configured for this zone yet.</p>
+            <p className="font-semibold text-lg">No tables configured for this floor yet.</p>
             <p className="text-sm mt-1">Click 'Add Table' to begin mapping your floor plan.</p>
           </div>
         ) : (
@@ -400,6 +395,7 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
                   onDelete={handleDelete}
                   onToggleStatus={handleToggleStatus}
                   highlight={highlightedTableId === table.id}
+                  plan={plan}
                 />
               </ErrorBoundary>
             ))}
@@ -407,50 +403,51 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
         )}
       </div>
 
-      {/* QR Modal */}
+      {/* QR Code Modal (Simplified, no seat selection) */}
       {selectedTable && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="p-8 rounded-3xl max-w-sm w-full shadow-[0_24px_64px_rgba(0,0,0,0.2)] flex flex-col items-center text-center transform transition-all border" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-            <h3 className="text-2xl font-black mb-3 tracking-tight" style={{ color: 'var(--text-1)' }}>
-              {selectedTable === 'roaming' ? 'Roaming Vendor QR' : `Table ${selectedTable.name}`}
-            </h3>
-            <div className="flex flex-wrap gap-2 mb-6 justify-center select-none w-full">
-              <button 
-                onClick={() => setSelectedSeatQR('FULL')} 
-                className={`px-4 py-2 text-xs rounded-full font-bold transition-all shadow-sm ${selectedSeatQR === 'FULL' ? 'bg-blue-600 text-white ring-2 ring-blue-600/30' : 'bg-[var(--surface-3)] hover:bg-[var(--surface-2)] text-[var(--text-2)] border border-[var(--border)]'}`}
-              >
-                Full Table
-              </button>
-              {selectedTable !== 'roaming' && (selectedTable.seats || selectedTable.capacity) && Array.from({ length: selectedTable.seats || selectedTable.capacity }, (_, i) => i + 1).map(seat => (
-                <button 
-                  key={seat}
-                  onClick={() => setSelectedSeatQR(seat)} 
-                  className={`px-4 py-2 text-xs rounded-full font-bold transition-all shadow-sm ${selectedSeatQR === seat ? 'bg-blue-600 text-white ring-2 ring-blue-600/30' : 'bg-[var(--surface-3)] hover:bg-[var(--surface-2)] text-[var(--text-2)] border border-[var(--border)]'}`}
-                >
-                  Seat {seat}
-                </button>
-              ))}
-            </div>
-            
-            <div className="p-5 rounded-2xl shadow-inner border w-full flex justify-center bg-white" style={{ borderColor: 'var(--border)' }} ref={qrRef}>
-              <QRCodeSVG 
-                value={
-                  selectedTable === 'roaming' 
-                    ? `${customerAppUrl}/order/${tenantSlug}` 
-                    : selectedSeatQR === 'FULL' 
-                      ? `${customerAppUrl}/order/${tenantSlug}/${selectedTable.id}?qr=${encodeURIComponent(selectedTable.qrSecret)}`
-                      : `${customerAppUrl}/order/${tenantSlug}/${selectedTable.id}?seat=${selectedSeatQR}&qr=${encodeURIComponent(selectedTable.qrSecret)}`
-                } 
-                size={200}
-                level="H"
-                includeMargin={true}
-              />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full flex flex-col items-center gap-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="text-center">
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight">Table {selectedTable.name === 'roaming' ? 'Roaming' : selectedTable.name}</h3>
+              <p className="text-sm font-semibold mt-1 text-slate-500">Scan to view menu & order</p>
             </div>
 
-            <div className="flex gap-3 mt-8 w-full">
-              <button onClick={() => { setSelectedTable(null); setSelectedSeatQR('FULL'); }} className="flex-1 py-3 text-sm font-bold rounded-xl transition-colors border" style={{ background: 'var(--surface-3)', color: 'var(--text-2)', borderColor: 'var(--border)' }}>Close</button>
-              <button onClick={downloadQR} className="flex-1 py-3 text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25">
-                Download PNG
+            <div 
+              ref={qrRef} 
+              className="bg-white p-6 rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.05)] border border-slate-100 flex flex-col items-center"
+              style={{ backgroundColor: qrConfig.bgColor }}
+            >
+              <QRCodeSVG
+                value={selectedTable === 'roaming' ? `${customerAppUrl}/order/${tenantSlug}` : `${customerAppUrl}/order/${tenantSlug}/${selectedTable.id}?qr=${encodeURIComponent(selectedTable.qrSecret)}`}
+                size={220}
+                level="H"
+                includeMargin={false}
+                fgColor={qrConfig.fgColor}
+                bgColor={qrConfig.bgColor}
+              />
+              <div className="mt-5 flex flex-col items-center justify-center w-full">
+                <span className="text-xl font-black tracking-tight text-center" style={{ color: qrConfig.fgColor }}>
+                   {business?.businessName || 'Your Venue'}
+                </span>
+                <span className="text-[10px] font-bold tracking-widest uppercase mt-2 opacity-60" style={{ color: qrConfig.fgColor }}>
+                   {qrConfig.watermarkText || 'Powered by Restoflow'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 w-full mt-2">
+              <button
+                onClick={() => setSelectedTable(null)}
+                className="flex-1 py-3 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={downloadQR}
+                className="flex-1 py-3 rounded-xl font-bold text-white shadow-xl hover:scale-[1.02] active:scale-95 transition-all shadow-blue-500/20"
+                style={{ background: '#2563eb' }}
+              >
+                Download
               </button>
             </div>
           </div>

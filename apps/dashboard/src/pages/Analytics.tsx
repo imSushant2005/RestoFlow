@@ -162,7 +162,7 @@ export function Analytics() {
   };
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto w-full" style={{ background: 'var(--bg)' }}>
+    <div className="flex-1 p-4 lg:p-8 overflow-y-auto w-full custom-scrollbar" style={{ background: 'var(--bg)' }}>
       <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <div>
           <h2 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text-1)' }}>{isBasicsOnly ? 'Standard Tracking' : 'Advanced Analytics'}</h2>
@@ -170,21 +170,23 @@ export function Analytics() {
             {features.name} Tier Active
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setRange('7d')} className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${range === '7d' ? 'bg-blue-600 text-white' : 'bg-transparent border'}`} style={range === '7d' ? {} : { color: 'var(--text-2)', borderColor: 'var(--border)' }}>7d</button>
-          <button onClick={() => setRange('30d')} className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${range === '30d' ? 'bg-blue-600 text-white' : 'bg-transparent border'}`} style={range === '30d' ? {} : { color: 'var(--text-2)', borderColor: 'var(--border)' }}>30d</button>
-          <button onClick={() => setRange('custom')} className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${range === 'custom' ? 'bg-blue-600 text-white' : 'bg-transparent border'}`} style={range === 'custom' ? {} : { color: 'var(--text-2)', borderColor: 'var(--border)' }}>Custom</button>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-1 rounded-xl bg-surface-2 p-1 border" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+            <button onClick={() => setRange('7d')} className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${range === '7d' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-transparent text-slate-500 hover:text-slate-300'}`}>7D</button>
+            <button onClick={() => setRange('30d')} className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${range === '30d' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-transparent text-slate-500 hover:text-slate-300'}`}>30D</button>
+            <button onClick={() => setRange('custom')} className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${range === 'custom' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-transparent text-slate-500 hover:text-slate-300'}`}>CUSTOM</button>
+          </div>
           {range === 'custom' && (
-            <>
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="px-2 py-2 rounded-lg outline-none text-sm" style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', color: 'var(--text-1)' }} />
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="px-2 py-2 rounded-lg outline-none text-sm" style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', color: 'var(--text-1)' }} />
-            </>
+            <div className="flex items-center gap-1 flex-1 sm:flex-none">
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="px-2 py-1.5 rounded-lg outline-none text-[10px] font-bold flex-1" style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', color: 'var(--text-1)' }} />
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="px-2 py-1.5 rounded-lg outline-none text-[10px] font-bold flex-1" style={{ background: 'var(--surface-3)', border: '1px solid var(--border)', color: 'var(--text-1)' }} />
+            </div>
           )}
           <button
             onClick={downloadCSV}
-            className="bg-blue-600 text-white px-4 py-2 flex items-center gap-2 rounded-xl font-bold shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all ml-2"
+            className="bg-blue-600 text-white px-4 py-2 flex items-center justify-center gap-2 rounded-xl text-xs font-black shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all flex-1 sm:flex-none"
           >
-            <Download size={16} /> Export CSV
+            <Download size={14} /> EXPORT
           </button>
         </div>
       </div>
@@ -242,40 +244,29 @@ export function Analytics() {
                  <Plus size={14} /> ADD EXPENSE
                </button>
              </div>
-             <div className="overflow-x-auto">
-               <table className="w-full text-left">
-                 <thead>
-                   <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
-                     <th className="pb-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Description</th>
-                     <th className="pb-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Category</th>
-                     <th className="pb-3 text-[10px] font-black uppercase text-slate-500 tracking-wider text-right">Amount</th>
-                     <th className="pb-3 text-[10px] font-black uppercase text-slate-500 tracking-wider text-right">Action</th>
-                   </tr>
-                 </thead>
-                 <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
-                   {expenses.map((exp: any) => (
-                     <tr key={exp.id} className="group">
-                       <td className="py-3 text-sm font-semibold" style={{ color: 'var(--text-1)' }}>{exp.description}</td>
-                       <td className="py-3">
-                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-bold text-slate-600 border" style={{ background: 'var(--surface-3)', color: 'var(--text-2)', borderColor: 'var(--border)' }}>
-                           {exp.category}
-                         </span>
-                       </td>
-                       <td className="py-3 text-sm font-black text-right" style={{ color: 'var(--text-1)' }}>{formatINR(exp.amount)}</td>
-                       <td className="py-3 text-right">
-                         <button onClick={() => deleteExpenseMutation(exp.id)} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors">
-                           <Trash2 size={14} />
-                         </button>
-                       </td>
-                     </tr>
-                   ))}
-                   {expenses.length === 0 && (
-                     <tr>
-                       <td colSpan={4} className="py-8 text-center text-xs font-bold text-slate-500">No expenses recorded for this period.</td>
-                     </tr>
-                   )}
-                 </tbody>
-               </table>
+             <div className="space-y-3">
+                {expenses.map((exp: any) => (
+                  <div key={exp.id} className="p-4 rounded-xl border flex items-center justify-between group" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+                    <div className="min-w-0 flex-1 px-1">
+                      <p className="font-black text-sm truncate" style={{ color: 'var(--text-1)' }}>{exp.description}</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-slate-500/10 text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>
+                          {exp.category}
+                        </span>
+                        {exp.date && <span className="text-[9px] font-bold text-slate-500">{new Date(exp.date).toLocaleDateString()}</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <p className="text-base font-black" style={{ color: 'var(--text-1)' }}>{formatINR(exp.amount)}</p>
+                      <button onClick={() => deleteExpenseMutation(exp.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors bg-white/5 rounded-lg">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {expenses.length === 0 && (
+                  <div className="py-8 text-center text-xs font-bold text-slate-500">No expenses recorded for this period.</div>
+                )}
              </div>
            </div>
            
@@ -535,7 +526,7 @@ function InsightMetric({
 
   return (
     <div
-      className="p-8 rounded-[2rem] border transition-all hover:scale-[1.02] duration-300 relative overflow-hidden group"
+      className="p-6 lg:p-8 rounded-[2rem] border transition-all hover:scale-[1.02] duration-300 relative overflow-hidden group"
       style={{
         background: 'var(--card-bg)',
         borderColor: 'var(--card-border)',

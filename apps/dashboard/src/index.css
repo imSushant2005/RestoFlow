@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&display=swap');/* Tailwind CSS Base Styles - Ignore IDE warnings for @tailwind at-rules */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -27,7 +27,8 @@
   --surface-2: #f8fafc;
   --surface-3: #f1f5f9;
   --surface-raised: #ffffff;
-  --surface-overlay: rgba(15, 23, 42, 0.6);
+  --surface-opaque: rgba(255, 255, 255, 0.9);
+  --surface-overlay: rgba(15, 23, 42, 0.4);
 
   /* Text */
   --text-1: #0f172a;
@@ -100,7 +101,8 @@
     --surface-2: #020408;
     --surface-3: #161a22;
     --surface-raised: #0f141e;
-    --surface-overlay: rgba(0, 0, 0, 0.85);
+    --surface-overlay: rgba(0, 0, 0, 0.75);
+    --surface-opaque: rgba(15, 23, 42, 0.78);
 
     --text-1: #f8fafc;
     --text-2: #94a3b8;
@@ -149,6 +151,7 @@ body.light {
   --surface-3: #f1f5f9;
   --surface-raised: #ffffff;
   --surface-overlay: rgba(15, 23, 42, 0.4);
+  --surface-opaque: rgba(255, 255, 255, 0.9);
   --text-1: #0f172a;
   --text-2: #334155;
   --text-3: #64748b;
@@ -185,6 +188,7 @@ body.dark {
   --surface-3: #1e293b;
   --surface-raised: #111827;
   --surface-overlay: rgba(0,0,0,0.7);
+  --surface-opaque: rgba(15, 23, 42, 0.78);
   --text-1: #f1f5f9;
   --text-2: #94a3b8;
   --text-3: #64748b;

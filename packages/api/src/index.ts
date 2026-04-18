@@ -73,7 +73,15 @@ function isOriginAllowed(origin?: string | null) {
   if (allowedOrigins.includes(origin)) return true;
 
   // 3. Localhost (dev)
-  if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) return true;
+  if (!isProduction && (
+    origin.startsWith('http://localhost:') || 
+    origin.startsWith('http://127.0.0.1:') ||
+    origin.startsWith('http://192.168.') ||
+    origin.startsWith('http://10.') ||
+    /^http:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\./.test(origin)
+  )) {
+    return true;
+  }
 
   // 4. Pattern match (vercel/railway)
   // Use a simple check to catch if the origin ends with a trusted domain

@@ -24,7 +24,7 @@ type ReadyPickupCard = {
   orderNumber: string;
   destinationLabel: string;
   tableName: string | null;
-  zoneName: string | null;
+  floorName: string | null;
   orderType: string;
   itemCount: number;
   readyAt?: string;
@@ -45,7 +45,7 @@ const COPY = {
     queue: 'Delivery queue',
     noRequests: 'No active guest requests right now.',
     noQueue: 'Kitchen is quiet right now. New ready orders will appear here.',
-    zone: 'Zone',
+    zone: 'Floor',
     items: 'Items',
     readyAt: 'Ready at',
     serve: 'Mark served',
@@ -69,7 +69,7 @@ const COPY = {
     queue: 'डिलीवरी कतार',
     noRequests: 'अभी कोई सक्रिय guest request नहीं है।',
     noQueue: 'किचन अभी शांत है। नए ready orders यहाँ दिखेंगे।',
-    zone: 'ज़ोन',
+    zone: 'फ्लोर',
     items: 'आइटम',
     readyAt: 'तैयार समय',
     serve: 'Served mark करें',
@@ -93,7 +93,7 @@ const COPY = {
     queue: 'Delivery queue',
     noRequests: 'Abhi koi active guest request nahi hai.',
     noQueue: 'Kitchen abhi quiet hai. Naye ready orders yahan dikhte rahenge.',
-    zone: 'Zone',
+    zone: 'Floor',
     items: 'Items',
     readyAt: 'Ready time',
     serve: 'Served mark karo',
@@ -138,19 +138,19 @@ function normalizeReadyOrder(order: any): ReadyPickupCard | null {
   if (!orderId) return null;
   const orderType = String(order?.orderType || '').toUpperCase();
   const tableName = order?.tableName ?? order?.table?.name ?? null;
-  const zoneName = order?.zoneName ?? order?.table?.zone?.name ?? null;
+  const floorName = order?.zoneName ?? order?.table?.zone?.name ?? null;
   const destinationLabel =
     order?.destinationLabel ||
     (orderType === 'TAKEAWAY'
       ? COPY.en.takeaway
-      : [tableName ? `Table ${tableName}` : null, zoneName ? `Zone ${zoneName}` : null].filter(Boolean).join(' • ') || COPY.en.dining);
+      : [tableName ? `Table ${tableName}` : null, floorName ? `Floor ${floorName}` : null].filter(Boolean).join(' • ') || COPY.en.dining);
 
   return {
     orderId,
     orderNumber: String(order?.orderNumber || `#${orderId.slice(-6).toUpperCase()}`),
     destinationLabel,
     tableName,
-    zoneName,
+    floorName,
     orderType,
     itemCount: Number(order?.itemCount) || (Array.isArray(order?.items) ? order.items.reduce((sum: number, item: any) => sum + Number(item?.quantity || 0), 0) : 0),
     readyAt: order?.readyAt || order?.updatedAt || undefined,
@@ -550,7 +550,7 @@ export function WaiterPage() {
                         <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-600">{order.orderNumber}</p>
                         <h3 className="mt-1 text-xl font-black tracking-tight" style={{ color: 'var(--text-1)' }}>{order.destinationLabel}</h3>
                         <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--text-3)' }}>
-                          {order.zoneName ? <span className="rounded-full bg-slate-100 px-3 py-1">{t.zone}: {order.zoneName}</span> : null}
+                          {order.floorName ? <span className="rounded-full bg-slate-100 px-3 py-1">{t.zone}: {order.floorName}</span> : null}
                           <span className="rounded-full bg-slate-100 px-3 py-1">{t.items}: {order.itemCount}</span>
                           <span className="rounded-full bg-slate-100 px-3 py-1">{t.readyAt}: {safeTime(order.readyAt)}</span>
                         </div>
