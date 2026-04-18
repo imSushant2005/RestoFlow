@@ -255,6 +255,8 @@ export function HistoryPage() {
               {pastVisits.map((s: any) => {
                 const totalItems = s.orders?.reduce((sum: number, o: any) => sum + (o._count?.items || 0), 0) || 0;
                 const paid = s.bill?.paymentStatus === 'PAID';
+                const fallbackTotal =
+                  s.orders?.reduce((sum: number, order: any) => sum + (Number(order?.totalAmount) || 0), 0) || 0;
                 
                 return (
                   <button
@@ -288,7 +290,7 @@ export function HistoryPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-4 ml-4">
-                      <span className="font-black text-lg" style={{ color: 'var(--text-1)' }}>{formatINR(s.bill?.totalAmount || 0)}</span>
+                      <span className="font-black text-lg" style={{ color: 'var(--text-1)' }}>{formatINR(Number(s.bill?.totalAmount || 0) || fallbackTotal)}</span>
                       <ChevronRight size={16} className="text-gray-300 group-hover:text-blue-500 transition-colors" />
                     </div>
                   </button>

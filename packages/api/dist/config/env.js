@@ -73,6 +73,7 @@ const envSchema = zod_1.z
     JSON_BODY_LIMIT: zod_1.z.string().default('1mb'),
     REQUIRE_REDIS_FOR_PROD: boolish,
     ENFORCE_TABLE_QR_SECRET: boolish,
+    RUN_BACKGROUND_JOBS: boolish.default(true),
 })
     .superRefine((value, ctx) => {
     const redisUrl = emptyToUndefined(value.REDIS_URL);

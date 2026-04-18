@@ -96,6 +96,7 @@ class BoundedTTLCache {
 const tenantSlugCache = new BoundedTTLCache(TENANT_SLUG_CACHE_MAX, TENANT_SLUG_CACHE_TTL_MS);
 // Cache validated user IDs for 5 minutes to prevent DB hit on every reconnect
 const socketUserAuthCache = new BoundedTTLCache(10_000, 5 * 60 * 1000);
+const socketSessionAuthCache = new BoundedTTLCache(20_000, 20 * 1000);
 // Debounce presence broadcasts per tenant to prevent reconnect-storm fan-out
 const presenceDebounceTimers = new Map();
 function emitTenantPresenceDebounced(tenantId) {
@@ -326,16 +327,21 @@ async function authMiddleware(socket, next) {
                 return rejectAuth(socket, next, 'session_tenant_mismatch');
             }
         }
-        const session = await prisma_1.prisma.diningSession.findFirst({
-            where: {
-                id: verifiedSession.sessionId,
-                tenantId: verifiedSession.tenantId,
-                customerId: verifiedSession.customerId,
-            },
-            select: { id: true },
-        });
-        if (!session) {
-            return rejectAuth(socket, next, 'session_missing_or_revoked');
+        const sessionCacheKey = `auth_session_${verifiedSession.tenantId}_${verifiedSession.sessionId}_${verifiedSession.customerId}`;
+        const isCachedSession = socketSessionAuthCache.get(sessionCacheKey);
+        if (!isCachedSession) {
+            const session = await prisma_1.prisma.diningSession.findFirst({
+                where: {
+                    id: verifiedSession.sessionId,
+                    tenantId: verifiedSession.tenantId,
+                    customerId: verifiedSession.customerId,
+                },
+                select: { id: true },
+            });
+            if (!session) {
+                return rejectAuth(socket, next, 'session_missing_or_revoked');
+            }
+            socketSessionAuthCache.set(sessionCacheKey, true);
         }
         socket.data.tenantId = verifiedSession.tenantId;
         socket.data.sessionId = verifiedSession.sessionId;

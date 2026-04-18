@@ -1,20 +1,94 @@
-import { prisma } from '../db/prisma';
-import { logger } from '../utils/logger';
+import { randomUUID } from 'crypto';
 import * as Sentry from '@sentry/node';
+import { prisma } from '../db/prisma';
+import { lockSessionForMutation } from '../db/session-lock';
+import { getIO, getSessionRoom, getTenantRoom } from '../socket';
+import { deleteCache, getRedisClient } from './cache.service';
+import { cacheKeys } from '../utils/cache-keys';
+import { logger } from '../utils/logger';
+import {
+  recordSessionCleanupComplete,
+  recordSessionCleanupFailure,
+  recordSessionCleanupLeaseSkip,
+  recordSessionCleanupStart,
+} from './runtime-metrics.service';
+
+const CLEANUP_LOCK_KEY = 'jobs:session_cleanup:lock';
+const CLEANUP_LOCK_TTL_SECONDS = 9 * 60;
+
+async function invalidateCleanupCaches(tenantId: string, sessionId: string) {
+  await Promise.all([
+    deleteCache(cacheKeys.dashboardLiveOrders(tenantId)),
+    deleteCache(cacheKeys.dashboardOrderHistoryPattern(tenantId)),
+    deleteCache(cacheKeys.publicSession(tenantId, sessionId)),
+    deleteCache(cacheKeys.sessionOrders(tenantId, sessionId)),
+  ]);
+}
+
+async function acquireCleanupLease() {
+  const redis = getRedisClient();
+  if (!redis) {
+    return {
+      acquired: true,
+      async release() {},
+    };
+  }
+
+  const token = randomUUID();
+
+  try {
+    const lockResult = await redis.set(CLEANUP_LOCK_KEY, token, 'EX', CLEANUP_LOCK_TTL_SECONDS, 'NX');
+    if (lockResult !== 'OK') {
+      return {
+        acquired: false,
+        async release() {},
+      };
+    }
+
+    return {
+      acquired: true,
+      async release() {
+        try {
+          await redis.eval(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+            1,
+            CLEANUP_LOCK_KEY,
+            token,
+          );
+        } catch (error) {
+          logger.warn({ error }, '[SESSION_CLEANUP] Failed to release Redis lease');
+        }
+      },
+    };
+  } catch (error) {
+    logger.warn({ error }, '[SESSION_CLEANUP] Redis lease unavailable, skipping this run');
+    return {
+      acquired: false,
+      async release() {},
+    };
+  }
+}
 
 /**
- * Automatically cancels ONLY zero-order sessions that have been open for
- * more than 6 hours (previous threshold: 1 hour).
+ * Automatically cancels only zero-order sessions that have been open for
+ * more than 6 hours.
  *
- * KEY SAFETY RULE:
- * Sessions with ANY non-cancelled orders are NEVER auto-closed here.
- * They require explicit operator action via the billing flow.
- * Touching them automatically risks generating incorrect bills or
- * misrepresenting payment method.
- *
- * Classification: PATCH NOW — critical data-integrity guard.
+ * Sessions with any non-cancelled orders are never auto-closed here.
+ * They require explicit operator action through the billing flow.
  */
-export async function cleanupStaleSessions() {
+export async function cleanupStaleSessions(expectedStartedAtMs?: number) {
+  const lease = await acquireCleanupLease();
+  if (!lease.acquired) {
+    recordSessionCleanupLeaseSkip();
+    logger.info('[SESSION_CLEANUP] Skipped because another instance owns the lease');
+    return;
+  }
+
+  const runStartedAtMs = Date.now();
+  recordSessionCleanupStart(expectedStartedAtMs);
+  let cancelled = 0;
+  let skipped = 0;
+
   try {
     const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
 
@@ -28,7 +102,6 @@ export async function cleanupStaleSessions() {
         tenantId: true,
         tableId: true,
         openedAt: true,
-        sessionStatus: true,
         _count: {
           select: {
             orders: {
@@ -46,22 +119,16 @@ export async function cleanupStaleSessions() {
 
     logger.info(`[SESSION_CLEANUP] Evaluating ${staleSessions.length} stale sessions`);
 
-    let cancelled = 0;
-    let skipped = 0;
-
     for (const session of staleSessions) {
       const orderCount = session._count.orders;
 
-      // HARD GUARD: Never auto-close a session that has live orders.
-      // Operators must reconcile these manually through the billing panel.
       if (orderCount > 0) {
         skipped++;
         const ageHours = ((Date.now() - session.openedAt.getTime()) / 3_600_000).toFixed(1);
         logger.warn(
           { sessionId: session.id, tenantId: session.tenantId, orderCount, ageHours },
-          `[SESSION_CLEANUP] SKIPPED ${session.id} — has ${orderCount} live orders, open for ${ageHours}h. Manual closure required.`,
+          `[SESSION_CLEANUP] SKIPPED ${session.id} - has ${orderCount} live orders, open for ${ageHours}h. Manual closure required.`,
         );
-        // Alert via Sentry so operators are notified of long-running sessions
         Sentry.captureMessage(
           `[RestoFlow] Long-running session ${session.id} needs attention (${ageHours}h, ${orderCount} orders)`,
           {
@@ -79,22 +146,51 @@ export async function cleanupStaleSessions() {
         continue;
       }
 
-      // Only cancel zero-order sessions (e.g. abandoned QR scans, accidental opens).
-      // These get CANCELLED (not CLOSED) — no bill is ever generated for them.
       try {
-        await prisma.$transaction(async (tx) => {
-          await tx.diningSession.update({
+        const outcome = await prisma.$transaction(async (tx) => {
+          await lockSessionForMutation(tx, session.id);
+
+          const lockedSession = await tx.diningSession.findUnique({
             where: { id: session.id },
+            select: {
+              id: true,
+              tenantId: true,
+              tableId: true,
+              openedAt: true,
+              sessionStatus: true,
+              _count: {
+                select: {
+                  orders: {
+                    where: { status: { notIn: ['CANCELLED'] } },
+                  },
+                },
+              },
+            },
+          });
+
+          if (!lockedSession || ['CLOSED', 'CANCELLED'].includes(lockedSession.sessionStatus)) {
+            return { action: 'noop' as const };
+          }
+
+          if (lockedSession._count.orders > 0) {
+            return {
+              action: 'skip' as const,
+              orderCount: lockedSession._count.orders,
+              openedAt: lockedSession.openedAt,
+            };
+          }
+
+          await tx.diningSession.update({
+            where: { id: lockedSession.id },
             data: {
-              sessionStatus: 'CANCELLED' as any, // Not CLOSED — CLOSED implies a bill exists
+              sessionStatus: 'CANCELLED' as any,
               closedAt: new Date(),
             },
           });
 
-          // Free the table so it shows as AVAILABLE again
-          if (session.tableId) {
+          if (lockedSession.tableId) {
             await tx.table.update({
-              where: { id: session.tableId },
+              where: { id: lockedSession.tableId },
               data: {
                 status: 'AVAILABLE',
                 currentOrderId: null,
@@ -102,12 +198,51 @@ export async function cleanupStaleSessions() {
               },
             });
           }
+
+          return {
+            action: 'cancelled' as const,
+            sessionId: lockedSession.id,
+            tenantId: lockedSession.tenantId,
+            tableId: lockedSession.tableId,
+          };
         });
 
-        cancelled++;
-        logger.info(
-          `[SESSION_CLEANUP] Auto-cancelled zero-order session: ${session.id} (table: ${session.tableId ?? 'none'})`,
-        );
+        if (outcome.action === 'skip') {
+          skipped++;
+          const ageHours = ((Date.now() - outcome.openedAt.getTime()) / 3_600_000).toFixed(1);
+          logger.warn(
+            { sessionId: session.id, tenantId: session.tenantId, orderCount: outcome.orderCount, ageHours },
+            `[SESSION_CLEANUP] SKIPPED ${session.id} - live order appeared during cleanup lock.`,
+          );
+          continue;
+        }
+
+        if (outcome.action === 'cancelled') {
+          cancelled++;
+          logger.info(
+            `[SESSION_CLEANUP] Auto-cancelled zero-order session: ${outcome.sessionId} (table: ${outcome.tableId ?? 'none'})`,
+          );
+
+          const updatePayload = {
+            sessionId: outcome.sessionId,
+            status: 'CANCELLED',
+            updatedAt: new Date().toISOString(),
+          };
+
+          const tenantRoom = getTenantRoom(outcome.tenantId);
+          const sessionRoom = getSessionRoom(outcome.tenantId, outcome.sessionId);
+          getIO().to(tenantRoom).emit('session:update', updatePayload);
+          getIO().to(sessionRoom).emit('session:update', updatePayload);
+
+          if (outcome.tableId) {
+            getIO().to(tenantRoom).emit('table:status_change', {
+              tableId: outcome.tableId,
+              status: 'AVAILABLE',
+            });
+          }
+
+          await invalidateCleanupCaches(outcome.tenantId, outcome.sessionId);
+        }
       } catch (err) {
         logger.error({ err }, `[SESSION_CLEANUP] Failed to cancel session ${session.id}`);
         Sentry.captureException(err, {
@@ -117,32 +252,45 @@ export async function cleanupStaleSessions() {
     }
 
     logger.info(
-      `[SESSION_CLEANUP] Complete — cancelled: ${cancelled}, skipped (has live orders): ${skipped}`,
+      `[SESSION_CLEANUP] Complete - cancelled: ${cancelled}, skipped (has live orders): ${skipped}`,
     );
   } catch (error) {
+    recordSessionCleanupFailure();
     logger.error({ error }, '[SESSION_CLEANUP_CRITICAL_ERROR]');
     Sentry.captureException(error);
+  } finally {
+    recordSessionCleanupComplete({
+      startedAtMs: runStartedAtMs,
+      cancelledSessions: cancelled,
+      skippedSessions: skipped,
+    });
+    await lease.release();
   }
 }
 
 let cleanupInterval: NodeJS.Timeout | null = null;
 let startupTimer: NodeJS.Timeout | null = null;
+let nextExpectedRunAtMs: number | null = null;
 
 /**
  * Starts the background session cleanup job.
- * - Delays the first run by 2 minutes after startup (lets the server stabilize)
- * - Default interval: 10 minutes (was 5 — reduced frequency to lower DB pressure)
+ * - Delays the first run by 2 minutes after startup
+ * - Default interval: 10 minutes
  */
 export function startSessionCleanupJob(intervalMs: number = 10 * 60 * 1000) {
-  if (cleanupInterval) return; // Prevent double-start
+  if (cleanupInterval) return;
 
   logger.info(`[SESSION_CLEANUP] Scheduling cleanup job (interval: ${intervalMs / 60000}m, first run in 2m)`);
+  nextExpectedRunAtMs = Date.now() + 2 * 60 * 1000;
 
-  // Delay first run so API has time to fully initialize
   startupTimer = setTimeout(() => {
-    void cleanupStaleSessions();
+    const scheduledAt = nextExpectedRunAtMs ?? Date.now();
+    void cleanupStaleSessions(scheduledAt);
+    nextExpectedRunAtMs = Date.now() + intervalMs;
     cleanupInterval = setInterval(() => {
-      void cleanupStaleSessions();
+      const scheduledAt = nextExpectedRunAtMs ?? Date.now();
+      nextExpectedRunAtMs = scheduledAt + intervalMs;
+      void cleanupStaleSessions(scheduledAt);
     }, intervalMs);
   }, 2 * 60 * 1000);
 }
@@ -157,4 +305,5 @@ export function stopSessionCleanupJob() {
     cleanupInterval = null;
     logger.info('[SESSION_CLEANUP] Stopped cleanup job.');
   }
+  nextExpectedRunAtMs = null;
 }

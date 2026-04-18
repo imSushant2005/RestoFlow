@@ -96,7 +96,12 @@ export function verifyCustomerAccessTokenFromRequest(req: Request): CustomerAcce
   if (!authHeader?.startsWith('Bearer ')) return null;
 
   const token = authHeader.slice('Bearer '.length).trim();
-  const decoded = jwt.verify(token, env.JWT_SECRET) as Partial<CustomerAccessClaims>;
+  let decoded: Partial<CustomerAccessClaims>;
+  try {
+    decoded = jwt.verify(token, env.JWT_SECRET) as Partial<CustomerAccessClaims>;
+  } catch {
+    return null;
+  }
 
   if (typeof decoded?.customerId !== 'string' || typeof decoded?.phone !== 'string') {
     return null;
@@ -111,7 +116,7 @@ export function verifyCustomerAccessTokenFromRequest(req: Request): CustomerAcce
 
 export function authorizeSessionAccess(
   req: Request,
-  context: { tenantId: string; sessionId: string; customerId: string },
+  context: { tenantId: string; sessionId: string; customerId: string; tenantSlug?: string | null },
 ): AuthorizedSessionAccess {
   const sessionAccessToken = readSessionAccessToken(req);
   if (sessionAccessToken) {
@@ -129,9 +134,15 @@ export function authorizeSessionAccess(
 
   const customerClaims = verifyCustomerAccessTokenFromRequest(req);
   if (customerClaims?.customerId === context.customerId) {
+    if (
+      context.tenantSlug &&
+      customerClaims.tenantSlug &&
+      customerClaims.tenantSlug !== context.tenantSlug
+    ) {
+      throw new Error('SESSION_ACCESS_MISMATCH');
+    }
     return { kind: 'customer', claims: customerClaims };
   }
 
   throw new Error('SESSION_ACCESS_REQUIRED');
 }
-

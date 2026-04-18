@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev:api": "pnpm --filter @dineflow/api dev",
+    "dev:worker": "pnpm --filter @dineflow/api worker",
     "dev:dashboard": "pnpm --filter @dineflow/dashboard dev",
     "dev:customer": "pnpm --filter @dineflow/customer dev",
     "dev:kds": "pnpm --filter @dineflow/kds dev",
@@ -15,6 +16,9 @@
     "db:migrate": "pnpm --filter @dineflow/prisma db:migrate",
     "db:seed": "pnpm --filter @dineflow/prisma db:seed",
     "db:setup": "pnpm db:push && pnpm db:generate && pnpm db:seed",
+    "load:burst": "node scripts/load/burst-orders.mjs",
+    "load:redis": "node scripts/load/redis-failure-watch.mjs",
+    "load:reconnect": "node scripts/load/socket-reconnect-storm.mjs",
     "redis:ping": "powershell -ExecutionPolicy Bypass -File scripts/redis-cli.ps1 PING",
     "redis:info": "powershell -ExecutionPolicy Bypass -File scripts/redis-cli.ps1 INFO",
     "redis:latency": "powershell -ExecutionPolicy Bypass -File scripts/redis-cli.ps1 LATENCY",

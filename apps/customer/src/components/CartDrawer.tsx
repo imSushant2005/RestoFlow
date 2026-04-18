@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
   CheckCircle2,
@@ -26,8 +26,32 @@ function buildIdempotencyKey(tenantSlug: string) {
   return `restoflow_${tenantSlug}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function incrementCustomerOverlayLock() {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  const current = Number(root.dataset.rfCustomerOverlayCount || '0');
+  const next = current + 1;
+  root.dataset.rfCustomerOverlayCount = String(next);
+  root.dataset.rfCustomerOverlay = 'open';
+}
+
+function decrementCustomerOverlayLock() {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  const current = Number(root.dataset.rfCustomerOverlayCount || '0');
+  const next = Math.max(0, current - 1);
+  if (next === 0) {
+    delete root.dataset.rfCustomerOverlayCount;
+    delete root.dataset.rfCustomerOverlay;
+    return;
+  }
+  root.dataset.rfCustomerOverlayCount = String(next);
+  root.dataset.rfCustomerOverlay = 'open';
+}
+
 export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const {
     items,
     addItem,
@@ -63,12 +87,13 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
   });
 
   const { data: tenantMenuMeta } = useQuery({
-    queryKey: ['tenant-tax-meta', tenantSlug],
+    queryKey: ['menu', tenantSlug],
     queryFn: async () => {
       const response = await publicApi.get(`/${tenantSlug}/menu`);
       return response.data;
     },
     enabled: Boolean(tenantSlug && isOpen),
+    placeholderData: () => queryClient.getQueryData(['menu', tenantSlug]),
     staleTime: 1000 * 60 * 5,
   });
 
@@ -86,6 +111,14 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
       document.body.style.overflow = 'auto';
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    incrementCustomerOverlayLock();
+    return () => {
+      decrementCustomerOverlayLock();
     };
   }, [isOpen]);
 
@@ -208,15 +241,18 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-end lg:items-stretch">
+    <div className="fixed inset-0 z-[130] flex items-end justify-end lg:items-stretch">
       <div
         className="absolute inset-0 bg-black/65 backdrop-blur-sm transition-opacity"
         onClick={!isSubmitting ? onClose : undefined}
       />
 
       <div
-        className="relative flex h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-[34px] shadow-2xl lg:h-full lg:rounded-none lg:rounded-l-[32px]"
-        style={{ background: 'var(--bg)' }}
+        className="relative flex w-full max-w-xl flex-col overflow-hidden rounded-t-[34px] shadow-2xl lg:h-full lg:rounded-none lg:rounded-l-[32px]"
+        style={{
+          background: 'var(--bg)',
+          height: 'min(92dvh, calc(100dvh - 0.75rem))',
+        }}
       >
         <div
           className="border-b px-5 pb-4 pt-5 lg:px-6"
@@ -327,7 +363,7 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
           </div>
         )}
 
-        <div className="custom-scrollbar flex-1 overflow-y-auto px-5 py-5 lg:px-6">
+        <div className="custom-scrollbar flex-1 overflow-y-auto px-5 py-5 pb-6 lg:px-6">
           {errorText && (
             <div
               className="mb-5 flex items-start gap-3 rounded-2xl border px-4 py-3"
@@ -535,8 +571,12 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
 
         {safeItems.length > 0 && (
           <div
-            className="border-t px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 lg:px-6"
-            style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+            className="border-t px-5 pt-4 lg:px-6"
+            style={{
+              borderColor: 'var(--border)',
+              background: 'var(--surface)',
+              paddingBottom: 'max(1rem, calc(var(--customer-safe-bottom) + 0.75rem))',
+            }}
           >
             <div className="mb-4 rounded-[28px] border p-4" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
               <div className="mb-3 flex items-center gap-2">

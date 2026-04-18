@@ -33,6 +33,7 @@ import { tracingMiddleware } from './middlewares/tracing.middleware';
 import { tenantRateLimitMiddleware } from './middlewares/tenant-rate-limit.middleware';
 import { getHttpMetricsSnapshot, metricsMiddleware } from './middlewares/metrics.middleware';
 import { getRedisClient } from './services/cache.service';
+import { getRuntimeMetricsSnapshot } from './services/runtime-metrics.service';
 
 // Instrumentation handled by ./instrumentation
 
@@ -223,13 +224,29 @@ app.get('/metrics', async (_req, res) => {
     }
   }
 
+  const runtime = getRuntimeMetricsSnapshot();
+  const pressureSignals = [
+    ...(runtime.cache.hitRatePercent < 85 && runtime.cache.gets > 25 ? ['cache_hit_rate_low'] : []),
+    ...(runtime.cache.redisFailures > 0 ? ['redis_failures_detected'] : []),
+    ...(runtime.db.avgDurationMs > 350 ? ['db_avg_latency_high'] : []),
+    ...(runtime.db.maxDurationMs > 1000 ? ['db_spike_detected'] : []),
+    ...(runtime.jobs.sessionCleanup.lastRunDelayMs > 15_000 ? ['background_job_delay_high'] : []),
+    ...(getSocketMetrics().activeConnections > 400 ? ['socket_pressure_high'] : []),
+  ];
+
   res.json({
     generatedAt: new Date().toISOString(),
     http: getHttpMetricsSnapshot(),
     sockets: getSocketMetrics(),
+    runtime,
     dependencies: {
       redis: redisStatus,
     },
+    process: {
+      backgroundJobsEmbedded: env.RUN_BACKGROUND_JOBS,
+      role: env.RUN_BACKGROUND_JOBS ? 'api-with-jobs' : 'api-only',
+    },
+    pressureSignals,
   });
 });
 
@@ -269,6 +286,10 @@ httpServer.on('error', (error: any) => {
 httpServer.listen(port, () => {
   logger.info(`RESTOFLOW API (V3 Enterprise) running on port ${port}`);
   
-  // Start background maintenance jobs
-  startSessionCleanupJob();
+  if (env.RUN_BACKGROUND_JOBS) {
+    logger.info('Background jobs enabled inside API process');
+    startSessionCleanupJob();
+  } else {
+    logger.warn('Background jobs disabled inside API process; worker process is required');
+  }
 });

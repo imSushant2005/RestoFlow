@@ -250,6 +250,7 @@ const tenantSlugCache = new BoundedTTLCache<string>(
 
 // Cache validated user IDs for 5 minutes to prevent DB hit on every reconnect
 const socketUserAuthCache = new BoundedTTLCache<boolean>(10_000, 5 * 60 * 1000);
+const socketSessionAuthCache = new BoundedTTLCache<boolean>(20_000, 20 * 1000);
 
 // Debounce presence broadcasts per tenant to prevent reconnect-storm fan-out
 const presenceDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -532,17 +533,24 @@ async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void):
       }
     }
 
-    const session = await prisma.diningSession.findFirst({
-      where: {
-        id: verifiedSession.sessionId,
-        tenantId: verifiedSession.tenantId,
-        customerId: verifiedSession.customerId,
-      },
-      select: { id: true },
-    });
+    const sessionCacheKey = `auth_session_${verifiedSession.tenantId}_${verifiedSession.sessionId}_${verifiedSession.customerId}`;
+    const isCachedSession = socketSessionAuthCache.get(sessionCacheKey);
 
-    if (!session) {
-      return rejectAuth(socket, next, 'session_missing_or_revoked');
+    if (!isCachedSession) {
+      const session = await prisma.diningSession.findFirst({
+        where: {
+          id: verifiedSession.sessionId,
+          tenantId: verifiedSession.tenantId,
+          customerId: verifiedSession.customerId,
+        },
+        select: { id: true },
+      });
+
+      if (!session) {
+        return rejectAuth(socket, next, 'session_missing_or_revoked');
+      }
+
+      socketSessionAuthCache.set(sessionCacheKey, true);
     }
 
     socket.data.tenantId = verifiedSession.tenantId;

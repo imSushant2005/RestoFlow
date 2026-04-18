@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { matchPath, Outlet, useLocation, useParams } from 'react-router-dom';
 import {
   getActiveSessionForTenant,
@@ -22,9 +23,12 @@ function matches(pathname: string, path: string) {
 
 export function CustomerShell() {
   const { tenantSlug, tableId } = useParams();
+  const queryClient = useQueryClient();
   const setTenantScope = useCartStore((state) => state.setTenantScope);
   const setTenantPlan = useCartStore((state) => state.setTenantPlan);
+  const setTenantBusinessType = useCartStore((state) => state.setTenantBusinessType);
   const tenantPlan = useCartStore((state) => state.tenantPlan);
+  const tenantBusinessType = useCartStore((state) => state.tenantBusinessType);
   const location = useLocation();
   const cartItems = useCartStore((state) => state.items);
   const customerName = useCartStore((state) => state.customerName);
@@ -87,20 +91,36 @@ export function CustomerShell() {
 
   useEffect(() => {
     if (!tenantSlug) return;
-    
-    // Minimal fetch to sync plan if missing (e.g. landing on Tracker/History directly)
-    const syncPlan = async () => {
+
+    const cachedMenu = queryClient.getQueryData<any>(['menu', tenantSlug]);
+    if (cachedMenu?.plan && !tenantPlan) {
+      setTenantPlan(cachedMenu.plan);
+    }
+    if (cachedMenu?.businessType && !tenantBusinessType) {
+      setTenantBusinessType(cachedMenu.businessType);
+    }
+
+    if ((cachedMenu?.plan || tenantPlan) && (cachedMenu?.businessType || tenantBusinessType)) {
+      return;
+    }
+
+    if (tenantPlan && tenantBusinessType) return;
+
+    const syncVenueProfile = async () => {
       try {
         const res = await publicApi.get(`/${tenantSlug}/menu`);
         if (res.data?.plan) {
           setTenantPlan(res.data.plan);
         }
+        if (res.data?.businessType) {
+          setTenantBusinessType(res.data.businessType);
+        }
       } catch (err) {
-        console.error('[PLAN_SYNC_ERROR]', err);
+        console.error('[TENANT_PROFILE_SYNC_ERROR]', err);
       }
     };
-    void syncPlan();
-  }, [tenantSlug, tenantPlan, setTenantPlan]);
+    void syncVenueProfile();
+  }, [queryClient, setTenantBusinessType, setTenantPlan, tenantBusinessType, tenantPlan, tenantSlug]);
 
   const isMenuRoute =
     matches(location.pathname, '/order/:tenantSlug') ||

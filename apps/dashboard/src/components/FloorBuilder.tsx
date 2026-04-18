@@ -13,6 +13,32 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { io } from 'socket.io-client';
 import { getCustomerAppUrl, getSocketUrl } from '../lib/network';
 
+const DEFAULT_QR_STYLE = {
+  fgColor: '#0f172a',
+  bgColor: '#ffffff',
+};
+
+function readQrStyleConfig() {
+  if (typeof window === 'undefined') return DEFAULT_QR_STYLE;
+  try {
+    const raw = localStorage.getItem('rf_qr_style');
+    if (!raw) return DEFAULT_QR_STYLE;
+    const parsed = JSON.parse(raw);
+    return {
+      fgColor:
+        parsed && typeof parsed === 'object' && typeof parsed.fgColor === 'string'
+          ? parsed.fgColor
+          : DEFAULT_QR_STYLE.fgColor,
+      bgColor:
+        parsed && typeof parsed === 'object' && typeof parsed.bgColor === 'string'
+          ? parsed.bgColor
+          : DEFAULT_QR_STYLE.bgColor,
+    };
+  } catch {
+    return DEFAULT_QR_STYLE;
+  }
+}
+
 const TableCard = ({ table, setSelectedTable, onDelete, onToggleStatus, highlight, plan }: any) => {
   const [showActions, setShowActions] = useState(false);
   const actionRef = useRef<HTMLDivElement | null>(null);
@@ -129,7 +155,7 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
   const [selectedTable, setSelectedTable] = useState<any>(null);
   
   // Custom QR settings from Settings > QR Studio
-  const qrConfig = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('rf_qr_style') || '{"fgColor":"#0f172a", "bgColor":"#ffffff", "watermarkText":"", "includeLogo":true}') : { fgColor: '#0f172a', bgColor: '#ffffff', watermarkText: '', includeLogo: true };
+  const qrConfig = readQrStyleConfig();
 
   const { data: business } = useQuery({
     queryKey: ['settings-business'],
@@ -409,7 +435,7 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
           <div className="bg-white rounded-3xl p-8 max-w-sm w-full flex flex-col items-center gap-6 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="text-center">
               <h3 className="text-2xl font-black text-slate-900 tracking-tight">Table {selectedTable.name === 'roaming' ? 'Roaming' : selectedTable.name}</h3>
-              <p className="text-sm font-semibold mt-1 text-slate-500">Scan to view menu & order</p>
+              <p className="text-sm font-semibold mt-1 text-slate-500">Scan me for order</p>
             </div>
 
             <div 
@@ -417,6 +443,9 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
               className="bg-white p-6 rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.05)] border border-slate-100 flex flex-col items-center"
               style={{ backgroundColor: qrConfig.bgColor }}
             >
+              <span className="text-[11px] font-black uppercase tracking-[0.24em]" style={{ color: qrConfig.fgColor }}>
+                 Scan me for order
+              </span>
               <QRCodeSVG
                 value={selectedTable === 'roaming' ? `${customerAppUrl}/order/${tenantSlug}` : `${customerAppUrl}/order/${tenantSlug}/${selectedTable.id}?qr=${encodeURIComponent(selectedTable.qrSecret)}`}
                 size={220}
@@ -429,8 +458,9 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
                 <span className="text-xl font-black tracking-tight text-center" style={{ color: qrConfig.fgColor }}>
                    {business?.businessName || 'Your Venue'}
                 </span>
-                <span className="text-[10px] font-bold tracking-widest uppercase mt-2 opacity-60" style={{ color: qrConfig.fgColor }}>
-                   {qrConfig.watermarkText || 'Powered by Restoflow'}
+                <div className="mt-3 h-px w-full" style={{ backgroundColor: `${qrConfig.fgColor}22` }} />
+                <span className="text-[10px] font-bold tracking-widest uppercase mt-3 opacity-70" style={{ color: qrConfig.fgColor }}>
+                   Powered by Restoflow
                 </span>
               </div>
             </div>

@@ -240,3 +240,8 @@ body {
   min-height: var(--customer-nav-height);
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
+html[data-rf-customer-overlay='open'] .customer-bottom-nav {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(calc(100% + 24px));
+}

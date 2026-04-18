@@ -23,6 +23,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER';
 type BillWorkflowAction = 'AWAITING_BILL' | 'PAID_CASH' | 'PAID_ONLINE';
+type SessionPaymentMethod = 'cash' | 'online' | 'upi' | 'card' | 'other';
 
 // Removed TERMINAL_STATUSES
 // --- ISOLATED TIME TICKER (Avoids global order re-renders) ---
@@ -79,6 +80,12 @@ function formatTimeValue(value: unknown, fallback = '--:--') {
   return format(parsed, 'h:mm a');
 }
 
+function formatStatusLabel(value: unknown) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return 'latest state';
+  return normalized.replace(/_/g, ' ').toLowerCase();
+}
+
 function asOrderCode(value: unknown) {
   const raw = typeof value === 'string' ? value : String(value || '');
   if (!raw) return '------';
@@ -90,9 +97,25 @@ function toAmount(value: unknown) {
   return Number.isFinite(num) ? num : 0;
 }
 
+function resolveTicketTotal(orders: any[] = [], session?: { bill?: { totalAmount?: unknown } | null } | null) {
+  const billTotal = toAmount(session?.bill?.totalAmount);
+  if (billTotal > 0) {
+    return billTotal;
+  }
+  return orders.reduce((sum, order) => sum + toAmount(order?.totalAmount), 0);
+}
+
 function toValidTimestamp(value: unknown) {
   const parsed = parseDateValue(value);
   return parsed ? parsed.getTime() : 0;
+}
+
+function normalizeSessionPaymentMethod(value: unknown): SessionPaymentMethod {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'online' || normalized === 'upi' || normalized === 'card' || normalized === 'other') {
+    return normalized;
+  }
+  return 'cash';
 }
 
 function formatElapsedLabel(totalMinutes: number) {
@@ -141,11 +164,12 @@ const TicketCard = memo(({
   onSelectBillAction: (sessionId: string, action: string) => void;
   finishPending: boolean;
   paymentPending: boolean;
-  onFinishSession: (sessionId: string) => void;
-  onCompleteSession: (sessionId: string, paymentMethod: 'cash' | 'online') => void;
+  onFinishSession: (sessionId: string, force?: boolean) => void;
+  onCompleteSession: (sessionId: string, paymentMethod: SessionPaymentMethod) => void;
   onViewInvoice: (ticket: any) => void;
 }) => {
   const ticketOrders = Array.isArray(ticket?.orders) ? ticket.orders : [];
+  const resolvedTicketTotal = resolveTicketTotal(ticketOrders, ticket?.session);
   const sessionStatus = String(ticket?.session?.sessionStatus || '').toUpperCase();
   const sessionPaymentMethod = String(ticket?.session?.bill?.paymentMethod || '').toUpperCase();
   const isCancelled = ticketOrders.length > 0 && ticketOrders.every((o: any) => o?.status === 'CANCELLED');
@@ -202,7 +226,7 @@ const TicketCard = memo(({
                      ? "This session has active orders. Force clear and archive it?"
                      : "Clear and archive this session?";
                    if (window.confirm(msg)) {
-                     onCompleteSession(ticket.sessionId, (ticket.session?.bill?.paymentMethod || 'cash').toLowerCase() as any);
+                     onCompleteSession(ticket.sessionId, normalizeSessionPaymentMethod(ticket.session?.bill?.paymentMethod));
                    }
                  }}
                  className="p-1 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all shrink-0"
@@ -211,7 +235,7 @@ const TicketCard = memo(({
                  <Trash2 size={12} />
                </button>
              )}
-            <span className="text-xl font-black text-blue-600 truncate max-w-full">{formatINR(ticket.totalAmount || 0)}</span>
+            <span className="text-xl font-black text-blue-600 truncate max-w-full">{formatINR(resolvedTicketTotal || 0)}</span>
           </div>
           {ticket.isSession && sessionStatus && (
             <div className="flex flex-col items-end gap-1 w-full">
@@ -317,7 +341,7 @@ const TicketCard = memo(({
                             }
                           }
                           
-                          onFinishSession(ticket.sessionId);
+                          onFinishSession(ticket.sessionId, outstandingBatches.length > 0 || activeBatches.length === 0);
                           return;
                         }
                         if (!canCapturePayment) {
@@ -340,7 +364,7 @@ const TicketCard = memo(({
                     if (!ticket.sessionId) return;
                     const isPaid = ticket.session?.bill?.paymentStatus === 'PAID';
                     if (!isPaid && !window.confirm("Payment not recorded. Clear and archive this session anyway?")) return;
-                    onCompleteSession(ticket.sessionId, (ticket.session?.bill?.paymentMethod || 'cash').toLowerCase() as any);
+                    onCompleteSession(ticket.sessionId, normalizeSessionPaymentMethod(ticket.session?.bill?.paymentMethod));
                   }}
                   disabled={paymentPending}
                   className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-3 text-xs font-black text-white shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.97]"
@@ -390,8 +414,10 @@ const PipelineCard = memo(({
   hasKDS,
   canSetKitchenStages,
   canSetServiceStages,
+  canCloseSession,
   isStatusPending,
   onUpdateStatus,
+  onFinishSession,
   onCompleteSession,
   isCompletePending,
   plan
@@ -400,9 +426,11 @@ const PipelineCard = memo(({
   hasKDS: boolean;
   canSetKitchenStages: boolean;
   canSetServiceStages: boolean;
+  canCloseSession: boolean;
   isStatusPending: boolean;
   onUpdateStatus: (id: string, status: string, cancelReason?: string) => void;
-  onCompleteSession?: (sessionId: string, paymentMethod: 'cash' | 'online', shouldClose: boolean) => void;
+  onFinishSession?: (sessionId: string, force?: boolean) => void;
+  onCompleteSession?: (sessionId: string, paymentMethod: SessionPaymentMethod, shouldClose: boolean) => void;
   isCompletePending?: boolean;
   plan?: string;
 }) => {
@@ -412,6 +440,19 @@ const PipelineCard = memo(({
   const elapsedMinutes = createdAtMs > 0 ? Math.max(0, Math.floor((Date.now() - createdAtMs) / 60000)) : 0;
   const isUrgent = elapsedMinutes >= 15 && ['NEW', 'ACCEPTED', 'PREPARING'].includes(currentStatus);
   const isSessionOrder = Boolean(order?.diningSessionId);
+  const sessionStatus = String(order?.diningSession?.sessionStatus || '').toUpperCase();
+  const sessionPaymentStatus = String(order?.diningSession?.bill?.paymentStatus || '').toUpperCase();
+  const sessionPaymentMethod = normalizeSessionPaymentMethod(order?.diningSession?.bill?.paymentMethod);
+  const canMoveSessionToBilling =
+    canCloseSession &&
+    isSessionOrder &&
+    sessionStatus !== 'AWAITING_BILL' &&
+    sessionStatus !== 'CLOSED' &&
+    sessionStatus !== 'CANCELLED';
+  const canArchiveSession =
+    canCloseSession &&
+    isSessionOrder &&
+    (sessionStatus === 'AWAITING_BILL' || sessionPaymentStatus === 'PAID');
   
   const {
     attributes,
@@ -443,22 +484,23 @@ const PipelineCard = memo(({
       
       {/* Header - Always Visible */}
       <div 
-        className="flex items-center justify-between p-4 cursor-pointer hover:bg-white/5 transition-colors rounded-2xl"
+        className="flex flex-col gap-3 p-4 cursor-pointer rounded-2xl transition-colors hover:bg-white/5 sm:flex-row sm:items-start sm:justify-between"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
           <div {...attributes} {...listeners} className="p-1 cursor-grab active:cursor-grabbing text-slate-600 hover:text-slate-400 transition-colors">
             <GripVertical size={16} />
           </div>
           <div className="flex flex-col gap-1.5 min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span 
-                className={`flex-shrink-0 flex items-center justify-center h-8 px-3 rounded-xl text-sm font-black tracking-tight shadow-lg shadow-blue-500/10 ${
+                className={`inline-flex h-8 max-w-full items-center justify-center truncate rounded-xl px-3 text-sm font-black tracking-tight shadow-lg shadow-blue-500/10 ${
                   order.orderType === 'TAKEAWAY' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' :
                   order.orderType === 'ZOMATO' ? 'bg-red-600/20 text-red-400 border border-red-500/30' :
                   order.orderType === 'SWIGGY' ? 'bg-orange-600/20 text-orange-400 border border-orange-500/30' :
                   'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
                 }`}
+                title={order.orderNumber || `T-${asOrderCode(order?.id)}`}
               >
                 {order.orderNumber || `T-${asOrderCode(order?.id)}`}
               </span>
@@ -469,7 +511,7 @@ const PipelineCard = memo(({
                 <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-orange-600/10 text-orange-500 uppercase tracking-widest border border-orange-500/20">SWIGGY</span>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {order.table?.name ? (
                 <div className="flex items-center gap-1">
                   <UtensilsCrossed size={10} className="text-emerald-500" />
@@ -487,8 +529,8 @@ const PipelineCard = memo(({
           </div>
         </div>
         
-        <div className="flex items-center gap-4">
-          <div className="text-right flex flex-col items-end gap-1">
+        <div className="flex w-full items-start justify-between gap-3 sm:ml-auto sm:w-auto sm:flex-shrink-0 sm:justify-end">
+          <div className="flex min-w-[72px] flex-col gap-1 text-left sm:items-end sm:text-right">
             <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase tracking-wide">
                <Clock size={10} className="text-slate-600" />
                {formatTimeValue(order?.createdAt)}
@@ -591,27 +633,63 @@ const PipelineCard = memo(({
                   Mark Served
                 </button>
               )}
-              {currentStatus === 'SERVED' && isSessionOrder && (
+              {currentStatus === 'SERVED' && !isSessionOrder && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpdateStatus(order.id, 'RECEIVED');
+                  }}
+                  disabled={isStatusPending}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-700 hover:bg-slate-600 py-3 text-xs font-black text-white transition-all active:scale-[0.97]"
+                >
+                  <CheckCircle size={14} />
+                  Complete Pickup
+                </button>
+              )}
+              {currentStatus === 'SERVED' && isSessionOrder && canMoveSessionToBilling && onFinishSession && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     const isPaid = order.diningSession?.bill?.paymentStatus === 'PAID';
                     if (plan === 'MINI' && !isPaid) {
                       onUpdateStatus(order.id, 'COMPLETE_SETTLE');
-                    } else if (order.diningSessionId && onCompleteSession) {
-                      onCompleteSession(
-                        order.diningSessionId, 
-                        order.diningSession?.bill?.paymentMethod || 'cash',
-                        true 
-                      );
+                    } else if (order.diningSessionId) {
+                      onFinishSession(order.diningSessionId);
+                    }
+                  }}
+                  disabled={isStatusPending || isCompletePending}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 py-3 text-xs font-black text-white shadow-lg shadow-amber-500/20 transition-all active:scale-[0.97]"
+                >
+                  <ReceiptText size={14} />
+                  Move to Billing
+                </button>
+              )}
+              {currentStatus === 'SERVED' && isSessionOrder && canArchiveSession && onCompleteSession && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const isPaid = sessionPaymentStatus === 'PAID';
+                    if (plan === 'MINI' && !isPaid) {
+                      onUpdateStatus(order.id, 'COMPLETE_SETTLE');
+                      return;
+                    }
+                    if (order.diningSessionId) {
+                      onCompleteSession(order.diningSessionId, sessionPaymentMethod, true);
                     }
                   }}
                   disabled={isStatusPending || isCompletePending}
                   className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-3 text-xs font-black text-white shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.97]"
                 >
                   <CheckCircle size={14} />
-                  Order Complete
+                  {sessionPaymentStatus === 'PAID' ? 'Archive Session' : 'Record Payment & Archive'}
                 </button>
+              )}
+              {currentStatus === 'SERVED' && isSessionOrder && !canCloseSession && (
+                <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Cashier will close this session from billing
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -628,7 +706,7 @@ export function Orders({ role }: { role?: string }) {
   const canViewHistory = effectiveRole !== 'KITCHEN';
   const canCloseSession = effectiveRole === 'OWNER' || effectiveRole === 'MANAGER' || effectiveRole === 'CASHIER';
   const { features, plan } = usePlanFeatures();
-  const [localToast, setLocalToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+  const [localToast, setLocalToast] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
 
   useEffect(() => {
     if (localToast) {
@@ -678,7 +756,10 @@ export function Orders({ role }: { role?: string }) {
   const openTestOrder = async () => {
     const slug = await resolveTenantSlug();
     if (!slug) {
-      alert('Tenant slug missing. Complete Business Profile setup first.');
+      setLocalToast({
+        message: 'Tenant slug missing. Complete Business Profile setup first.',
+        type: 'error',
+      });
       return;
     }
     window.open(`/order/${slug}`, '_blank', 'noopener,noreferrer');
@@ -698,8 +779,8 @@ export function Orders({ role }: { role?: string }) {
     },
     staleTime: 1000 * 10,
     refetchInterval: 60000,
-    refetchOnWindowFocus: 'always',
-    refetchOnReconnect: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const { data: historyResponse } = useQuery<any>({
@@ -708,6 +789,8 @@ export function Orders({ role }: { role?: string }) {
       const res = await api.get('/orders/history');
       return res.data;
     },
+    enabled: activeTab === 'HISTORY',
+    placeholderData: () => queryClient.getQueryData(['order-history']),
     staleTime: 1000 * 30,
   });
 
@@ -732,19 +815,41 @@ export function Orders({ role }: { role?: string }) {
         });
       });
 
-      return { previousState };
+      return { previousState, requestedStatus: newUpdate.status };
     },
-    onError: (err: any, _variables: any, context: any) => {
-      // 409 Rollback UX
+    onError: (err: any, variables: any, context: any) => {
+      const requestedStatus = String(context?.requestedStatus || variables?.status || '').toUpperCase();
+      const recoveryTruth = err.response?.data?.recovery?.truth;
       if (err.response?.status === 409 || err.response?.data?.error === 'OCC_CONFLICT') {
-        const actualStatus = err.response?.data?.recovery?.truth?.status || 'its true state';
-        alert(`Update rejected: The ticket was modified elsewhere. Syncing back to ${actualStatus}...`);
-      } else if (!navigator.onLine) {
-        alert("You are offline. Cannot change order status.");
-      } else {
-        alert("Failed to update status. Snapping back.");
+        if (recoveryTruth?.id) {
+          queryClient.setQueryData(['live-orders'], (old: any) => {
+            const safe = Array.isArray(old) ? old : [];
+            return safe.map((order: any) => (order.id === recoveryTruth.id ? recoveryTruth : order));
+          });
+        }
+
+        setLocalToast({
+          message:
+            recoveryTruth?.status && recoveryTruth.status !== requestedStatus
+              ? `Another screen already moved this ticket to ${formatStatusLabel(recoveryTruth.status)}.`
+              : 'This ticket was already updated elsewhere. Synced latest state.',
+          type: 'info',
+        });
+        return;
       }
-      // Snap back to truth
+
+      if (!navigator.onLine) {
+        setLocalToast({ message: 'You are offline. Cannot change order status.', type: 'error' });
+      } else {
+        setLocalToast({
+          message:
+            err?.response?.data?.error ||
+            err?.message ||
+            'Failed to update status. Restored latest saved state.',
+          type: 'error',
+        });
+      }
+
       queryClient.setQueryData(['live-orders'], context?.previousState);
     },
     onSettled: () => {
@@ -755,21 +860,32 @@ export function Orders({ role }: { role?: string }) {
   });
 
   const finishSessionMutation = useMutation({
-    mutationFn: async ({ sessionId }: { sessionId: string }) => {
+    mutationFn: async ({ sessionId, force = false }: { sessionId: string; force?: boolean }) => {
       const slug = await resolveTenantSlug();
       if (!slug) {
         throw new Error('Tenant slug missing. Complete Business Profile setup first.');
       }
-      return api.post(`/public/${slug}/sessions/${sessionId}/admin-finish`);
+      return api.post(`/public/${slug}/sessions/${sessionId}/admin-finish`, { force });
     },
     onSuccess: refreshOperationalData,
     onError: (error: any) => {
-      window.alert(error?.response?.data?.error || error?.message || 'Could not move this table to billing.');
+      setLocalToast({
+        message: error?.response?.data?.error || error?.message || 'Could not move this table to billing.',
+        type: 'error',
+      });
     },
   });
 
   const completeSessionMutation = useMutation({
-    mutationFn: async ({ sessionId, paymentMethod, shouldClose }: { sessionId: string; paymentMethod: 'cash' | 'online'; shouldClose?: boolean }) => {
+    mutationFn: async ({
+      sessionId,
+      paymentMethod,
+      shouldClose,
+    }: {
+      sessionId: string;
+      paymentMethod: SessionPaymentMethod;
+      shouldClose?: boolean;
+    }) => {
       const slug = await resolveTenantSlug();
       if (!slug) {
         throw new Error('Tenant slug missing. Complete Business Profile setup first.');
@@ -778,7 +894,10 @@ export function Orders({ role }: { role?: string }) {
     },
     onSuccess: refreshOperationalData,
     onError: (error: any) => {
-      window.alert(error?.response?.data?.error || error?.message || 'Could not confirm payment for this bill.');
+      setLocalToast({
+        message: error?.response?.data?.error || error?.message || 'Could not confirm payment for this bill.',
+        type: 'error',
+      });
     },
   });
 
@@ -814,7 +933,7 @@ export function Orders({ role }: { role?: string }) {
           };
         }
         acc[groupId].orders.push(order);
-        acc[groupId].totalAmount += toAmount(order?.totalAmount);
+        acc[groupId].totalAmount = resolveTicketTotal(acc[groupId].orders, acc[groupId].session);
         return acc;
       }, {}),
     ).sort((a: any, b: any) => toValidTimestamp(b?.createdAt) - toValidTimestamp(a?.createdAt));
@@ -827,11 +946,11 @@ export function Orders({ role }: { role?: string }) {
     }));
   }, []);
 
-  const handleFinishSession = useCallback((sessionId: string) => {
-    finishSessionMutation.mutate({ sessionId });
+  const handleFinishSession = useCallback((sessionId: string, force = false) => {
+    finishSessionMutation.mutate({ sessionId, force });
   }, [finishSessionMutation]);
 
-  const handleCompleteSession = useCallback((sessionId: string, paymentMethod: 'cash' | 'online') => {
+  const handleCompleteSession = useCallback((sessionId: string, paymentMethod: SessionPaymentMethod) => {
     completeSessionMutation.mutate({ sessionId, paymentMethod });
   }, [completeSessionMutation]);
 
@@ -852,10 +971,6 @@ export function Orders({ role }: { role?: string }) {
       status, 
       cancelReason, 
       expectedVersion: order?.version || 0 
-    }, {
-      onError: () => {
-        setLocalToast({ message: 'Failed to update status. Snapping back.', type: 'error' });
-      }
     });
   }, [liveOrders, statusMutation, plan]);
 
@@ -921,7 +1036,7 @@ export function Orders({ role }: { role?: string }) {
         };
       }
       acc[groupId].orders.push(order);
-      acc[groupId].totalAmount += toAmount(order?.totalAmount);
+      acc[groupId].totalAmount = resolveTicketTotal(acc[groupId].orders, acc[groupId].session);
       return acc;
     }, {}),
   ).sort((a: any, b: any) => toValidTimestamp(b?.createdAt) - toValidTimestamp(a?.createdAt));
@@ -985,10 +1100,6 @@ export function Orders({ role }: { role?: string }) {
         id: orderId, 
         status: newStatus, 
         expectedVersion: order.version || 0 
-      }, {
-        onError: () => {
-          setLocalToast({ message: 'Failed to update status. Snapping back.', type: 'error' });
-        }
       });
     }
   };
@@ -1030,13 +1141,15 @@ export function Orders({ role }: { role?: string }) {
                       shouldClose 
                     }, {
                       onSuccess: () => {
-                        // For MINI plan, we also want to mark the order as terminal (READY or SERVED) 
-                        // so it moves/archives correctly
-                        statusMutation.mutate({ 
-                          id, 
-                          status: shouldClose ? 'SERVED' : 'READY', 
-                          expectedVersion: order.version || 0 
-                        });
+                        if (!shouldClose) {
+                          statusMutation.mutate({ 
+                            id, 
+                            status: 'READY', 
+                            expectedVersion: order.version || 0 
+                          });
+                        } else {
+                          refreshOperationalData();
+                        }
                       }
                     });
                   }}
@@ -1062,11 +1175,15 @@ export function Orders({ role }: { role?: string }) {
                       shouldClose 
                     }, {
                       onSuccess: () => {
-                        statusMutation.mutate({ 
-                          id, 
-                          status: shouldClose ? 'SERVED' : 'READY', 
-                          expectedVersion: order.version || 0 
-                        });
+                        if (!shouldClose) {
+                          statusMutation.mutate({ 
+                            id, 
+                            status: 'READY', 
+                            expectedVersion: order.version || 0 
+                          });
+                        } else {
+                          refreshOperationalData();
+                        }
                       }
                     });
                   }}
@@ -1094,7 +1211,12 @@ export function Orders({ role }: { role?: string }) {
         <div 
           className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl border backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300"
           style={{ 
-            background: localToast.type === 'error' ? 'rgba(239, 68, 68, 0.9)' : 'rgba(16, 185, 129, 0.9)',
+            background:
+              localToast.type === 'error'
+                ? 'rgba(239, 68, 68, 0.9)'
+                : localToast.type === 'info'
+                  ? 'rgba(37, 99, 235, 0.9)'
+                  : 'rgba(16, 185, 129, 0.9)',
             borderColor: 'rgba(255,255,255,0.1)',
             color: 'white'
           }}
@@ -1230,8 +1352,10 @@ export function Orders({ role }: { role?: string }) {
                       hasKDS={features.hasKDS}
                       canSetKitchenStages={canSetKitchenStages}
                       canSetServiceStages={canSetServiceStages}
+                      canCloseSession={canCloseSession}
                       isStatusPending={statusMutation.isPending && statusMutation.variables?.id === order.id}
                       onUpdateStatus={handleUpdateStatus}
+                      onFinishSession={handleFinishSession}
                       onCompleteSession={(sid, method, close) => completeSessionMutation.mutate({ sessionId: sid, paymentMethod: method, shouldClose: close })}
                       isCompletePending={completeSessionMutation.isPending && completeSessionMutation.variables?.sessionId === order.diningSessionId}
                       plan={plan}
@@ -1263,6 +1387,7 @@ export function Orders({ role }: { role?: string }) {
                   hasKDS={features.hasKDS}
                   canSetKitchenStages={false}
                   canSetServiceStages={false}
+                  canCloseSession={false}
                   isStatusPending={false}
                   onUpdateStatus={() => {}}
                 />

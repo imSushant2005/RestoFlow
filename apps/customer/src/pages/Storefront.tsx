@@ -79,7 +79,14 @@ export function Storefront() {
   const [intakeError, setIntakeError] = useState('');
 
   const deferredSearch = useDeferredValue(searchText.trim().toLowerCase());
-  const { items: cartItems, customerName, setCustomerInfo, setTenantScope, setTenantPlan } = useCartStore();
+  const {
+    items: cartItems,
+    customerName,
+    setCustomerInfo,
+    setTenantScope,
+    setTenantPlan,
+    setTenantBusinessType,
+  } = useCartStore();
   const { lang, setLang, t } = useLanguage();
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = cartItems.reduce((sum, item) => sum + item.totalPrice * item.quantity, 0);
@@ -116,7 +123,10 @@ export function Storefront() {
     if (menuData?.plan) {
       setTenantPlan(menuData.plan);
     }
-  }, [menuData?.plan, setTenantPlan, setTenantScope, tenantSlug]);
+    if (menuData?.businessType) {
+      setTenantBusinessType(menuData.businessType);
+    }
+  }, [menuData?.businessType, menuData?.plan, setTenantBusinessType, setTenantPlan, setTenantScope, tenantSlug]);
 
   useEffect(() => {
     if (!customerName && rfName && rfPhone) {

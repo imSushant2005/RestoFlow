@@ -1,6 +1,14 @@
 import Redis from 'ioredis';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
+import {
+  recordCacheDelete,
+  recordCacheError,
+  recordCacheRead,
+  recordCacheWrite,
+  recordRedisFailure,
+  setRedisState,
+} from './runtime-metrics.service';
 
 type MemoryCacheEntry = {
   expiresAt: number;
@@ -8,6 +16,7 @@ type MemoryCacheEntry = {
 };
 
 const memoryCache = new Map<string, MemoryCacheEntry>();
+const inFlightCacheLoads = new Map<string, Promise<unknown>>();
 const isProduction = process.env.NODE_ENV === 'production';
 const shouldUseRedis = Boolean(env.REDIS_URL);
 const redisCache = shouldUseRedis
@@ -25,26 +34,36 @@ let redisConnectPromise: Promise<void> | null = null;
 let redisRetryAfterMs = 0;
 
 if (redisCache) {
+  setRedisState('connecting');
   redisCache.on('error', (err) => {
     redisReady = false;
+    recordRedisFailure(err);
     if (!hasLoggedRedisDisconnect) {
       hasLoggedRedisDisconnect = true;
       logger.error({ err }, 'Redis Cache Service Disconnected');
     }
   });
   redisCache.on('connect', () => {
+    redisReady = false;
+    setRedisState('connecting');
+  });
+  redisCache.on('ready', () => {
     redisReady = true;
+    setRedisState('ready');
     hasLoggedRedisDisconnect = false;
-    logger.info('Redis Cache Service Connected');
+    logger.info('Redis Cache Service Ready');
   });
   redisCache.on('close', () => {
     redisReady = false;
+    setRedisState('unavailable');
   });
 } else {
+  setRedisState('not_configured');
   logger.warn('REDIS_URL not configured. Using in-memory cache.');
 }
 
 function logCacheError(meta: Record<string, unknown>, message: string) {
+  recordCacheError(meta.error);
   if (isProduction) {
     logger.error(meta, message);
   } else {
@@ -59,6 +78,10 @@ function setMemoryValue(key: string, value: unknown, ttlSeconds: number) {
   });
 }
 
+function shouldUseMemoryFallback() {
+  return !shouldUseRedis || !isProduction;
+}
+
 function getMemoryValue(key: string) {
   const entry = memoryCache.get(key);
   if (!entry) return null;
@@ -69,29 +92,46 @@ function getMemoryValue(key: string) {
   return JSON.parse(entry.value);
 }
 
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function deleteMemoryValue(pattern: string) {
+  if (!pattern.includes('*')) {
+    memoryCache.delete(pattern);
+    return;
+  }
+
+  const regex = new RegExp(`^${pattern.split('*').map(escapeRegex).join('.*')}$`);
   for (const key of memoryCache.keys()) {
-    if (key.includes(pattern.replace(/\*/g, ''))) {
+    if (regex.test(key)) {
       memoryCache.delete(key);
     }
   }
 }
 
+function isRedisCommandReady() {
+  return redisCache != null && redisCache.status === 'ready' && redisReady;
+}
+
 async function ensureRedisConnection() {
   if (!redisCache) return false;
-  if (redisReady) return true;
+  if (isRedisCommandReady()) return true;
   if (Date.now() < redisRetryAfterMs) return false;
 
   if (!redisConnectPromise) {
     redisConnectPromise = redisCache
       .connect()
       .then(() => {
-        redisReady = true;
+        redisReady = redisCache.status === 'ready';
       })
       .catch((error) => {
         redisReady = false;
         redisRetryAfterMs = Date.now() + 30_000;
-        logCacheError({ error }, 'Redis unavailable, falling back to memory cache');
+        logCacheError(
+          { error, fallback: shouldUseMemoryFallback() ? 'memory' : 'cache_bypass' },
+          'Redis unavailable during cache connect',
+        );
         try {
           if (redisCache.status !== 'end') {
             redisCache.disconnect();
@@ -104,27 +144,54 @@ async function ensureRedisConnection() {
   }
 
   await redisConnectPromise;
-  return redisReady;
+  return isRedisCommandReady();
 }
 
 export const getCache = async <T = any>(key: string): Promise<T | null> => {
   try {
     if (!redisCache) {
-      return getMemoryValue(key);
+      const memoryValue = getMemoryValue(key);
+      recordCacheRead(memoryValue !== null, 'memory');
+      return memoryValue;
     }
 
     const canUseRedis = await ensureRedisConnection();
     if (!canUseRedis) {
-      return getMemoryValue(key);
+      if (shouldUseMemoryFallback()) {
+        const memoryValue = getMemoryValue(key);
+        recordCacheRead(memoryValue !== null, 'memory');
+        return memoryValue;
+      }
+      recordCacheRead(false, 'bypass');
+      return null;
+    }
+
+    if (!isRedisCommandReady()) {
+      redisReady = false;
+      setRedisState('unavailable');
+      if (shouldUseMemoryFallback()) {
+        const memoryValue = getMemoryValue(key);
+        recordCacheRead(memoryValue !== null, 'memory');
+        return memoryValue;
+      }
+      recordCacheRead(false, 'bypass');
+      return null;
     }
 
     const data = await redisCache.get(key);
+    recordCacheRead(Boolean(data), 'redis');
     return data ? JSON.parse(data) : null;
   } catch (error) {
     redisReady = false;
     redisRetryAfterMs = Date.now() + 5_000;
     logCacheError({ key, error }, 'Cache Get Failed');
-    return getMemoryValue(key);
+    if (shouldUseMemoryFallback()) {
+      const memoryValue = getMemoryValue(key);
+      recordCacheRead(memoryValue !== null, 'memory');
+      return memoryValue;
+    }
+    recordCacheRead(false, 'bypass');
+    return null;
   }
 };
 
@@ -132,21 +199,45 @@ export const setCache = async (key: string, value: any, ttlSeconds: number = 360
   try {
     if (!redisCache) {
       setMemoryValue(key, value, ttlSeconds);
+      recordCacheWrite('memory');
       return;
     }
 
     const canUseRedis = await ensureRedisConnection();
     if (!canUseRedis) {
-      setMemoryValue(key, value, ttlSeconds);
+      if (shouldUseMemoryFallback()) {
+        setMemoryValue(key, value, ttlSeconds);
+        recordCacheWrite('memory');
+      } else {
+        recordCacheWrite('bypass');
+      }
+      return;
+    }
+
+    if (!isRedisCommandReady()) {
+      redisReady = false;
+      setRedisState('unavailable');
+      if (shouldUseMemoryFallback()) {
+        setMemoryValue(key, value, ttlSeconds);
+        recordCacheWrite('memory');
+      } else {
+        recordCacheWrite('bypass');
+      }
       return;
     }
 
     await redisCache.set(key, JSON.stringify(value), 'EX', ttlSeconds);
+    recordCacheWrite('redis');
   } catch (error) {
     redisReady = false;
     redisRetryAfterMs = Date.now() + 5_000;
     logCacheError({ key, error }, 'Cache Set Failed');
-    setMemoryValue(key, value, ttlSeconds);
+    if (shouldUseMemoryFallback()) {
+      setMemoryValue(key, value, ttlSeconds);
+      recordCacheWrite('memory');
+    } else {
+      recordCacheWrite('bypass');
+    }
   }
 };
 
@@ -154,12 +245,26 @@ export const deleteCache = async (pattern: string) => {
   try {
     if (!redisCache) {
       deleteMemoryValue(pattern);
+      recordCacheDelete();
       return;
     }
 
     const canUseRedis = await ensureRedisConnection();
     if (!canUseRedis) {
-      deleteMemoryValue(pattern);
+      if (shouldUseMemoryFallback()) {
+        deleteMemoryValue(pattern);
+      }
+      recordCacheDelete();
+      return;
+    }
+
+    if (!isRedisCommandReady()) {
+      redisReady = false;
+      setRedisState('unavailable');
+      if (shouldUseMemoryFallback()) {
+        deleteMemoryValue(pattern);
+      }
+      recordCacheDelete();
       return;
     }
 
@@ -178,11 +283,15 @@ export const deleteCache = async (pattern: string) => {
     } else {
       await redisCache.del(pattern);
     }
+    recordCacheDelete();
   } catch (error) {
     redisReady = false;
     redisRetryAfterMs = Date.now() + 5_000;
     logCacheError({ pattern, error }, 'Cache Delete Failed');
-    deleteMemoryValue(pattern);
+    if (shouldUseMemoryFallback()) {
+      deleteMemoryValue(pattern);
+    }
+    recordCacheDelete();
   }
 };
 
@@ -199,9 +308,21 @@ export async function withCache<T>(
     return cached;
   }
 
-  const fresh = await fallback();
-  await setCache(key, fresh, ttlSeconds);
-  return fresh;
+  const existingLoad = inFlightCacheLoads.get(key);
+  if (existingLoad) {
+    return existingLoad as Promise<T>;
+  }
+
+  const loadPromise = (async () => {
+    const fresh = await fallback();
+    await setCache(key, fresh, ttlSeconds);
+    return fresh;
+  })().finally(() => {
+    inFlightCacheLoads.delete(key);
+  });
+
+  inFlightCacheLoads.set(key, loadPromise as Promise<unknown>);
+  return loadPromise;
 }
 
 export const getRedisClient = () => redisCache;

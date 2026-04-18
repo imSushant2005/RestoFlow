@@ -6,6 +6,7 @@ export const cacheKeys = {
   publicMenu: (tenantSlug: string) => `public_menu_${tenantSlug}`,
   publicSession: (tenantId: string, sessionId: string) => `public_session_${tenantId}_${sessionId}`,
   sessionOrders: (tenantId: string, sessionId: string) => `session_orders_${tenantId}_${sessionId}`,
+  publicOrderInfo: (tenantId: string, orderId: string) => `public_order_info_${tenantId}_${orderId}`,
   dashboardLiveOrders: (tenantId: string) => `dashboard_live_orders_${tenantId}`,
   dashboardOrderHistory: (tenantId: string, page: number, limit: number, statusKey: string) =>
     `dashboard_order_history_${tenantId}_${page}_${limit}_${statusKey}`,
@@ -13,4 +14,3 @@ export const cacheKeys = {
   publicOrderIdempotency: (tenantId: string, idempotencyKey: string) =>
     `public_order_idempotency_${tenantId}_${idempotencyKey}`,
 };
-

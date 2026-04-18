@@ -24,6 +24,7 @@ interface CartState {
   orderType?: 'DINE_IN' | 'TAKEAWAY';
   tableSeat?: string;
   tenantPlan?: string;
+  tenantBusinessType?: string;
   setTenantScope: (tenantSlug?: string) => void;
   addItem: (item: CartItem) => void;
   removeItem: (id: string) => void;
@@ -32,6 +33,7 @@ interface CartState {
   getCartTotal: () => number;
   setCustomerInfo: (info: { name: string; phone: string; type: 'DINE_IN' | 'TAKEAWAY', seat?: string }) => void;
   setTenantPlan: (plan: string) => void;
+  setTenantBusinessType: (businessType: string) => void;
 }
 
 const newStorageKey = 'restoflow-cart';
@@ -67,7 +69,13 @@ export const useCartStore = create<CartState>()(
             return { tenantSlug: nextTenant };
           }
           // Keep customer identity but isolate cart/session context per tenant.
-          return { tenantSlug: nextTenant, items: [], tableSeat: undefined, tenantPlan: undefined };
+          return {
+            tenantSlug: nextTenant,
+            items: [],
+            tableSeat: undefined,
+            tenantPlan: undefined,
+            tenantBusinessType: undefined,
+          };
         }),
       addItem: (item) =>
         set((state) => {
@@ -116,6 +124,7 @@ export const useCartStore = create<CartState>()(
       },
       setCustomerInfo: (info) => set({ customerName: info.name, customerPhone: info.phone, orderType: info.type, tableSeat: info.seat }),
       setTenantPlan: (plan) => set({ tenantPlan: plan }),
+      setTenantBusinessType: (businessType) => set({ tenantBusinessType: businessType }),
     }),
     {
       name: newStorageKey,

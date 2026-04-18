@@ -53,6 +53,31 @@ function getSessionRank(session: any) {
   return Math.max(...ranks);
 }
 
+function deriveBillFromSession(session: any) {
+  const rawBill = session?.bill;
+  if (!rawBill) return null;
+
+  const orders = Array.isArray(session?.orders) ? session.orders : [];
+  const subtotal = orders.reduce((sum: number, order: any) => sum + Number(order?.subtotal || 0), 0);
+  const taxAmount = orders.reduce((sum: number, order: any) => sum + Number(order?.taxAmount || 0), 0);
+  const discountAmount = orders.reduce((sum: number, order: any) => sum + Number(order?.discountAmount || 0), 0);
+  const summedTotal = orders.reduce((sum: number, order: any) => sum + Number(order?.totalAmount || 0), 0);
+  const computedTotal = summedTotal > 0 ? summedTotal : Math.max(0, subtotal + taxAmount - discountAmount);
+  const currentTotal = Number(rawBill.totalAmount || 0);
+
+  if (computedTotal <= 0 || currentTotal > 0) {
+    return rawBill;
+  }
+
+  return {
+    ...rawBill,
+    subtotal,
+    taxAmount,
+    discountAmount,
+    totalAmount: computedTotal,
+  };
+}
+
 function RatingStars({
   label,
   value,
@@ -182,11 +207,11 @@ export function BillPage() {
   }, [reviewDismissed, session?.bill?.paymentStatus, session?.review]);
 
   const splitValues = useMemo(() => {
-    const bill = session?.bill;
+    const bill = deriveBillFromSession(session);
     const count = Math.max(1, splitCount);
     if (!bill) return { perHead: 0 };
     return { perHead: Number(bill.totalAmount || 0) / count };
-  }, [session?.bill, splitCount]);
+  }, [session, splitCount]);
 
   const latestReviewableOrder = useMemo(() => {
     if (!session?.orders || session?.review) return null;
@@ -198,7 +223,8 @@ export function BillPage() {
   }, [session?.orders, session?.review]);
 
   const shareWhatsApp = () => {
-    if (!session?.bill) return;
+    const resolvedBill = deriveBillFromSession(session);
+    if (!resolvedBill) return;
     const items = session.orders?.flatMap((order: any) => order.items || []) || [];
     const itemLines = items.map((item: any) => `- ${item.name} x${item.quantity}: ${formatINR(item.totalPrice)}`).join('\n');
     const message = [
@@ -207,9 +233,9 @@ export function BillPage() {
       `Table: ${session.table?.name || 'Takeaway'}`,
       itemLines,
       '',
-      `Subtotal: ${formatINR(session.bill.subtotal)}`,
-      `Tax: ${formatINR(session.bill.taxAmount)}`,
-      `Total: ${formatINR(session.bill.totalAmount)}`,
+      `Subtotal: ${formatINR(resolvedBill.subtotal)}`,
+      `Tax: ${formatINR(resolvedBill.taxAmount)}`,
+      `Total: ${formatINR(resolvedBill.totalAmount)}`,
     ]
       .filter(Boolean)
       .join('\n');
@@ -258,7 +284,9 @@ export function BillPage() {
     );
   }
 
-  if (!session?.bill || typeof session.bill.totalAmount !== 'number') {
+  const bill = deriveBillFromSession(session);
+
+  if (!bill || typeof bill.totalAmount !== 'number') {
     return (
       <div
         className="min-h-[100dvh] flex flex-col items-center justify-center gap-6 p-10 text-center"
@@ -289,7 +317,6 @@ export function BillPage() {
     );
   }
 
-  const bill = session.bill;
   const allItems = session.orders?.flatMap((order: any) => order.items || []) || [];
   const brandColor = session.tenant?.primaryColor || '#f97316';
   const serviceStaffName = session?.review?.serviceStaffName || session?.attendedByName || 'Restaurant team';

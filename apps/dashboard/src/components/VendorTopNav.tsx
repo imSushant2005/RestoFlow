@@ -43,6 +43,7 @@ type VendorTopNavProps = {
     slug?: string;
     email?: string;
     phone?: string;
+    plan?: string;
   } | null;
   billing?: {
     plan?: string;
@@ -146,11 +147,12 @@ export function VendorTopNav({
   const notificationRef = useRef<HTMLDivElement | null>(null);
   const headerLabel = ROUTE_LABELS[path] || 'Overview';
   const formattedNow = format(now, 'MMM d, yyyy | h:mm a');
-  const planName = (billing?.plan || 'FREE').toUpperCase();
+  const planName = (billing?.plan || business?.plan || 'FREE').toUpperCase();
 
   const { data: authMe } = useQuery<AuthMeResponse>({
     queryKey: ['auth-me'],
     queryFn: async () => (await api.get('/auth/me')).data,
+    enabled: profileOpen,
     staleTime: 1000 * 60,
     retry: false,
   });

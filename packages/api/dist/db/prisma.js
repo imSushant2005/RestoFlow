@@ -4,6 +4,7 @@ exports.prisma = void 0;
 exports.withPrismaRetry = withPrismaRetry;
 exports.checkPrismaReadiness = checkPrismaReadiness;
 const prisma_1 = require("@dineflow/prisma");
+const runtime_metrics_service_1 = require("../services/runtime-metrics.service");
 const globalForPrisma = globalThis;
 exports.prisma = globalForPrisma.prisma ||
     new prisma_1.PrismaClient({
@@ -25,16 +26,15 @@ const PERF_ALERT_THRESHOLD_MS = 500;
 const PRISMA_RETRY_LIMIT = 2;
 const PRISMA_RETRY_BACKOFF_MS = 150;
 let prismaReconnectPromise = null;
-if (process.env.NODE_ENV !== 'production') {
-    exports.prisma.$on('query', (event) => {
-        const normalizedQuery = String(event.query || '').replace(/\s+/g, ' ').trim().toUpperCase();
-        if (normalizedQuery === 'SELECT 1')
-            return;
-        if (event.duration >= PERF_ALERT_THRESHOLD_MS) {
-            console.warn(`[PRISMA_PERF_ALERT]: Slow query detected (${event.duration}ms):`, event.query);
-        }
-    });
-}
+exports.prisma.$on('query', (event) => {
+    const normalizedQuery = String(event.query || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    if (normalizedQuery === 'SELECT 1')
+        return;
+    (0, runtime_metrics_service_1.recordPrismaQuery)(event.duration, String(event.query || ''), PERF_ALERT_THRESHOLD_MS);
+    if (process.env.NODE_ENV !== 'production' && event.duration >= PERF_ALERT_THRESHOLD_MS) {
+        console.warn(`[PRISMA_PERF_ALERT]: Slow query detected (${event.duration}ms):`, event.query);
+    }
+});
 async function disconnectPrisma() {
     try {
         await exports.prisma.$disconnect();
@@ -78,9 +78,13 @@ async function withPrismaRetry(operation, label = 'prisma-operation', maxRetries
         }
         catch (error) {
             if (!isTransientPrismaError(error) || attempt >= maxRetries) {
+                if (isTransientPrismaError(error)) {
+                    (0, runtime_metrics_service_1.recordPrismaRetryFailure)();
+                }
                 throw error;
             }
             attempt += 1;
+            (0, runtime_metrics_service_1.recordPrismaRetry)();
             const waitMs = PRISMA_RETRY_BACKOFF_MS * 2 ** (attempt - 1);
             console.warn(`[PRISMA_RETRY] ${label} attempt ${attempt}/${maxRetries} after transient error:`, error instanceof Error ? error.message : String(error));
             try {

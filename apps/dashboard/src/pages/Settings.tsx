@@ -32,6 +32,32 @@ const DEFAULT_HOURS = {
   sunday: { open: '10:00', close: '22:00', isOpen: true },
 };
 
+const DEFAULT_QR_CONFIG = {
+  fgColor: '#0f172a',
+  bgColor: '#ffffff',
+};
+
+function readQrConfig() {
+  if (typeof window === 'undefined') return DEFAULT_QR_CONFIG;
+  try {
+    const saved = localStorage.getItem('rf_qr_style');
+    if (!saved) return DEFAULT_QR_CONFIG;
+    const parsed = JSON.parse(saved);
+    return {
+      fgColor:
+        parsed && typeof parsed === 'object' && typeof parsed.fgColor === 'string'
+          ? parsed.fgColor
+          : DEFAULT_QR_CONFIG.fgColor,
+      bgColor:
+        parsed && typeof parsed === 'object' && typeof parsed.bgColor === 'string'
+          ? parsed.bgColor
+          : DEFAULT_QR_CONFIG.bgColor,
+    };
+  } catch {
+    return DEFAULT_QR_CONFIG;
+  }
+}
+
 export function Settings() {
   const queryClient = useQueryClient();
   const { plan } = usePlanFeatures();
@@ -41,14 +67,18 @@ export function Settings() {
   const [errorMessage, setErrorMessage] = useState('');
 
   // Queries
-  const { data: business, isLoading: loadingBusiness } = useQuery({
+  const { data: business, isLoading: loadingBusiness, error: businessError } = useQuery({
     queryKey: ['settings-business'],
-    queryFn: async () => (await api.get('/settings/business')).data
+    queryFn: async () => (await api.get('/settings/business')).data,
+    staleTime: 1000 * 60 * 5,
+    retry: 1,
   });
 
   const { data: staff, isLoading: loadingStaff } = useQuery({
     queryKey: ['settings-staff'],
-    queryFn: async () => (await api.get('/settings/staff')).data
+    queryFn: async () => (await api.get('/settings/staff')).data,
+    enabled: activeTab === 'staff' && plan !== 'MINI',
+    staleTime: 1000 * 60,
   });
 
   // Mutations
@@ -71,18 +101,13 @@ export function Settings() {
 
   // Forms State
   const [staffForm, setStaffForm] = useState({ name: '', username: '', employeeCode: '', role: 'WAITER', password: '' });
-  const [manualUsername, setManualUsername] = useState(false);
-  const [manualEmployeeCode, setManualEmployeeCode] = useState(false);
 
 
   // Business Hours State
   const [hours, setHours] = useState<any>(DEFAULT_HOURS);
   
   // QR Studio State
-  const [qrConfig, setQrConfig] = useState(() => {
-    const saved = localStorage.getItem('rf_qr_style');
-    return saved ? JSON.parse(saved) : { fgColor: '#0f172a', bgColor: '#ffffff', watermarkText: '', includeLogo: true };
-  });
+  const [qrConfig, setQrConfig] = useState(() => readQrConfig());
 
   useEffect(() => {
     if (business?.businessHours) {
@@ -101,9 +126,15 @@ export function Settings() {
   useEffect(() => {
     const slug = business?.slug || 'restaurant';
     if (!staffForm.name.trim()) return;
-    if (!manualUsername) setStaffForm(p => ({ ...p, username: buildUsername(p.name, slug) }));
-    if (!manualEmployeeCode) setStaffForm(p => ({ ...p, employeeCode: buildEmployeeCode(p.name, slug) }));
-  }, [business?.slug, staffForm.name, manualEmployeeCode, manualUsername]);
+    setStaffForm((previous) => {
+      const nextUsername = buildUsername(previous.name, slug);
+      const nextEmployeeCode = buildEmployeeCode(previous.name, slug);
+      if (previous.username === nextUsername && previous.employeeCode === nextEmployeeCode) {
+        return previous;
+      }
+      return { ...previous, username: nextUsername, employeeCode: nextEmployeeCode };
+    });
+  }, [business?.slug, staffForm.name]);
 
   const handleBusinessSave = (e: any) => {
     e.preventDefault();
@@ -135,7 +166,6 @@ export function Settings() {
       queryClient.invalidateQueries({ queryKey: ['settings-staff'] });
       showSuccess('Staff created.');
       setStaffForm({ name: '', username: '', employeeCode: '', role: 'WAITER', password: '' });
-      setManualUsername(false); setManualEmployeeCode(false);
     },
     onError: (err: any) => setErrorMessage(err.response?.data?.error || 'Failed to create staff.'),
   });
@@ -158,7 +188,34 @@ export function Settings() {
     });
   };
 
-  if (loadingBusiness || loadingStaff) return <div className="p-8 font-medium animate-pulse text-slate-500">Loading Configuration...</div>;
+  const shouldLoadStaff = activeTab === 'staff' && plan !== 'MINI';
+
+  if (loadingBusiness || (shouldLoadStaff && loadingStaff)) {
+    return (
+      <div
+        className="flex min-h-[420px] items-center justify-center rounded-[2rem] border px-6 text-sm font-bold animate-pulse"
+        style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-3)' }}
+      >
+        Loading configuration...
+      </div>
+    );
+  }
+
+  if (!business && businessError) {
+    return (
+      <div
+        className="flex min-h-[420px] flex-col items-center justify-center gap-3 rounded-[2rem] border px-6 text-center"
+        style={{ background: 'var(--surface)', borderColor: 'rgba(239,68,68,0.18)' }}
+      >
+        <h2 className="text-xl font-black" style={{ color: 'var(--text-1)' }}>
+          Workspace details unavailable
+        </h2>
+        <p className="max-w-md text-sm font-medium" style={{ color: 'var(--text-3)' }}>
+          We could not load business settings right now. Refresh once, then try again.
+        </p>
+      </div>
+    );
+  }
 
   const tabs: { id: string, label: string, icon: any, locked?: boolean }[] = [
     { id: 'business', label: 'Profile', icon: Settings2 },
@@ -169,12 +226,18 @@ export function Settings() {
   ];
 
   return (
-    <div className="flex flex-col lg:flex-row h-full w-full bg-slate-50/50">
+    <div
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[2rem] border lg:flex-row"
+      style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--card-shadow-hover)' }}
+    >
       {/* ── Navigation: Desktop Sidebar / Mobile Tabs ── */}
-      <div className="flex-shrink-0 lg:w-72 bg-white border-b lg:border-r border-slate-200 lg:h-full z-10 flex flex-col">
-        <div className="p-6 hidden lg:block border-b border-slate-100">
-          <h2 className="text-2xl font-black tracking-tight text-slate-900">Workspace</h2>
-          <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Configuration</p>
+      <div
+        className="z-10 flex flex-shrink-0 flex-col border-b lg:h-full lg:w-72 lg:border-r"
+        style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
+      >
+        <div className="hidden border-b p-6 lg:block" style={{ borderColor: 'var(--border)' }}>
+          <h2 className="text-2xl font-black tracking-tight" style={{ color: 'var(--text-1)' }}>Workspace</h2>
+          <p className="mt-1 text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>Configuration</p>
         </div>
         
         {/* Nav list - Horizontal on mobile, vertical on desktop */}
@@ -187,11 +250,19 @@ export function Settings() {
                 activeTab === tab.id 
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
                   : tab.locked 
-                    ? 'text-slate-300 cursor-not-allowed grayscale' 
-                    : 'text-slate-600 hover:bg-slate-50 active:scale-[0.98]'
+                    ? 'cursor-not-allowed grayscale' 
+                    : 'hover:bg-white/5 active:scale-[0.98]'
               }`}
+              style={
+                activeTab === tab.id
+                  ? undefined
+                  : { color: tab.locked ? 'var(--text-3)' : 'var(--text-2)' }
+              }
             >
-              <div className={`p-1.5 rounded-lg ${activeTab === tab.id ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>
+              <div
+                className={`p-1.5 rounded-lg ${activeTab === tab.id ? 'bg-white/20' : ''}`}
+                style={activeTab === tab.id ? undefined : { background: 'var(--surface-3)', color: 'var(--text-3)' }}
+              >
                 <tab.icon size={16} />
               </div>
               <span className="flex-1 text-left">{tab.label}</span>
@@ -202,13 +273,13 @@ export function Settings() {
       </div>
 
       {/* ── Content Area ── */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
-        <div className="max-w-4xl mx-auto p-4 md:p-8 lg:p-12">
+      <div className="custom-scrollbar flex-1 overflow-y-auto" style={{ background: 'var(--surface-2)' }}>
+        <div className="mx-auto min-h-full max-w-4xl p-4 md:p-8 lg:p-12">
           
           <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
              <div>
-                <h1 className="text-3xl font-black tracking-tight text-slate-900 capitalize">{activeTab} Tools</h1>
-                <p className="text-slate-500 font-medium mt-1">Manage your venue's core settings and preferences.</p>
+                <h1 className="text-3xl font-black tracking-tight capitalize" style={{ color: 'var(--text-1)' }}>{activeTab} Tools</h1>
+                <p className="mt-1 font-medium" style={{ color: 'var(--text-3)' }}>Manage your venue&apos;s core settings and preferences.</p>
              </div>
              
              {/* Dynamic Status Badges */}
@@ -231,11 +302,11 @@ export function Settings() {
             {/* --- BUSINESS PROFILE TAB --- */}
             {activeTab === 'business' && (
               <div className="space-y-6">
-                <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group">
+                <div className="p-6 md:p-8 rounded-[2rem] border shadow-sm relative overflow-hidden group" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
                   <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
                   <div className="mb-8">
-                    <h3 className="text-xl font-bold text-slate-900">Brand Identity</h3>
-                    <p className="text-sm text-slate-500 font-medium mt-1 leading-relaxed">This identity is visible across your digital menu and physical invoices.</p>
+                    <h3 className="text-xl font-bold" style={{ color: 'var(--text-1)' }}>Brand Identity</h3>
+                    <p className="mt-1 text-sm font-medium leading-relaxed" style={{ color: 'var(--text-3)' }}>This identity is visible across your digital menu and physical invoices.</p>
                   </div>
                   
                   <form onSubmit={handleBusinessSave} className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -289,7 +360,7 @@ export function Settings() {
 
             {/* --- MENU & TAX TAB --- */}
             {activeTab === 'menu' && (
-              <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden">
+              <div className="p-6 md:p-8 rounded-[2rem] border shadow-sm relative overflow-hidden" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
                 <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
                 <div className="mb-8">
                   <h3 className="text-xl font-bold text-slate-900">Taxation & Regional</h3>
@@ -323,7 +394,7 @@ export function Settings() {
 
             {/* --- HOURS TAB --- */}
             {activeTab === 'hours' && (
-              <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden">
+              <div className="p-6 md:p-8 rounded-[2rem] border shadow-sm relative overflow-hidden" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
                 <div className="absolute top-0 left-0 w-1 h-full bg-orange-500" />
                 <div className="mb-8">
                   <h3 className="text-xl font-bold text-slate-900">Service Hours</h3>
@@ -384,7 +455,7 @@ export function Settings() {
             {/* --- STAFF TAB --- */}
             {activeTab === 'staff' && (
               <div className="space-y-8">
-                 <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden">
+                 <div className="p-6 md:p-8 rounded-[2rem] border shadow-sm relative overflow-hidden" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
                     <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500" />
                     <div className="mb-8">
                       <h3 className="text-xl font-bold text-slate-900">Add Team Member</h3>
@@ -422,7 +493,7 @@ export function Settings() {
                     </form>
                  </div>
 
-                 <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
+                 <div className="rounded-[2rem] border shadow-sm overflow-hidden" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
                     <div className="p-6 border-b border-slate-100 bg-slate-50/50">
                        <h3 className="font-black text-slate-900">Active Directory</h3>
                     </div>
@@ -454,11 +525,11 @@ export function Settings() {
             {activeTab === 'qr' && (
               <div className="flex flex-col xl:flex-row gap-8">
                  <div className="flex-1 space-y-8">
-                    <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div className="p-6 md:p-8 rounded-[2rem] border shadow-sm relative overflow-hidden" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
                        <div className="absolute top-0 left-0 w-1 h-full bg-slate-900" />
                        <div className="mb-8">
-                          <h3 className="text-xl font-bold text-slate-900">Module Aesthetics</h3>
-                          <p className="text-sm text-slate-500 font-medium mt-1">Fine-tune the appearance of generated table assets.</p>
+                          <h3 className="text-xl font-bold" style={{ color: 'var(--text-1)' }}>QR Styling</h3>
+                          <p className="mt-1 text-sm font-medium" style={{ color: 'var(--text-3)' }}>Fine-tune the appearance of generated table assets.</p>
                        </div>
                        
                        <div className="space-y-8">
@@ -479,19 +550,12 @@ export function Settings() {
                              </div>
                           </div>
 
-                          <div className="pt-6 border-t border-slate-100">
-                             <label className="group flex items-center justify-between p-5 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200 cursor-pointer transition-all">
-                                <div>
-                                   <p className="font-bold text-slate-900">Perceptual Watermarking</p>
-                                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Embed venue icon for security</p>
-                                </div>
-                                <input type="checkbox" checked={qrConfig.includeLogo} onChange={e => setQrConfig({...qrConfig, includeLogo: e.target.checked})} className="w-6 h-6 text-slate-900 rounded-lg border-slate-300 focus:ring-0" />
-                             </label>
-                          </div>
-
-                          <div className="space-y-3">
-                             <label className="text-xs font-black uppercase tracking-widest text-slate-400 pl-1">Canvas Signature</label>
-                             <input type="text" value={qrConfig.watermarkText} onChange={e => setQrConfig({...qrConfig, watermarkText: e.target.value})} placeholder="e.g. Scan to Pay" className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-black text-sm uppercase focus:bg-white transition-all shadow-inner" />
+                          <div className="rounded-2xl border p-5" style={{ background: 'var(--surface-3)', borderColor: 'var(--border)' }}>
+                             <p className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>QR copy is fixed</p>
+                             <p className="mt-1 text-xs font-medium leading-relaxed" style={{ color: 'var(--text-3)' }}>
+                                Every QR now prints <span style={{ color: 'var(--text-1)' }}>Scan me for order</span> at the top,
+                                your venue name under the code, and a permanent <span style={{ color: 'var(--text-1)' }}>Powered by Restoflow</span> footer.
+                             </p>
                           </div>
                        </div>
                     </div>
@@ -503,6 +567,9 @@ export function Settings() {
                        <div className="bg-slate-900 p-10 rounded-[2.5rem] flex flex-col items-center shadow-[0_40px_80px_-15px_rgba(15,23,42,0.3)] relative group">
                           <div className="absolute top-6 left-1/2 -translate-x-1/2 w-12 h-1 bg-slate-800 rounded-full" />
                           <div className="mt-8 bg-white p-6 rounded-3xl shadow-2xl flex flex-col items-center" style={{ backgroundColor: qrConfig.bgColor }}>
+                             <span className="text-[11px] font-black uppercase tracking-[0.24em]" style={{ color: qrConfig.fgColor }}>
+                                Scan me for order
+                             </span>
                              <QRCodeSVG 
                                 value="https://restoflow.com/preview" 
                                 size={220}
@@ -515,13 +582,10 @@ export function Settings() {
                                 <span className="text-2xl font-black tracking-tighter text-center leading-none" style={{ color: qrConfig.fgColor }}>
                                    {business?.businessName || 'VENUE IDENTITY'}
                                 </span>
-                                <div className="mt-3 flex items-center gap-2 overflow-hidden">
-                                   <div className="h-[1px] w-4 bg-slate-200" style={{ backgroundColor: `${qrConfig.fgColor}33` }} />
-                                   <span className="text-[9px] font-black tracking-[0.2em] uppercase whitespace-nowrap" style={{ color: qrConfig.fgColor }}>
-                                      {qrConfig.watermarkText || 'RESERVED TABLE'}
-                                   </span>
-                                   <div className="h-[1px] w-4 bg-slate-200" style={{ backgroundColor: `${qrConfig.fgColor}33` }} />
-                                </div>
+                                <div className="mt-3 h-px w-full" style={{ backgroundColor: `${qrConfig.fgColor}22` }} />
+                                <span className="mt-3 text-[10px] font-black tracking-[0.2em] uppercase whitespace-nowrap" style={{ color: qrConfig.fgColor }}>
+                                   Powered by Restoflow
+                                </span>
                              </div>
                           </div>
                           

@@ -1,6 +1,6 @@
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
 import {
   LayoutDashboard,
@@ -16,28 +16,7 @@ import {
   Menu,
   X,
 } from 'lucide-react';
-import { MenuBuilder } from './pages/MenuBuilder';
-import { FloorPlan } from './pages/FloorPlan';
-import { Orders } from './pages/Orders';
-import { DashboardOverview } from './pages/DashboardOverview';
-import { Analytics } from './pages/Analytics';
-import { Settings } from './pages/Settings';
-import { Onboarding } from './pages/Onboarding';
-import { InvoicesPage as Billing } from './pages/InvoicesPage';
-import { PlansHub as SubscriptionPage } from './pages/PlansHub';
-import { Admin } from './pages/Admin';
-import { WaiterPage } from './pages/WaiterPage';
-import { AssistedOrderingPage } from './pages/AssistedOrderingPage';
 import { FirstLoginPasswordGate } from './components/FirstLoginPasswordGate';
-import { AuthContactPage } from './pages/AuthContactPage';
-import { DemoPage } from './pages/DemoPage';
-import { HomePage } from './pages/HomePage';
-import { PrivacyPolicyPage, TermsPage } from './pages/LegalPages';
-import { LoginPage } from './pages/LoginPage';
-import { MarketingBillingPage } from './pages/MarketingBillingPage';
-import { ProductPage } from './pages/ProductPage';
-import { SignupPage } from './pages/SignupPage';
-import { SetupFlowPage } from './pages/SetupFlowPage';
 import { DashboardErrorBoundary } from './components/DashboardErrorBoundary';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { VendorTopNav, type OpsNotification } from './components/VendorTopNav';
@@ -45,8 +24,34 @@ import { useRealtimeSocket } from './hooks/useRealtimeSocket';
 import { usePlanFeatures } from './hooks/usePlanFeatures';
 import { api } from './lib/api';
 import { clearDashboardAuthStorage, markManualLogout } from './lib/authSession';
-import { driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
+
+const DashboardOverview = lazy(() => import('./pages/DashboardOverview').then((m) => ({ default: m.DashboardOverview })));
+const MenuBuilder = lazy(() => import('./pages/MenuBuilder').then((m) => ({ default: m.MenuBuilder })));
+const FloorPlan = lazy(() => import('./pages/FloorPlan').then((m) => ({ default: m.FloorPlan })));
+const Orders = lazy(() => import('./pages/Orders').then((m) => ({ default: m.Orders })));
+const Analytics = lazy(() => import('./pages/Analytics').then((m) => ({ default: m.Analytics })));
+const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })));
+const Onboarding = lazy(() => import('./pages/Onboarding').then((m) => ({ default: m.Onboarding })));
+const Billing = lazy(() => import('./pages/InvoicesPage').then((m) => ({ default: m.InvoicesPage })));
+const SubscriptionPage = lazy(() => import('./pages/PlansHub').then((m) => ({ default: m.PlansHub })));
+const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
+const WaiterPage = lazy(() => import('./pages/WaiterPage').then((m) => ({ default: m.WaiterPage })));
+const AssistedOrderingPage = lazy(() =>
+  import('./pages/AssistedOrderingPage').then((m) => ({ default: m.AssistedOrderingPage })),
+);
+const AuthContactPage = lazy(() => import('./pages/AuthContactPage').then((m) => ({ default: m.AuthContactPage })));
+const DemoPage = lazy(() => import('./pages/DemoPage').then((m) => ({ default: m.DemoPage })));
+const HomePage = lazy(() => import('./pages/HomePage').then((m) => ({ default: m.HomePage })));
+const PrivacyPolicyPage = lazy(() => import('./pages/LegalPages').then((m) => ({ default: m.PrivacyPolicyPage })));
+const TermsPage = lazy(() => import('./pages/LegalPages').then((m) => ({ default: m.TermsPage })));
+const LoginPage = lazy(() => import('./pages/LoginPage').then((m) => ({ default: m.LoginPage })));
+const MarketingBillingPage = lazy(() =>
+  import('./pages/MarketingBillingPage').then((m) => ({ default: m.MarketingBillingPage })),
+);
+const ProductPage = lazy(() => import('./pages/ProductPage').then((m) => ({ default: m.ProductPage })));
+const SignupPage = lazy(() => import('./pages/SignupPage').then((m) => ({ default: m.SignupPage })));
+const SetupFlowPage = lazy(() => import('./pages/SetupFlowPage').then((m) => ({ default: m.SetupFlowPage })));
 
 // Pre-load notification sounds at module level — avoids creating a new Audio object
 // (and a CDN HTTP request) on every notification.
@@ -131,93 +136,105 @@ function ScreenLoader({ message }: { message: string }) {
   );
 }
 
+function withScreenFallback(node: ReactNode, message = 'Loading workspace...') {
+  return <Suspense fallback={<ScreenLoader message={message} />}>{node}</Suspense>;
+}
+
 function MarketingHomeRoute() {
   const navigate = useNavigate();
-  return (
+  return withScreenFallback(
     <HomePage
       onLoginClick={() => navigate('/login')}
       onSignupClick={() => navigate('/signup')}
       onContactClick={() => navigate('/contact')}
-    />
+    />,
+    'Loading home...'
   );
 }
 
 function MarketingProductRoute() {
   const navigate = useNavigate();
-  return (
+  return withScreenFallback(
     <ProductPage
       onLoginClick={() => navigate('/login')}
       onSignupClick={() => navigate('/signup')}
       onContactClick={() => navigate('/contact')}
-    />
+    />,
+    'Loading product...'
   );
 }
 
 function MarketingSetupFlowRoute() {
   const navigate = useNavigate();
-  return (
+  return withScreenFallback(
     <SetupFlowPage
       onLoginClick={() => navigate('/login')}
       onSignupClick={() => navigate('/signup')}
       onContactClick={() => navigate('/contact')}
-    />
+    />,
+    'Loading setup flow...'
   );
 }
 
 function MarketingBillingRoute() {
   const navigate = useNavigate();
-  return (
+  return withScreenFallback(
     <MarketingBillingPage
       onLoginClick={() => navigate('/login')}
       onSignupClick={() => navigate('/signup')}
       onContactClick={() => navigate('/contact')}
-    />
+    />,
+    'Loading billing...'
   );
 }
 
 function MarketingDemoRoute() {
   const navigate = useNavigate();
-  return (
+  return withScreenFallback(
     <DemoPage
       onLoginClick={() => navigate('/login')}
       onSignupClick={() => navigate('/signup')}
       onContactClick={() => navigate('/contact')}
-    />
+    />,
+    'Loading demo...'
   );
 }
 
 function MarketingContactRoute() {
   const navigate = useNavigate();
-  return (
+  return withScreenFallback(
     <AuthContactPage
       onBackHome={() => navigate('/')}
       onLoginClick={() => navigate('/login')}
       onSignupClick={() => navigate('/signup')}
-    />
+    />,
+    'Loading contact...'
   );
 }
 
 function MarketingPrivacyRoute() {
   const navigate = useNavigate();
-  return (
+  return withScreenFallback(
     <PrivacyPolicyPage
       onBackHome={() => navigate('/')}
       onLoginClick={() => navigate('/login')}
       onSignupClick={() => navigate('/signup')}
       onContactClick={() => navigate('/contact')}
-    />
+    />,
+    'Loading privacy policy...'
   );
 }
 
 function MarketingTermsRoute() {
   const navigate = useNavigate();
-  return (
+  return withScreenFallback(
     <TermsPage
       onBackHome={() => navigate('/')}
       onLoginClick={() => navigate('/login')}
       onSignupClick={() => navigate('/signup')}
       onContactClick={() => navigate('/contact')}
-    />
+    />,
+    'Loading terms...'
   );
 }
 
@@ -280,32 +297,20 @@ function DashboardShell() {
   const canShowFirstTimeDemo = FULL_ACCESS_ROLES.has(role);
   const canShowAdminShellData = BUSINESS_READ_ROLES.has(role);
   const shouldFetchBusinessShellData = canShowAdminShellData;
-  const shouldFetchBillingShellData = canAccessBilling && role !== 'WAITER';
   const shouldEnableShellRealtime = canAccessOrders && role !== 'WAITER';
 
-  const [businessQuery, billingQuery] = useQueries({
-    queries: [
-      {
-        queryKey: ['settings-business'],
-        queryFn: async () => (await api.get('/settings/business')).data,
-        retry: false,
-        staleTime: 1000 * 30,
-        enabled: shouldFetchBusinessShellData,
-      },
-      {
-        queryKey: ['billing-summary'],
-        queryFn: async () => (await api.get('/billing')).data,
-        retry: false,
-        staleTime: 1000 * 30,
-        enabled: shouldFetchBillingShellData,
-      },
-    ],
+  const businessQuery = useQuery({
+    queryKey: ['settings-business'],
+    queryFn: async () => (await api.get('/settings/business')).data,
+    retry: false,
+    staleTime: 1000 * 60 * 5,
+    enabled: shouldFetchBusinessShellData,
   });
 
   const business = businessQuery.data;
-  const billing = billingQuery.data;
-  const isLoading = shouldFetchBusinessShellData && (businessQuery.isLoading || (shouldFetchBillingShellData && billingQuery.isLoading));
-  const isError = shouldFetchBusinessShellData && businessQuery.isError;
+  const billing = null;
+  const isLoading = shouldFetchBusinessShellData && businessQuery.isLoading && !business;
+  const isError = shouldFetchBusinessShellData && businessQuery.isError && !business;
   const demoStorageKey = getDemoStorageKey(business);
 
   // Derives live order count from React Query cache — no HTTP request fired.
@@ -517,33 +522,45 @@ function DashboardShell() {
     const hasSeenDemo = localStorage.getItem(demoStorageKey) === '1';
     if (hasSeenDemo) return;
     setShowFirstTimeDemo(true);
+    let cancelled = false;
+    let driverObj: { drive: () => void; hasNextStep: () => boolean; destroy: () => void } | null = null;
 
-    const driverObj = driver({
-      showProgress: true,
-      steps: [
-        { popover: { title: 'Welcome to RestoFlow', description: 'This walkthrough shows how menu, tables, kitchen, service, billing, and staff controls connect inside one operating system.', side: 'bottom', align: 'center' }},
-        { element: '#dashboard-stats-grid', onHighlightStarted: () => navigate('/app'), popover: { title: 'Start with the live pulse', description: 'Revenue, active tables, and live order movement are visible here so managers can understand service pressure quickly.', side: 'bottom', align: 'start' }},
-        { element: '#nav-menu', onHighlightStarted: () => navigate('/app/menu'), popover: { title: 'Build the menu once', description: 'Categories, modifiers, photos, and availability updates all flow from this shared source of truth.', side: 'right', align: 'start' }},
-        { element: '#item-list-container', onHighlightStarted: () => navigate('/app/menu'), popover: { title: 'Preview the guest experience', description: 'Check the live preview before publishing so your team knows exactly what diners will see on mobile.', side: 'left', align: 'start' }},
-        { element: '#nav-tables-qr', onHighlightStarted: () => navigate('/app/tables'), popover: { title: 'Map tables and QR access', description: 'Set up zones, tables, and QR entry points so dine-in sessions always attach to the right service location.', side: 'right', align: 'start' }},
-        { element: '#floor-builder-canvas', onHighlightStarted: () => navigate('/app/tables'), popover: { title: 'Match the real restaurant', description: 'Arrange the floor visually so staff can understand occupancy and routing without guessing.', side: 'left', align: 'start' }},
-        { element: '#nav-live-orders', onHighlightStarted: () => navigate('/app/orders'), popover: { title: 'Control the live pipeline', description: 'Orders move from kitchen to service to billing here. This is the core rush-hour workspace for operators.', side: 'right', align: 'start' }},
-        { element: '#nav-billing', onHighlightStarted: () => navigate('/app/billing'), popover: { title: 'Close bills with confidence', description: 'Invoices, payment states, and export-ready records stay together for end-of-day accuracy.', side: 'right', align: 'start' }},
-        { element: '#nav-analytics', onHighlightStarted: () => navigate('/app/analytics'), popover: { title: 'Track performance trends', description: 'Use analytics to review demand, menu movement, and operational patterns instead of relying on memory.', side: 'right', align: 'start' }},
-        { element: '#nav-settings', onHighlightStarted: () => navigate('/app/settings'), popover: { title: 'Keep business identity complete', description: 'Business details, staff access, and invoice identity should stay accurate here so setup never blocks operations.', side: 'right', align: 'start' }},
-        { element: '#nav-notifications-btn', popover: { title: 'Focus on the right alerts', description: 'Notifications surface live assistance and billing needs so the correct role can respond quickly.', side: 'bottom', align: 'end' }},
-        { element: '#nav-profile-btn', popover: { title: 'Manage staff preferences', description: 'Open the profile menu for password changes, language selection, ordering links, and waiter tip summaries.', side: 'bottom', align: 'end' }},
-        { popover: { title: 'Next best step', description: 'Finish your menu, verify tables, and then place one full test order from customer to kitchen to billing.' }},
-      ],
-      onDestroyStarted: () => {
-        if (!driverObj.hasNextStep() || confirm("Are you sure you want to skip the tour?")) {
-           driverObj.destroy();
-           localStorage.setItem(demoStorageKey, '1');
+    void import('driver.js').then(({ driver }) => {
+      if (cancelled) return;
+
+      driverObj = driver({
+        showProgress: true,
+        steps: [
+          { popover: { title: 'Welcome to RestoFlow', description: 'This walkthrough shows how menu, tables, kitchen, service, billing, and staff controls connect inside one operating system.', side: 'bottom', align: 'center' }},
+          { element: '#dashboard-stats-grid', onHighlightStarted: () => navigate('/app'), popover: { title: 'Start with the live pulse', description: 'Revenue, active tables, and live order movement are visible here so managers can understand service pressure quickly.', side: 'bottom', align: 'start' }},
+          { element: '#nav-menu', onHighlightStarted: () => navigate('/app/menu'), popover: { title: 'Build the menu once', description: 'Categories, modifiers, photos, and availability updates all flow from this shared source of truth.', side: 'right', align: 'start' }},
+          { element: '#item-list-container', onHighlightStarted: () => navigate('/app/menu'), popover: { title: 'Preview the guest experience', description: 'Check the live preview before publishing so your team knows exactly what diners will see on mobile.', side: 'left', align: 'start' }},
+          { element: '#nav-tables-qr', onHighlightStarted: () => navigate('/app/tables'), popover: { title: 'Map tables and QR access', description: 'Set up zones, tables, and QR entry points so dine-in sessions always attach to the right service location.', side: 'right', align: 'start' }},
+          { element: '#floor-builder-canvas', onHighlightStarted: () => navigate('/app/tables'), popover: { title: 'Match the real restaurant', description: 'Arrange the floor visually so staff can understand occupancy and routing without guessing.', side: 'left', align: 'start' }},
+          { element: '#nav-live-orders', onHighlightStarted: () => navigate('/app/orders'), popover: { title: 'Control the live pipeline', description: 'Orders move from kitchen to service to billing here. This is the core rush-hour workspace for operators.', side: 'right', align: 'start' }},
+          { element: '#nav-billing', onHighlightStarted: () => navigate('/app/billing'), popover: { title: 'Close bills with confidence', description: 'Invoices, payment states, and export-ready records stay together for end-of-day accuracy.', side: 'right', align: 'start' }},
+          { element: '#nav-analytics', onHighlightStarted: () => navigate('/app/analytics'), popover: { title: 'Track performance trends', description: 'Use analytics to review demand, menu movement, and operational patterns instead of relying on memory.', side: 'right', align: 'start' }},
+          { element: '#nav-settings', onHighlightStarted: () => navigate('/app/settings'), popover: { title: 'Keep business identity complete', description: 'Business details, staff access, and invoice identity should stay accurate here so setup never blocks operations.', side: 'right', align: 'start' }},
+          { element: '#nav-notifications-btn', popover: { title: 'Focus on the right alerts', description: 'Notifications surface live assistance and billing needs so the correct role can respond quickly.', side: 'bottom', align: 'end' }},
+          { element: '#nav-profile-btn', popover: { title: 'Manage staff preferences', description: 'Open the profile menu for password changes, language selection, ordering links, and waiter tip summaries.', side: 'bottom', align: 'end' }},
+          { popover: { title: 'Next best step', description: 'Finish your menu, verify tables, and then place one full test order from customer to kitchen to billing.' }},
+        ],
+        onDestroyStarted: () => {
+          if (!driverObj?.hasNextStep() || confirm("Are you sure you want to skip the tour?")) {
+            driverObj?.destroy();
+            localStorage.setItem(demoStorageKey, '1');
+          }
         }
-      }
+      });
+
+      driverObj.drive();
+    }).catch(() => {
+      localStorage.setItem(demoStorageKey, '1');
     });
 
-    driverObj.drive();
+    return () => {
+      cancelled = true;
+    };
   }, [isLoading, isPlanLoading, showFirstTimeDemo, canShowFirstTimeDemo, business, demoStorageKey, navigate, notifications.length]);
 
 
@@ -765,16 +782,16 @@ function DashboardShell() {
         <div id="scroll-container" className="min-h-0 flex-1 px-2 pb-2 pt-2 sm:px-3 sm:pb-3 lg:px-5 lg:pb-5 overflow-y-auto custom-scrollbar relative">
           <DashboardErrorBoundary>
             <Routes>
-              {canAccessDashboard && <Route index element={<DashboardOverview />} />}
-              {canAccessMenu && <Route path="menu" element={<MenuBuilder />} />}
-              {canAccessTables && <Route path="tables" element={<FloorPlan />} />}
-              {canAccessOrders && <Route path="orders" element={<Orders role={role} />} />}
-              {canAccessAssistedOrdering && <Route path="assisted-ordering" element={<AssistedOrderingPage />} />}
-              {canAccessAnalytics && <Route path="analytics" element={<Analytics />} />}
-              {canAccessSettings && <Route path="settings" element={<Settings />} />}
-              {canAccessBilling && <Route path="billing" element={<Billing />} />}
-              {canAccessBilling && <Route path="subscription" element={<SubscriptionPage />} />}
-              {role === 'WAITER' && <Route path="waiter" element={<WaiterPage />} />}
+              {canAccessDashboard && <Route index element={withScreenFallback(<DashboardOverview />)} />}
+              {canAccessMenu && <Route path="menu" element={withScreenFallback(<MenuBuilder />)} />}
+              {canAccessTables && <Route path="tables" element={withScreenFallback(<FloorPlan />)} />}
+              {canAccessOrders && <Route path="orders" element={withScreenFallback(<Orders role={role} />)} />}
+              {canAccessAssistedOrdering && <Route path="assisted-ordering" element={withScreenFallback(<AssistedOrderingPage />)} />}
+              {canAccessAnalytics && <Route path="analytics" element={withScreenFallback(<Analytics />)} />}
+              {canAccessSettings && <Route path="settings" element={withScreenFallback(<Settings />)} />}
+              {canAccessBilling && <Route path="billing" element={withScreenFallback(<Billing />)} />}
+              {canAccessBilling && <Route path="subscription" element={withScreenFallback(<SubscriptionPage />)} />}
+              {role === 'WAITER' && <Route path="waiter" element={withScreenFallback(<WaiterPage />)} />}
               <Route path="*" element={<Navigate to={defaultRoute} replace />} />
             </Routes>
           </DashboardErrorBoundary>
@@ -898,7 +915,7 @@ function App() {
 
   return (
     <Routes>
-      <Route path="/admin" element={<Admin />} />
+      <Route path="/admin" element={withScreenFallback(<Admin />, 'Loading admin tools...')} />
       <Route path="/sso-callback" element={clerkConfigured ? <AuthenticateWithRedirectCallback /> : <Navigate to="/login" replace />} />
 
       <Route path="/" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingHomeRoute />} />
@@ -909,8 +926,8 @@ function App() {
       <Route path="/contact" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingContactRoute />} />
       <Route path="/privacy" element={<MarketingPrivacyRoute />} />
       <Route path="/terms" element={<MarketingTermsRoute />} />
-      <Route path="/login" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <LoginPage onLogin={handleLogin} />} />
-      <Route path="/signup" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <SignupPage onLogin={handleLogin} />} />
+      <Route path="/login" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : withScreenFallback(<LoginPage onLogin={handleLogin} />, 'Loading login...')} />
+      <Route path="/signup" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : withScreenFallback(<SignupPage onLogin={handleLogin} />, 'Loading signup...')} />
 
       <Route
         path="/setup"
@@ -918,7 +935,9 @@ function App() {
           !isLoggedIn ? (
             <Navigate to="/login" replace />
           ) : FULL_ACCESS_ROLES.has(role) ? (
-            <Onboarding nextPath={role === 'OWNER' && mustChangePassword ? '/security-setup' : getDefaultRouteForRole(role)} />
+            withScreenFallback(
+              <Onboarding nextPath={role === 'OWNER' && mustChangePassword ? '/security-setup' : getDefaultRouteForRole(role)} />,
+            )
           ) : (
             <Navigate to={getDefaultRouteForRole(role)} replace />
           )

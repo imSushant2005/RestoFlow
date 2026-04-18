@@ -71,6 +71,7 @@ const tracing_middleware_1 = require("./middlewares/tracing.middleware");
 const tenant_rate_limit_middleware_1 = require("./middlewares/tenant-rate-limit.middleware");
 const metrics_middleware_1 = require("./middlewares/metrics.middleware");
 const cache_service_1 = require("./services/cache.service");
+const runtime_metrics_service_1 = require("./services/runtime-metrics.service");
 // Instrumentation handled by ./instrumentation
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
@@ -235,13 +236,28 @@ app.get('/metrics', async (_req, res) => {
             redisStatus = 'unavailable';
         }
     }
+    const runtime = (0, runtime_metrics_service_1.getRuntimeMetricsSnapshot)();
+    const pressureSignals = [
+        ...(runtime.cache.hitRatePercent < 85 && runtime.cache.gets > 25 ? ['cache_hit_rate_low'] : []),
+        ...(runtime.cache.redisFailures > 0 ? ['redis_failures_detected'] : []),
+        ...(runtime.db.avgDurationMs > 350 ? ['db_avg_latency_high'] : []),
+        ...(runtime.db.maxDurationMs > 1000 ? ['db_spike_detected'] : []),
+        ...(runtime.jobs.sessionCleanup.lastRunDelayMs > 15_000 ? ['background_job_delay_high'] : []),
+        ...((0, socket_1.getSocketMetrics)().activeConnections > 400 ? ['socket_pressure_high'] : []),
+    ];
     res.json({
         generatedAt: new Date().toISOString(),
         http: (0, metrics_middleware_1.getHttpMetricsSnapshot)(),
         sockets: (0, socket_1.getSocketMetrics)(),
+        runtime,
         dependencies: {
             redis: redisStatus,
         },
+        process: {
+            backgroundJobsEmbedded: env_1.env.RUN_BACKGROUND_JOBS,
+            role: env_1.env.RUN_BACKGROUND_JOBS ? 'api-with-jobs' : 'api-only',
+        },
+        pressureSignals,
     });
 });
 // C-7: Auth rate limiters applied BEFORE the auth router
@@ -274,7 +290,12 @@ httpServer.on('error', (error) => {
 });
 httpServer.listen(port, () => {
     logger_1.logger.info(`RESTOFLOW API (V3 Enterprise) running on port ${port}`);
-    // Start background maintenance jobs
-    (0, session_cleanup_service_1.startSessionCleanupJob)();
+    if (env_1.env.RUN_BACKGROUND_JOBS) {
+        logger_1.logger.info('Background jobs enabled inside API process');
+        (0, session_cleanup_service_1.startSessionCleanupJob)();
+    }
+    else {
+        logger_1.logger.warn('Background jobs disabled inside API process; worker process is required');
+    }
 });
 //# sourceMappingURL=index.js.map

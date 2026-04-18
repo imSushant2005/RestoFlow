@@ -1,18 +1,65 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check, Hand, HelpCircle, Loader2, Receipt, Sparkles, X } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { publicApi } from '../lib/api';
 import { WAITER_ACK_EVENT } from './HandshakeListener';
 
-const CALL_TYPES = [
-  { id: 'WAITER', label: 'Call Waiter', icon: <Hand size={22} />, color: 'bg-blue-500', desc: 'A waiter will come to your table' },
+const BASE_CALL_TYPES = [
   { id: 'BILL', label: 'Request Bill', icon: <Receipt size={22} />, color: 'bg-emerald-500', desc: 'Get the bill at your table' },
   { id: 'WATER', label: 'Request Water', icon: <Hand size={22} />, color: 'bg-cyan-500', desc: 'Need fresh water' },
   { id: 'EXTRA', label: 'Request Extra', icon: <Receipt size={22} />, color: 'bg-indigo-500', desc: 'Need spoons, napkins, etc.' },
   { id: 'HELP', label: 'Need Help', icon: <HelpCircle size={22} />, color: 'bg-orange-500', desc: 'Need assistance with something' },
 ];
 
-const GATED_PLANS = ['FREE', 'STARTER', 'GOLD', 'PLATINUM', 'MINI'];
+function resolveServiceAssistMode(plan?: string, businessType?: string) {
+  const normalizedPlan = String(plan || '').trim().toUpperCase();
+  const normalizedBusinessType = String(businessType || '').trim().toLowerCase();
+
+  if (normalizedBusinessType === 'restaurant' || normalizedBusinessType === 'hotel') {
+    return 'FULL_SERVICE' as const;
+  }
+
+  if (normalizedBusinessType === 'cafe') {
+    return 'ASSISTED_SERVICE' as const;
+  }
+
+  if (normalizedBusinessType === 'street_vendor' || normalizedBusinessType === 'cloud_kitchen') {
+    return 'SELF_SERVICE' as const;
+  }
+
+  if (normalizedPlan === 'DINEPRO' || normalizedPlan === 'PREMIUM') {
+    return 'FULL_SERVICE' as const;
+  }
+
+  if (normalizedPlan === 'CAFE') {
+    return 'ASSISTED_SERVICE' as const;
+  }
+
+  return 'SELF_SERVICE' as const;
+}
+
+function incrementCustomerOverlayLock() {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  const current = Number(root.dataset.rfCustomerOverlayCount || '0');
+  const next = current + 1;
+  root.dataset.rfCustomerOverlayCount = String(next);
+  root.dataset.rfCustomerOverlay = 'open';
+}
+
+function decrementCustomerOverlayLock() {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  const current = Number(root.dataset.rfCustomerOverlayCount || '0');
+  const next = Math.max(0, current - 1);
+  if (next === 0) {
+    delete root.dataset.rfCustomerOverlayCount;
+    delete root.dataset.rfCustomerOverlay;
+    return;
+  }
+  root.dataset.rfCustomerOverlayCount = String(next);
+  root.dataset.rfCustomerOverlay = 'open';
+}
 
 export function WaiterCall({
   tenantSlug,
@@ -27,11 +74,34 @@ export function WaiterCall({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const tenantPlan = useCartStore((state) => state.tenantPlan);
+  const tenantBusinessType = useCartStore((state) => state.tenantBusinessType);
   const [status, setStatus] = useState<'IDLE' | 'SENDING' | 'SENT' | 'ACCEPTED'>('IDLE');
   const [sentType, setSentType] = useState('');
   const [manualTable, setManualTable] = useState('');
+  const [inlineError, setInlineError] = useState('');
 
   const tableId = initialTableId || manualTable.trim();
+  const serviceAssistMode = resolveServiceAssistMode(tenantPlan, tenantBusinessType);
+  const primaryAssistLabel = serviceAssistMode === 'FULL_SERVICE' ? 'Call Waiter' : 'Call Staff';
+  const primaryAssistDescription =
+    serviceAssistMode === 'FULL_SERVICE'
+      ? 'A waiter will come to your table'
+      : 'If table service is available, staff will assist you at your table';
+  const acceptedTitle = serviceAssistMode === 'FULL_SERVICE' ? 'Waiter is Coming!' : 'Staff is Coming!';
+
+  const callTypes = useMemo(
+    () => [
+      {
+        id: 'WAITER',
+        label: primaryAssistLabel,
+        icon: <Hand size={22} />,
+        color: 'bg-blue-500',
+        desc: primaryAssistDescription,
+      },
+      ...BASE_CALL_TYPES,
+    ],
+    [primaryAssistDescription, primaryAssistLabel],
+  );
 
   useEffect(() => {
     const onAcknowledged = (event: Event) => {
@@ -60,12 +130,21 @@ export function WaiterCall({
     return () => window.clearTimeout(timeoutId);
   }, [status]);
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    incrementCustomerOverlayLock();
+    return () => {
+      decrementCustomerOverlayLock();
+    };
+  }, [isOpen]);
+
   const handleCall = async (type: string) => {
     if (!tableId) {
-      alert('Please enter your table number first.');
+      setInlineError('Enter your table number first so staff knows where to come.');
       return;
     }
 
+    setInlineError('');
     setStatus('SENDING');
     setSentType(type);
 
@@ -79,12 +158,13 @@ export function WaiterCall({
       setStatus('SENT');
     } catch (error) {
       console.error('Failed to request staff assistance', error);
+      setInlineError('Could not send the request right now. Please try once more.');
       setStatus('IDLE');
       setSentType('');
     }
   };
 
-  if (!tenantPlan || GATED_PLANS.includes(tenantPlan.toUpperCase())) {
+  if (serviceAssistMode === 'SELF_SERVICE') {
     return null;
   }
 
@@ -94,7 +174,7 @@ export function WaiterCall({
         onClick={() => setIsOpen(true)}
         className="fixed right-4 z-[50] h-14 w-14 rounded-full border-4 border-white/20 bg-blue-600 text-white shadow-[0_10px_30px_rgba(37,99,235,0.4)] transition-all active:scale-90"
         style={{ bottom: 'var(--customer-fab-bottom)' }}
-        aria-label="Call waiter"
+        aria-label={primaryAssistLabel}
       >
         <span className="flex items-center justify-center">
           <Hand size={24} className="transition-transform group-hover:rotate-12" />
@@ -103,14 +183,17 @@ export function WaiterCall({
 
       {isOpen && (
         <div
-          className="fixed inset-0 z-[80] flex items-end justify-center"
+          className="fixed inset-0 z-[160] flex items-end justify-center p-3 sm:p-4"
           onClick={() => status === 'IDLE' && setIsOpen(false)}
         >
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-md overflow-hidden rounded-t-[40px] border-t border-[color:var(--border)] bg-[color:var(--surface)] p-8 pb-10 shadow-2xl slide-up"
+            className="relative mb-[calc(var(--customer-nav-space)+0.25rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-[36px] border border-[color:var(--border)] bg-[color:var(--surface)] p-5 pb-10 shadow-2xl slide-up sm:rounded-[40px] sm:p-8"
             onClick={(event) => event.stopPropagation()}
-            style={{ paddingBottom: 'max(2.5rem, calc(env(safe-area-inset-bottom) + 1.5rem))' }}
+            style={{
+              maxHeight: 'calc(100dvh - var(--customer-nav-space) - 0.75rem)',
+              paddingBottom: 'max(2rem, calc(var(--customer-safe-bottom) + 1.25rem))',
+            }}
           >
             <div className="mx-auto mb-8 h-1.5 w-12 rounded-full bg-[color:var(--surface-3)]" />
 
@@ -124,7 +207,7 @@ export function WaiterCall({
                   <div className="absolute -bottom-2 -left-2 h-12 w-12 rounded-full bg-blue-400/20 blur-xl animate-pulse" />
                 </div>
                 <div className="mt-4">
-                  <h3 className="text-3xl font-black tracking-tight text-[color:var(--text-1)]">Waiter is Coming!</h3>
+                  <h3 className="text-3xl font-black tracking-tight text-[color:var(--text-1)]">{acceptedTitle}</h3>
                   <p className="mt-3 text-lg font-bold leading-tight text-blue-500">
                     Your request has been accepted. Help will be at your table in a moment.
                   </p>
@@ -155,6 +238,12 @@ export function WaiterCall({
                   </button>
                 </div>
 
+                {inlineError && (
+                  <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3">
+                    <p className="text-sm font-bold text-red-400">{inlineError}</p>
+                  </div>
+                )}
+
                 {!initialTableId && (
                   <div className="mb-8 rounded-[32px] border border-blue-600/20 bg-blue-600/[0.05] p-6 backdrop-blur-md">
                     <p className="mb-4 text-[11px] font-black uppercase tracking-[0.2em] text-blue-500">Assign Table First</p>
@@ -170,7 +259,7 @@ export function WaiterCall({
                 )}
 
                 <div className="grid gap-4">
-                  {CALL_TYPES.map((callType) => (
+                  {callTypes.map((callType) => (
                     <button
                       key={callType.id}
                       onClick={() => handleCall(callType.id)}

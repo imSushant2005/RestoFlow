@@ -61,6 +61,10 @@ const LIVE_ORDERS_SELECT = {
   orderType: true,
   status: true,
   placedBy: true,
+  subtotal: true,
+  taxAmount: true,
+  discountAmount: true,
+  totalAmount: true,
   customerName: true,
   customerPhone: true,
   specialInstructions: true,
@@ -278,10 +282,26 @@ function getOrderHistoryCacheKey(tenantId: string, page: number, limit: number, 
   return cacheKeys.dashboardOrderHistory(tenantId, page, limit, statusKey);
 }
 
-async function invalidateDashboardOrderCaches(tenantId: string) {
+function isActiveSessionConflictError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const maybeError = error as { code?: string; message?: string };
+  return (
+    maybeError.code === 'P2002' ||
+    String(maybeError.message || '').includes('DiningSession_active_table_session_uidx')
+  );
+}
+
+async function invalidateOrderMutationCaches(
+  tenantId: string,
+  sessionId?: string | null,
+  orderId?: string | null,
+) {
   await Promise.all([
     deleteCache(getLiveOrdersCacheKey(tenantId)),
     deleteCache(cacheKeys.dashboardOrderHistoryPattern(tenantId)),
+    sessionId ? deleteCache(cacheKeys.publicSession(tenantId, sessionId)) : Promise.resolve(),
+    sessionId ? deleteCache(cacheKeys.sessionOrders(tenantId, sessionId)) : Promise.resolve(),
+    orderId ? deleteCache(cacheKeys.publicOrderInfo(tenantId, orderId)) : Promise.resolve(),
   ]);
 }
 
@@ -541,7 +561,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     res.json(order);
 
     setImmediate(() => {
-      invalidateDashboardOrderCaches(req.tenantId!).catch((err) =>
+      invalidateOrderMutationCaches(req.tenantId!, existingOrder.diningSessionId, existingOrder.id).catch((err) =>
         console.error('[CACHE_INVALIDATION_ERROR]', err)
       );
     });
@@ -914,7 +934,7 @@ export const createAssistedOrder = async (req: Request, res: Response) => {
       }
     }
 
-    await invalidateDashboardOrderCaches(tenant.id);
+    await invalidateOrderMutationCaches(tenant.id, result.session.id, result.order.id);
 
     res.status(201).json({
       source: isDirectBill ? 'STAFF_ASSISTED_DIRECT_BILL' : 'STAFF_ASSISTED',
@@ -951,6 +971,24 @@ export const createAssistedOrder = async (req: Request, res: Response) => {
     }
     if (message.startsWith('MODIFIER_NOT_FOUND')) {
       return res.status(409).json({ error: 'One or more modifiers are no longer available. Refresh the menu and try again.' });
+    }
+    const conflictTableId = typeof req.body?.tableId === 'string' ? req.body.tableId.trim() : '';
+    if (conflictTableId && isActiveSessionConflictError(error)) {
+      const activeSession = await prisma.diningSession.findFirst({
+        where: {
+          tenantId: req.tenantId!,
+          tableId: conflictTableId,
+          sessionStatus: { notIn: ['CLOSED' as any, 'CANCELLED' as any] },
+        },
+        select: { id: true },
+      });
+
+      if (activeSession) {
+        return res.status(409).json({
+          error: 'This table already has an active session. Choose another table or finish the open session first.',
+          existingSessionId: activeSession.id,
+        });
+      }
     }
 
     res.status(500).json({ error: 'Failed to create assisted order' });
