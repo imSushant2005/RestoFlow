@@ -5,10 +5,13 @@ const prisma_1 = require("../db/prisma");
 const socket_1 = require("../socket");
 const plans_1 = require("../config/plans");
 const cache_service_1 = require("../services/cache.service");
+const cache_keys_1 = require("../utils/cache-keys");
 const invalidateMenuCache = async (tenantId) => {
     const t = await prisma_1.prisma.tenant.findUnique({ where: { id: tenantId } });
-    if (t)
-        await (0, cache_service_1.deleteCache)(`public_menu_${t.slug}`);
+    await Promise.all([
+        t ? (0, cache_service_1.deleteCache)(cache_keys_1.cacheKeys.publicMenu(t.slug)) : Promise.resolve(),
+        (0, cache_service_1.deleteCache)(cache_keys_1.cacheKeys.dashboardMenuItemsPattern(tenantId)),
+    ]);
 };
 const getCategories = async (req, res) => {
     try {
@@ -58,15 +61,58 @@ const reorderCategories = async (req, res) => {
 exports.reorderCategories = reorderCategories;
 const getMenuItems = async (req, res) => {
     try {
-        const items = await prisma_1.prisma.menuItem.findMany({
-            where: { tenantId: req.tenantId },
-            orderBy: { sortOrder: 'asc' },
-            include: {
-                modifierGroups: {
-                    include: { modifiers: true }
-                }
+        const categoryId = typeof req.query.categoryId === 'string' && req.query.categoryId.trim().length > 0
+            ? req.query.categoryId.trim()
+            : null;
+        const includeModifiers = String(req.query.includeModifiers || '').toLowerCase() === 'true';
+        const whereClause = {
+            tenantId: req.tenantId,
+            ...(categoryId ? { categoryId } : {}),
+        };
+        const cacheKey = cache_keys_1.cacheKeys.dashboardMenuItems(req.tenantId, categoryId || 'all', includeModifiers ? 'full' : 'list');
+        const items = await (0, cache_service_1.withCache)(cacheKey, () => {
+            if (includeModifiers) {
+                return prisma_1.prisma.menuItem.findMany({
+                    where: whereClause,
+                    orderBy: { sortOrder: 'asc' },
+                    include: {
+                        modifierGroups: {
+                            include: { modifiers: true },
+                        },
+                    },
+                });
             }
-        });
+            return prisma_1.prisma.menuItem.findMany({
+                where: whereClause,
+                orderBy: { sortOrder: 'asc' },
+                select: {
+                    id: true,
+                    tenantId: true,
+                    categoryId: true,
+                    name: true,
+                    description: true,
+                    price: true,
+                    compareAtPrice: true,
+                    images: true,
+                    isAvailable: true,
+                    isPopular: true,
+                    isChefSpecial: true,
+                    isBestSeller: true,
+                    isNew: true,
+                    isVeg: true,
+                    isVegan: true,
+                    isGlutenFree: true,
+                    spiceLevel: true,
+                    allergens: true,
+                    calories: true,
+                    prepTimeMinutes: true,
+                    sortOrder: true,
+                    tags: true,
+                    createdAt: true,
+                    updatedAt: true,
+                },
+            });
+        }, 20);
         res.json(items);
     }
     catch (error) {

@@ -234,7 +234,7 @@ export function WaiterPage() {
 
   const { data: authMe } = useQuery<any>({
     queryKey: ['auth-me'],
-    queryFn: async () => (await api.get('/auth/me')).data,
+    queryFn: async () => (await api.get('/auth/me?includeTips=true')).data,
     staleTime: 1000 * 60,
     retry: false,
   });

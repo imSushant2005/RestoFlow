@@ -171,6 +171,7 @@ model MenuItem {
 
   @@index([tenantId, categoryId])
   @@index([tenantId, isAvailable])
+  @@index([tenantId, sortOrder])
 }
 
 model ModifierGroup {
@@ -184,6 +185,8 @@ model ModifierGroup {
   sortOrder     Int        @default(0)
 
   modifiers     Modifier[]
+
+  @@index([menuItemId, sortOrder])
 }
 
 model Modifier {
@@ -454,6 +457,7 @@ model Review {
   @@index([orderId])
   @@index([diningSessionId])
   @@index([serviceStaffUserId])
+  @@index([serviceStaffUserId, createdAt])
 }
 
 // ─── ANALYTICS (Daily Snapshots) ──────────────────────────

@@ -16,7 +16,7 @@ import {
   UtensilsCrossed,
   Clock3
 } from 'lucide-react';
-import { publicApi } from '../lib/api';
+import { getTenantPublicAuthHeaders, publicApi } from '../lib/api';
 import { formatINR } from '../lib/currency';
 import { getSocketUrl } from '../lib/network';
 import { getSessionAccessTokenForTenant } from '../lib/tenantStorage';
@@ -258,6 +258,9 @@ export function BillPage() {
         comment: reviewComment.trim() || undefined,
         tipAmount,
         serviceStaffName: session?.attendedByName || undefined,
+        ...(sessionAccessToken ? { sessionAccessToken } : {}),
+      }, {
+        headers: getTenantPublicAuthHeaders(tenantSlug),
       });
       await fetchBill(true);
       setReviewOpen(false);

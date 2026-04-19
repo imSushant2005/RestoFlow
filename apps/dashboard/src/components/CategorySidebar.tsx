@@ -11,6 +11,15 @@ interface Category {
   name: string;
 }
 
+type CategorySidebarProps = {
+  categories: Category[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  isLoading?: boolean;
+  showHeader?: boolean;
+  onCreateRequest?: () => void;
+};
+
 function SortableCategoryItem({ id, category, isSelected, onSelect, onDeleteClick }: any) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
 
@@ -48,7 +57,14 @@ function SortableCategoryItem({ id, category, isSelected, onSelect, onDeleteClic
   );
 }
 
-export function CategorySidebar({ categories: initialCategories, selectedId, onSelect, isLoading }: any) {
+export function CategorySidebar({
+  categories: initialCategories,
+  selectedId,
+  onSelect,
+  isLoading,
+  showHeader = true,
+  onCreateRequest,
+}: CategorySidebarProps) {
   const [categories, setCategories] = useState(initialCategories);
   const [categoryToDelete, setCategoryToDelete] = useState<any>(null);
   const queryClient = useQueryClient();
@@ -80,10 +96,9 @@ export function CategorySidebar({ categories: initialCategories, selectedId, onS
     }
   };
 
-  const createMutation = useMutation({
-    mutationFn: (name: string) => api.post('/menus/categories', { name, description: '' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] })
-  });
+  const handleCreateClick = () => {
+    onCreateRequest?.();
+  };
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/menus/categories/${id}`),
@@ -98,19 +113,23 @@ export function CategorySidebar({ categories: initialCategories, selectedId, onS
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--surface)' }}>
-      <div className="p-4 flex justify-between items-center sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
-        <h2 className="font-semibold" style={{ color: 'var(--text-1)' }}>Categories</h2>
-        <button
-          onClick={() => {
-            const name = prompt('Category name:');
-            if (name) createMutation.mutate(name);
-          }}
-          className="p-1.5 rounded-md transition-colors"
-          style={{ color: 'var(--brand)' }}
-        >
-          <Plus size={18} />
-        </button>
-      </div>
+      {showHeader && (
+        <div className="p-4 flex justify-between items-center sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold" style={{ color: 'var(--text-1)' }}>Categories</h2>
+            <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-black text-blue-500">
+              {categories.length}
+            </span>
+          </div>
+          <button
+            onClick={handleCreateClick}
+            className="p-1.5 rounded-md transition-colors"
+            style={{ color: 'var(--brand)' }}
+          >
+            <Plus size={18} />
+          </button>
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto px-3 pb-10 custom-scrollbar">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={categories.map((c: any) => c.id)} strategy={verticalListSortingStrategy}>

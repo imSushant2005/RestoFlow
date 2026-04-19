@@ -39,7 +39,7 @@ export function DashboardOverview() {
 
   const { data: historyResponse } = useQuery<any>({
     queryKey: ['order-history'],
-    queryFn: async () => (await api.get('/orders/history')).data,
+    queryFn: async () => (await api.get('/orders/history?includeCount=false')).data,
     staleTime: 1000 * 20,
   });
 

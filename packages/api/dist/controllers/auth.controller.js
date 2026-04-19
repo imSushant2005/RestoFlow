@@ -5,6 +5,8 @@ const prisma_1 = require("@dineflow/prisma");
 const zod_1 = require("zod");
 const crypto_1 = require("crypto");
 const prisma_2 = require("../db/prisma");
+const cache_service_1 = require("../services/cache.service");
+const cache_keys_1 = require("../utils/cache-keys");
 const hash_1 = require("../utils/hash");
 const jwt_1 = require("../utils/jwt");
 const registerSchema = zod_1.z.object({
@@ -143,37 +145,39 @@ async function buildTipSummaryForUser(userId) {
     startOfWeek.setDate(now.getDate() - 6);
     startOfWeek.setHours(0, 0, 0, 0);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const [today, week, month] = await Promise.all([
-        prisma_2.prisma.review.aggregate({
-            where: { serviceStaffUserId: userId, createdAt: { gte: startOfToday } },
-            _sum: { tipAmount: true },
-            _count: { id: true },
-        }),
-        prisma_2.prisma.review.aggregate({
-            where: { serviceStaffUserId: userId, createdAt: { gte: startOfWeek } },
-            _sum: { tipAmount: true },
-            _count: { id: true },
-        }),
-        prisma_2.prisma.review.aggregate({
-            where: { serviceStaffUserId: userId, createdAt: { gte: startOfMonth } },
-            _sum: { tipAmount: true },
-            _count: { id: true },
-        }),
-    ]);
+    const [summary] = await (0, cache_service_1.withCache)(cache_keys_1.cacheKeys.authTipSummary(userId), () => prisma_2.prisma.$queryRaw `
+        SELECT
+          COALESCE(SUM("tipAmount") FILTER (WHERE "createdAt" >= ${startOfToday}), 0)::float8 AS "todayAmount",
+          COUNT(*) FILTER (WHERE "createdAt" >= ${startOfToday})::int AS "todaySessions",
+          COALESCE(SUM("tipAmount") FILTER (WHERE "createdAt" >= ${startOfWeek}), 0)::float8 AS "weekAmount",
+          COUNT(*) FILTER (WHERE "createdAt" >= ${startOfWeek})::int AS "weekSessions",
+          COALESCE(SUM("tipAmount") FILTER (WHERE "createdAt" >= ${startOfMonth}), 0)::float8 AS "monthAmount",
+          COUNT(*) FILTER (WHERE "createdAt" >= ${startOfMonth})::int AS "monthSessions"
+        FROM "Review"
+        WHERE "serviceStaffUserId" = ${userId}
+          AND "createdAt" >= ${startOfMonth}
+      `, 30);
     return {
         today: {
-            amount: Number(today._sum.tipAmount || 0),
-            sessions: today._count.id,
+            amount: Number(summary?.todayAmount || 0),
+            sessions: Number(summary?.todaySessions || 0),
         },
         week: {
-            amount: Number(week._sum.tipAmount || 0),
-            sessions: week._count.id,
+            amount: Number(summary?.weekAmount || 0),
+            sessions: Number(summary?.weekSessions || 0),
         },
         month: {
-            amount: Number(month._sum.tipAmount || 0),
-            sessions: month._count.id,
+            amount: Number(summary?.monthAmount || 0),
+            sessions: Number(summary?.monthSessions || 0),
         },
     };
+}
+async function invalidateAuthMeCache(userId, tenantId) {
+    await Promise.all([
+        (0, cache_service_1.deleteCache)(cache_keys_1.cacheKeys.authMeUser(userId)),
+        (0, cache_service_1.deleteCache)(cache_keys_1.cacheKeys.authTenantBrief(tenantId)),
+        (0, cache_service_1.deleteCache)(cache_keys_1.cacheKeys.authTipSummary(userId)),
+    ]);
 }
 async function buildUniqueTenantSlug(tenantName) {
     const base = tenantName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'restaurant';
@@ -423,14 +427,14 @@ const login = async (req, res) => {
         }
         const normalized = normalizeIdentifier(rawIdentifier);
         const normalizedEmployeeCode = normalizeEmployeeCode(rawIdentifier);
-        const user = await prisma_2.prisma.user.findFirst({
+        const user = await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.user.findFirst({
             where: {
                 OR: [
                     { email: normalized },
                     { employeeCode: normalizedEmployeeCode },
                 ],
             },
-        });
+        }), 'login-user-lookup');
         if (!user) {
             return res.status(401).json({ error: 'User not found. Please create an account first from the signup page.' });
         }
@@ -540,6 +544,7 @@ const changeFirstPassword = async (req, res) => {
             where: { id: user.id },
             data: updatePayload,
         });
+        await invalidateAuthMeCache(user.id, req.tenantId);
         return res.json({ success: true, message: 'Password changed successfully' });
     }
     catch (error) {
@@ -587,6 +592,7 @@ const changePassword = async (req, res) => {
             where: { id: req.user.id },
             data: updateData,
         });
+        await invalidateAuthMeCache(req.user.id, req.tenantId);
         return res.json({ success: true, message: 'Password updated successfully.' });
     }
     catch (error) {
@@ -629,6 +635,7 @@ const updateProfile = async (req, res) => {
                 securityQuestion: true,
             },
         });
+        await invalidateAuthMeCache(req.user.id, req.tenantId);
         return res.json({
             success: true,
             user: {
@@ -652,8 +659,11 @@ const getMe = async (req, res) => {
         if (!req.user?.id || !req.tenantId) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
-        const user = await prisma_2.prisma.user.findUnique({
-            where: { id: req.user.id },
+        const userId = req.user.id;
+        const tenantId = req.tenantId;
+        const includeTips = String(req.query.includeTips || '').toLowerCase() === 'true';
+        const user = await (0, cache_service_1.withCache)(cache_keys_1.cacheKeys.authMeUser(userId), () => prisma_2.prisma.user.findUnique({
+            where: { id: userId },
             select: {
                 id: true,
                 email: true,
@@ -666,21 +676,22 @@ const getMe = async (req, res) => {
                 preferredLanguage: true,
                 avatarUrl: true,
                 isActive: true,
-                tenant: {
-                    select: {
-                        id: true,
-                        slug: true,
-                        businessName: true,
-                    },
-                },
             },
-        });
+        }), 15);
         if (!user || !user.isActive) {
             return res.status(404).json({ error: 'User not found' });
         }
-        const tipsSummary = await buildTipSummaryForUser(user.id);
+        const tenant = await (0, cache_service_1.withCache)(cache_keys_1.cacheKeys.authTenantBrief(tenantId), () => prisma_2.prisma.tenant.findUnique({
+            where: { id: tenantId },
+            select: {
+                id: true,
+                slug: true,
+                businessName: true,
+            },
+        }), 60);
+        const tipsSummary = includeTips ? await buildTipSummaryForUser(user.id) : undefined;
         return res.json({
-            tenantId: req.tenantId,
+            tenantId,
             user: {
                 id: user.id,
                 email: user.email,
@@ -693,9 +704,9 @@ const getMe = async (req, res) => {
                 mustChangePassword: user.mustChangePassword,
                 hasSecurityQuestion: Boolean(user.securityQuestion),
                 securitySetupPending: getSecuritySetupPending(user),
-                tipsSummary,
+                ...(includeTips ? { tipsSummary } : {}),
             },
-            tenant: user.tenant,
+            tenant,
         });
     }
     catch (error) {

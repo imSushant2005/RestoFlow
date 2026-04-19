@@ -440,10 +440,10 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
 
             <div 
               ref={qrRef} 
-              className="bg-white p-6 rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.05)] border border-slate-100 flex flex-col items-center"
-              style={{ backgroundColor: qrConfig.bgColor }}
+              className="p-6 rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.05)] border flex flex-col items-center"
+              style={{ backgroundColor: qrConfig.bgColor, borderColor: `${qrConfig.fgColor}18` }}
             >
-              <span className="text-[11px] font-black uppercase tracking-[0.24em]" style={{ color: qrConfig.fgColor }}>
+              <span className="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em]" style={{ color: qrConfig.fgColor, backgroundColor: `${qrConfig.fgColor}10` }}>
                  Scan me for order
               </span>
               <QRCodeSVG
@@ -454,12 +454,15 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
                 fgColor={qrConfig.fgColor}
                 bgColor={qrConfig.bgColor}
               />
-              <div className="mt-5 flex flex-col items-center justify-center w-full">
-                <span className="text-xl font-black tracking-tight text-center" style={{ color: qrConfig.fgColor }}>
+              <div className="mt-5 flex flex-col items-center justify-center w-full max-w-[240px]">
+                <span className="text-[10px] font-black uppercase tracking-[0.22em] opacity-70" style={{ color: qrConfig.fgColor }}>
+                  Venue name
+                </span>
+                <span className="mt-2 text-xl font-black tracking-tight text-center leading-tight break-words" style={{ color: qrConfig.fgColor }}>
                    {business?.businessName || 'Your Venue'}
                 </span>
                 <div className="mt-3 h-px w-full" style={{ backgroundColor: `${qrConfig.fgColor}22` }} />
-                <span className="text-[10px] font-bold tracking-widest uppercase mt-3 opacity-70" style={{ color: qrConfig.fgColor }}>
+                <span className="text-[10px] font-bold tracking-widest uppercase mt-3 rounded-full px-3 py-1 opacity-80" style={{ color: qrConfig.fgColor, backgroundColor: `${qrConfig.fgColor}10` }}>
                    Powered by Restoflow
                 </span>
               </div>

@@ -62,7 +62,7 @@ export function InvoicesPage() {
 
   const { data: historyResponse, isLoading } = useQuery({
     queryKey: ['bill-counter-orders'],
-    queryFn: async () => (await api.get('/orders/history?status=RECEIVED,SERVED&limit=100')).data,
+    queryFn: async () => (await api.get('/orders/history?status=RECEIVED,SERVED&limit=100&includeCount=false')).data,
     staleTime: 1000 * 15,
   });
 
@@ -519,4 +519,3 @@ export function InvoiceModal({
     </div>
   );
 }
-

@@ -190,6 +190,17 @@ export async function performSessionCompletion(
     let currentSession = existingSession;
     const computedTotals = calculateSessionOrderTotals(existingSession.orders);
 
+    if (existingSession.sessionStatus === 'CANCELLED') {
+      throw new Error('SESSION_CANCELLED');
+    }
+
+    if (existingSession.sessionStatus === 'CLOSED' && shouldClose) {
+      return {
+        ...existingSession,
+        bill: reconcileSessionBill(existingSession.bill, computedTotals),
+      };
+    }
+
     // Generate Bill if missing
     if (!existingSession.isBillGenerated) {
       if (existingSession.orders.length === 0) {
@@ -747,7 +758,7 @@ export const addOrderToSession = async (req: Request, res: Response) => {
     }
 
     const [tenant, session] = await Promise.all([
-      prisma.tenant.findUnique({ where: { slug: tenantSlug } }),
+      resolveTenantBySlugOrThrow(tenantSlug),
       prisma.diningSession.findFirst({
         where: { id: sessionId, tenant: { slug: tenantSlug } },
         select: {
@@ -760,7 +771,6 @@ export const addOrderToSession = async (req: Request, res: Response) => {
       }),
     ]);
 
-    if (!tenant) return res.status(404).json({ error: 'Restaurant not found' });
     if (!session) return res.status(404).json({ error: 'Session not found' });
     authorizeSessionAccess(req, {
       tenantId: tenant.id,
@@ -1156,6 +1166,9 @@ export const completeSession = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === 'SESSION_NOT_READY_FOR_PAYMENT') {
       return res.status(409).json({ error: 'Generate the final bill before marking payment complete.' });
     }
+    if (error instanceof Error && error.message === 'SESSION_CANCELLED') {
+      return res.status(409).json({ error: 'Cancelled sessions cannot be marked as paid.' });
+    }
     res.status(500).json({ error: 'Failed to complete session' });
   }
 };
@@ -1227,8 +1240,7 @@ export const getActiveSession = async (req: Request, res: Response) => {
     const qrSecret = readTableQrSecret(req);
     const enforceTableQrSecret = Boolean(env.ENFORCE_TABLE_QR_SECRET);
 
-    const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-    if (!tenant) return res.status(404).json({ error: 'Restaurant not found' });
+    const tenant = await resolveTenantBySlugOrThrow(tenantSlug);
 
     const table = await prisma.table.findFirst({
       where: { id: tableId, tenantId: tenant.id },

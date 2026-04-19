@@ -24,6 +24,11 @@ import { CSS } from '@dnd-kit/utilities';
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER';
 type BillWorkflowAction = 'AWAITING_BILL' | 'PAID_CASH' | 'PAID_ONLINE';
 type SessionPaymentMethod = 'cash' | 'online' | 'upi' | 'card' | 'other';
+type SessionActionOptions = {
+  shouldClose?: boolean;
+  ensureBillFirst?: boolean;
+  force?: boolean;
+};
 
 // Removed TERMINAL_STATUSES
 // --- ISOLATED TIME TICKER (Avoids global order re-renders) ---
@@ -165,13 +170,14 @@ const TicketCard = memo(({
   finishPending: boolean;
   paymentPending: boolean;
   onFinishSession: (sessionId: string, force?: boolean) => void;
-  onCompleteSession: (sessionId: string, paymentMethod: SessionPaymentMethod) => void;
+  onCompleteSession: (sessionId: string, paymentMethod: SessionPaymentMethod, options?: SessionActionOptions) => void;
   onViewInvoice: (ticket: any) => void;
 }) => {
   const ticketOrders = Array.isArray(ticket?.orders) ? ticket.orders : [];
   const resolvedTicketTotal = resolveTicketTotal(ticketOrders, ticket?.session);
   const sessionStatus = String(ticket?.session?.sessionStatus || '').toUpperCase();
   const sessionPaymentMethod = String(ticket?.session?.bill?.paymentMethod || '').toUpperCase();
+  const sessionPaymentStatus = String(ticket?.session?.bill?.paymentStatus || '').toUpperCase();
   const isCancelled = ticketOrders.length > 0 && ticketOrders.every((o: any) => o?.status === 'CANCELLED');
   const isClosedSession = ticket.isSession && sessionStatus === 'CLOSED';
   const createdAtMs = toValidTimestamp(ticket?.createdAt);
@@ -226,7 +232,11 @@ const TicketCard = memo(({
                      ? "This session has active orders. Force clear and archive it?"
                      : "Clear and archive this session?";
                    if (window.confirm(msg)) {
-                     onCompleteSession(ticket.sessionId, normalizeSessionPaymentMethod(ticket.session?.bill?.paymentMethod));
+                     onCompleteSession(ticket.sessionId, normalizeSessionPaymentMethod(ticket.session?.bill?.paymentMethod), {
+                       shouldClose: true,
+                       force: true,
+                       ensureBillFirst: sessionStatus !== 'AWAITING_BILL' && sessionPaymentStatus !== 'PAID',
+                     });
                    }
                  }}
                  className="p-1 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all shrink-0"
@@ -348,7 +358,10 @@ const TicketCard = memo(({
                           window.alert('Generate final bill first.');
                           return;
                         }
-                        onCompleteSession(ticket.sessionId, selectedBillAction === 'PAID_ONLINE' ? 'online' : 'cash');
+                        onCompleteSession(ticket.sessionId, selectedBillAction === 'PAID_ONLINE' ? 'online' : 'cash', {
+                          shouldClose: true,
+                          ensureBillFirst: sessionStatus !== 'AWAITING_BILL' && sessionPaymentStatus !== 'PAID',
+                        });
                     }}
                     disabled={finishPending || paymentPending}
                     className="rounded-xl bg-blue-600 px-5 py-3 text-xs font-black text-white hover:bg-blue-500 transition-all disabled:opacity-50"
@@ -364,7 +377,10 @@ const TicketCard = memo(({
                     if (!ticket.sessionId) return;
                     const isPaid = ticket.session?.bill?.paymentStatus === 'PAID';
                     if (!isPaid && !window.confirm("Payment not recorded. Clear and archive this session anyway?")) return;
-                    onCompleteSession(ticket.sessionId, normalizeSessionPaymentMethod(ticket.session?.bill?.paymentMethod));
+                    onCompleteSession(ticket.sessionId, normalizeSessionPaymentMethod(ticket.session?.bill?.paymentMethod), {
+                      shouldClose: true,
+                      force: !isPaid,
+                    });
                   }}
                   disabled={paymentPending}
                   className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-3 text-xs font-black text-white shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.97]"
@@ -430,7 +446,7 @@ const PipelineCard = memo(({
   isStatusPending: boolean;
   onUpdateStatus: (id: string, status: string, cancelReason?: string) => void;
   onFinishSession?: (sessionId: string, force?: boolean) => void;
-  onCompleteSession?: (sessionId: string, paymentMethod: SessionPaymentMethod, shouldClose: boolean) => void;
+  onCompleteSession?: (sessionId: string, paymentMethod: SessionPaymentMethod, options?: SessionActionOptions) => void;
   isCompletePending?: boolean;
   plan?: string;
 }) => {
@@ -674,7 +690,10 @@ const PipelineCard = memo(({
                       return;
                     }
                     if (order.diningSessionId) {
-                      onCompleteSession(order.diningSessionId, sessionPaymentMethod, true);
+                      onCompleteSession(order.diningSessionId, sessionPaymentMethod, {
+                        shouldClose: true,
+                        ensureBillFirst: sessionStatus !== 'AWAITING_BILL' && sessionPaymentStatus !== 'PAID',
+                      });
                     }
                   }}
                   disabled={isStatusPending || isCompletePending}
@@ -771,14 +790,15 @@ export function Orders({ role }: { role?: string }) {
     queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
   }, [queryClient]);
 
-  const { data: liveOrders = [], isLoading } = useQuery<any[]>({
+  const { data: liveOrders = [], isLoading, isError: isLiveOrdersError } = useQuery<any[]>({
     queryKey: ['live-orders'],
     queryFn: async () => {
       const res = await api.get('/orders');
       return res.data;
     },
     staleTime: 1000 * 10,
-    refetchInterval: 60000,
+    refetchInterval: 30000,
+    retry: 2,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
   });
@@ -786,7 +806,7 @@ export function Orders({ role }: { role?: string }) {
   const { data: historyResponse } = useQuery<any>({
     queryKey: ['order-history'],
     queryFn: async () => {
-      const res = await api.get('/orders/history');
+      const res = await api.get('/orders/history?includeCount=false');
       return res.data;
     },
     enabled: activeTab === 'HISTORY',
@@ -868,12 +888,6 @@ export function Orders({ role }: { role?: string }) {
       return api.post(`/public/${slug}/sessions/${sessionId}/admin-finish`, { force });
     },
     onSuccess: refreshOperationalData,
-    onError: (error: any) => {
-      setLocalToast({
-        message: error?.response?.data?.error || error?.message || 'Could not move this table to billing.',
-        type: 'error',
-      });
-    },
   });
 
   const completeSessionMutation = useMutation({
@@ -893,12 +907,6 @@ export function Orders({ role }: { role?: string }) {
       return api.post(`/public/${slug}/sessions/${sessionId}/complete`, { paymentMethod, shouldClose });
     },
     onSuccess: refreshOperationalData,
-    onError: (error: any) => {
-      setLocalToast({
-        message: error?.response?.data?.error || error?.message || 'Could not confirm payment for this bill.',
-        type: 'error',
-      });
-    },
   });
 
   const [activeDragOrder, setActiveDragOrder] = useState<any>(null);
@@ -947,12 +955,74 @@ export function Orders({ role }: { role?: string }) {
   }, []);
 
   const handleFinishSession = useCallback((sessionId: string, force = false) => {
-    finishSessionMutation.mutate({ sessionId, force });
+    finishSessionMutation.mutate(
+      { sessionId, force },
+      {
+        onError: (error: any) => {
+          setLocalToast({
+            message: error?.response?.data?.error || error?.message || 'Could not move this table to billing.',
+            type: 'error',
+          });
+        },
+      },
+    );
   }, [finishSessionMutation]);
 
-  const handleCompleteSession = useCallback((sessionId: string, paymentMethod: SessionPaymentMethod) => {
-    completeSessionMutation.mutate({ sessionId, paymentMethod });
-  }, [completeSessionMutation]);
+  const handleCompleteSession = useCallback(async (
+    sessionId: string,
+    paymentMethod: SessionPaymentMethod,
+    options?: SessionActionOptions,
+  ) => {
+    const shouldClose = options?.shouldClose ?? true;
+    const ensureBillFirst = options?.ensureBillFirst ?? false;
+    const force = options?.force ?? false;
+
+    const settle = () => completeSessionMutation.mutateAsync({ sessionId, paymentMethod, shouldClose });
+
+    try {
+      if (ensureBillFirst) {
+        await finishSessionMutation.mutateAsync({ sessionId, force });
+      }
+
+      await settle();
+      setLocalToast({
+        message: shouldClose ? 'Session archived successfully.' : 'Payment recorded successfully.',
+        type: 'success',
+      });
+      return;
+    } catch (error: any) {
+      const serverMessage = error?.response?.data?.error || error?.message || '';
+      const needsBillFirst =
+        error?.response?.status === 409 ||
+        String(serverMessage).toLowerCase().includes('final bill');
+
+      if (shouldClose && !ensureBillFirst && needsBillFirst) {
+        try {
+          await finishSessionMutation.mutateAsync({ sessionId, force });
+          await settle();
+          setLocalToast({
+            message: 'Bill generated and session archived successfully.',
+            type: 'success',
+          });
+          return;
+        } catch (retryError: any) {
+          setLocalToast({
+            message:
+              retryError?.response?.data?.error ||
+              retryError?.message ||
+              'Could not record payment and archive this session.',
+            type: 'error',
+          });
+          return;
+        }
+      }
+
+      setLocalToast({
+        message: serverMessage || 'Could not record payment and archive this session.',
+        type: 'error',
+      });
+    }
+  }, [completeSessionMutation, finishSessionMutation]);
 
   const handleUpdateStatus = useCallback((id: string, status: string, cancelReason?: string) => {
     const order = liveOrders.find((o: any) => o.id === id);
@@ -993,6 +1063,45 @@ export function Orders({ role }: { role?: string }) {
       new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
   }, [liveOrders]);
+
+  const settlePendingMiniOrder = useCallback(async (paymentMethod: SessionPaymentMethod) => {
+    if (!pendingMiniSettle) return;
+
+    const { id, status, order } = pendingMiniSettle;
+    setPendingMiniSettle(null);
+
+    const shouldClose = status === 'COMPLETE_SETTLE';
+
+    try {
+      await completeSessionMutation.mutateAsync({
+        sessionId: order.diningSessionId,
+        paymentMethod,
+        shouldClose,
+      });
+
+      if (!shouldClose) {
+        statusMutation.mutate({
+          id,
+          status,
+          expectedVersion: order.version || 0,
+        });
+      } else {
+        refreshOperationalData();
+      }
+
+      setLocalToast({
+        message: shouldClose
+          ? 'Payment recorded and session archived.'
+          : `Payment recorded and order moved to ${formatStatusLabel(status)}.`,
+        type: 'success',
+      });
+    } catch (error: any) {
+      setLocalToast({
+        message: error?.response?.data?.error || error?.message || 'Could not record payment for this order.',
+        type: 'error',
+      });
+    }
+  }, [completeSessionMutation, pendingMiniSettle, refreshOperationalData, statusMutation]);
 
   if (isLoading) {
     return (
@@ -1104,10 +1213,6 @@ export function Orders({ role }: { role?: string }) {
     }
   };
 
-
-
-
-
   return (
     <>
       <div className="flex h-full min-h-0 flex-col p-3 sm:p-5 lg:p-8 relative">
@@ -1131,27 +1236,7 @@ export function Orders({ role }: { role?: string }) {
              <div className="mt-8 grid grid-cols-1 gap-3">
                 <button
                   onClick={() => {
-                    const { id, status, order } = pendingMiniSettle;
-                    setPendingMiniSettle(null);
-                    const shouldClose = status === 'COMPLETE_SETTLE';
-                    
-                    completeSessionMutation.mutate({ 
-                      sessionId: order.diningSessionId, 
-                      paymentMethod: 'cash', 
-                      shouldClose 
-                    }, {
-                      onSuccess: () => {
-                        if (!shouldClose) {
-                          statusMutation.mutate({ 
-                            id, 
-                            status: 'READY', 
-                            expectedVersion: order.version || 0 
-                          });
-                        } else {
-                          refreshOperationalData();
-                        }
-                      }
-                    });
+                    void settlePendingMiniOrder('cash');
                   }}
                   disabled={completeSessionMutation.isPending}
                   className="group flex items-center justify-between w-full h-16 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black transition-all active:scale-95 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
@@ -1165,27 +1250,7 @@ export function Orders({ role }: { role?: string }) {
 
                 <button
                   onClick={() => {
-                    const { id, status, order } = pendingMiniSettle;
-                    setPendingMiniSettle(null);
-                    const shouldClose = status === 'COMPLETE_SETTLE';
-
-                    completeSessionMutation.mutate({ 
-                      sessionId: order.diningSessionId, 
-                      paymentMethod: 'online', 
-                      shouldClose 
-                    }, {
-                      onSuccess: () => {
-                        if (!shouldClose) {
-                          statusMutation.mutate({ 
-                            id, 
-                            status: 'READY', 
-                            expectedVersion: order.version || 0 
-                          });
-                        } else {
-                          refreshOperationalData();
-                        }
-                      }
-                    });
+                    void settlePendingMiniOrder('online');
                   }}
                   disabled={completeSessionMutation.isPending}
                   className="group flex items-center justify-between w-full h-16 px-6 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black transition-all active:scale-95 shadow-lg shadow-blue-500/20 disabled:opacity-50"
@@ -1217,12 +1282,10 @@ export function Orders({ role }: { role?: string }) {
                 : localToast.type === 'info'
                   ? 'rgba(37, 99, 235, 0.9)'
                   : 'rgba(16, 185, 129, 0.9)',
-            borderColor: 'rgba(255,255,255,0.1)',
-            color: 'white'
+            borderColor: 'rgba(255,255,255,0.1)'
           }}
         >
-          <div className="h-2 w-2 rounded-full bg-white animate-pulse shadow-[0_0_10px_white]" />
-          <span className="text-sm font-black tracking-tight">{localToast.message}</span>
+          <p className="text-white font-bold text-sm">{localToast.message}</p>
         </div>
       )}
       <div className="mb-4 flex flex-col gap-3 lg:mb-6">
@@ -1317,19 +1380,23 @@ export function Orders({ role }: { role?: string }) {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          {isOffline && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded-3xl m-4">
-               <div className="bg-red-500/20 border border-red-500 text-red-50 font-bold px-6 py-4 rounded-xl flex items-center gap-3 shadow-2xl">
-                 <XCircle size={24} className="text-red-400" />
+          {(isOffline || isLiveOrdersError) && (
+            <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm rounded-3xl m-4">
+               <div className="bg-red-500/20 border border-red-500 text-red-50 font-bold px-8 py-6 rounded-[2rem] flex items-center gap-4 shadow-2xl animate-in zoom-in-95 duration-300">
+                 <Signal size={32} className="text-red-400 animate-pulse" />
                  <div>
-                   <p className="text-lg">You are offline</p>
-                   <p className="text-xs text-red-200">Reconnecting to server... changes disabled.</p>
+                   <p className="text-xl font-black tracking-tight">{isOffline ? 'No Internet Connection' : 'Database Connection Lost'}</p>
+                   <p className="text-sm text-red-200 mt-1 opacity-80 font-bold">
+                     {isOffline 
+                       ? 'Please check your router or cellular data.' 
+                       : 'Restoflow is currently unable to reach the database. Retrying...'}
+                   </p>
                  </div>
                </div>
             </div>
           )}
           <div
-            className={`flex flex-1 flex-col gap-4 overflow-y-auto custom-scrollbar p-3 sm:p-4 lg:h-full lg:flex-row lg:gap-6 lg:overflow-x-auto lg:overflow-y-hidden lg:p-6 relative ${isOffline ? 'opacity-40 pointer-events-none' : ''}`}
+            className={`flex flex-1 flex-col gap-4 overflow-y-auto custom-scrollbar p-3 sm:p-4 lg:h-full lg:flex-row lg:gap-6 lg:overflow-x-auto lg:overflow-y-hidden lg:p-6 relative ${(isOffline || isLiveOrdersError) ? 'opacity-40 pointer-events-none' : ''}`}
             style={{ background: 'var(--kanban-bg)' }}
           >
             {pipelineColumns.map(({ id, label, color, bg, badge, filter, pulse }) => {
@@ -1356,7 +1423,7 @@ export function Orders({ role }: { role?: string }) {
                       isStatusPending={statusMutation.isPending && statusMutation.variables?.id === order.id}
                       onUpdateStatus={handleUpdateStatus}
                       onFinishSession={handleFinishSession}
-                      onCompleteSession={(sid, method, close) => completeSessionMutation.mutate({ sessionId: sid, paymentMethod: method, shouldClose: close })}
+                      onCompleteSession={handleCompleteSession}
                       isCompletePending={completeSessionMutation.isPending && completeSessionMutation.variables?.sessionId === order.diningSessionId}
                       plan={plan}
                     />

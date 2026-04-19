@@ -14,7 +14,7 @@ import {
   Timer,
   UtensilsCrossed,
 } from 'lucide-react';
-import { publicApi } from '../lib/api';
+import { getTenantPublicAuthHeaders, publicApi } from '../lib/api';
 import { formatINR } from '../lib/currency';
 import { getSocketUrl } from '../lib/network';
 import { getActiveSessionForTenant, getSessionAccessTokenForTenant, setLastTableIdForTenant } from '../lib/tenantStorage';
@@ -117,7 +117,15 @@ export function OrderStatus() {
       if (!latestCompletedWithoutReview?.id) {
         throw new Error('No completed order available for review');
       }
-      return publicApi.post(`/orders/${latestCompletedWithoutReview.id}/feedback`, { rating, feedback });
+      return publicApi.post(
+        `/orders/${latestCompletedWithoutReview.id}/feedback`,
+        {
+          rating,
+          feedback,
+          ...(sessionAccessToken ? { sessionAccessToken } : {}),
+        },
+        { headers: getTenantPublicAuthHeaders(tenantSlug) },
+      );
     },
     onSuccess: () => {
       setRating(0);

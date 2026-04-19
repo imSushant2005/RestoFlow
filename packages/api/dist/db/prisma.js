@@ -18,8 +18,8 @@ exports.prisma = globalForPrisma.prisma ||
             // Neon + pooled Postgres can be bursty under concurrent local dev and
             // order/session flows do several sequential writes. Prisma's default
             // interactive transaction timeout is too short for this workload.
-            maxWait: 10_000,
-            timeout: 20_000,
+            maxWait: 20_000,
+            timeout: 40_000,
         },
     });
 const PERF_ALERT_THRESHOLD_MS = 500;
@@ -48,8 +48,9 @@ async function ensurePrismaConnected() {
         prismaReconnectPromise = exports.prisma
             .$connect()
             .catch((error) => {
-            console.error('[PRISMA_CONNECT_ERROR]', error);
-            throw error;
+            console.error('[PRISMA_CONNECT_ERROR]', error instanceof Error ? error.message : String(error));
+            // Do not re-throw here if this is used as a floating promise.
+            // Managed retries will happen via withPrismaRetry.
         })
             .finally(() => {
             prismaReconnectPromise = null;

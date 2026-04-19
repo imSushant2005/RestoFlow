@@ -554,44 +554,8 @@ export const createOrder = async (req: Request, res: Response) => {
 
     const tableIdToUpdate = safeTableId || lockedSession.tableId || null;
 
-    getIO().to(getTenantRoom(tenant.id)).emit('order:new', order);
-    getIO().to(getSessionRoom(tenant.id, lockedSession.id)).emit('order:new', order);
-    getIO().to(getTenantRoom(tenant.id)).emit('session:update', {
-      sessionId: lockedSession.id,
-      status: 'ACTIVE',
-      updatedAt: new Date().toISOString(),
-    });
-    getIO().to(getSessionRoom(tenant.id, lockedSession.id)).emit('session:update', {
-      sessionId: lockedSession.id,
-      status: 'ACTIVE',
-      updatedAt: new Date().toISOString(),
-    });
-    if (tableIdToUpdate) {
-      getIO().to(getTenantRoom(tenant.id)).emit('table:status_change', {
-        tableId: tableIdToUpdate,
-        status: 'ORDERING_OPEN',
-        orderNumber,
-      });
-    }
-
-    await Promise.all([
-      invalidateOperationalCaches(tenant.id, lockedSession.id, order.id),
-      requestIdempotencyKey
-        ? setCache(cacheKeys.publicOrderIdempotency(tenant.id, requestIdempotencyKey), {
-            ...order,
-            sessionId: lockedSession.id,
-            diningSessionId: lockedSession.id,
-            sessionAccessToken: generateSessionAccessToken({
-              tenantId: tenant.id,
-              sessionId: lockedSession.id,
-              customerId: lockedSession.customerId,
-              tableId: lockedSession.tableId || null,
-            }),
-          }, 600)
-        : Promise.resolve(),
-    ]);
-
-    return res.status(201).json({
+    // Release connection and respond immediately — side effects run in background
+    res.status(201).json({
       ...order,
       sessionId: lockedSession.id,
       diningSessionId: lockedSession.id,
@@ -602,6 +566,62 @@ export const createOrder = async (req: Request, res: Response) => {
         tableId: lockedSession.tableId || null,
       }),
     });
+
+    setImmediate(async () => {
+      try {
+        const io = getIO();
+        const tenantRoom = getTenantRoom(tenant.id);
+        const sessionRoom = getSessionRoom(tenant.id, lockedSession!.id);
+
+        io.to(tenantRoom).emit('order:new', order);
+        io.to(sessionRoom).emit('order:new', order);
+
+        io.to(tenantRoom).emit('session:update', {
+          sessionId: lockedSession!.id,
+          status: 'ACTIVE',
+          updatedAt: new Date().toISOString(),
+        });
+
+        io.to(sessionRoom).emit('session:update', {
+          sessionId: lockedSession!.id,
+          status: 'ACTIVE',
+          updatedAt: new Date().toISOString(),
+        });
+
+        if (tableIdToUpdate) {
+          io.to(tenantRoom).emit('table:status_change', {
+            tableId: tableIdToUpdate,
+            status: 'ORDERING_OPEN',
+            orderNumber,
+          });
+        }
+
+        await Promise.all([
+          invalidateOperationalCaches(tenant.id, lockedSession!.id, order.id),
+          requestIdempotencyKey
+            ? setCache(
+                cacheKeys.publicOrderIdempotency(tenant.id, requestIdempotencyKey),
+                {
+                  ...order,
+                  sessionId: lockedSession!.id,
+                  diningSessionId: lockedSession!.id,
+                  sessionAccessToken: generateSessionAccessToken({
+                    tenantId: tenant.id,
+                    sessionId: lockedSession!.id,
+                    customerId: lockedSession!.customerId,
+                    tableId: lockedSession!.tableId || null,
+                  }),
+                },
+                600
+              )
+            : Promise.resolve(),
+        ]);
+      } catch (err) {
+        console.error('[PUBLIC_ORDER_POST_CREATE_ERROR]', err);
+      }
+    });
+
+    return;
   } catch (error) {
     console.error('createOrder error:', error);
     const message = error instanceof Error ? error.message : 'Failed to create order';

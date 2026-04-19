@@ -37,6 +37,12 @@ const DEFAULT_QR_CONFIG = {
   bgColor: '#ffffff',
 };
 
+const QR_PRESETS = [
+  { label: 'Classic Ink', fgColor: '#0f172a', bgColor: '#ffffff' },
+  { label: 'Royal Blue', fgColor: '#1d4ed8', bgColor: '#ffffff' },
+  { label: 'Midnight Card', fgColor: '#f8fafc', bgColor: '#0f172a' },
+];
+
 function readQrConfig() {
   if (typeof window === 'undefined') return DEFAULT_QR_CONFIG;
   try {
@@ -227,7 +233,7 @@ export function Settings() {
 
   return (
     <div
-      className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[2rem] border lg:flex-row"
+      className="settings-page flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[2rem] border lg:flex-row"
       style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--card-shadow-hover)' }}
     >
       {/* ── Navigation: Desktop Sidebar / Mobile Tabs ── */}
@@ -533,6 +539,36 @@ export function Settings() {
                        </div>
                        
                        <div className="space-y-8">
+                          <div className="space-y-3">
+                             <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <div>
+                                   <p className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>Quick presets</p>
+                                   <p className="text-xs font-medium" style={{ color: 'var(--text-3)' }}>Use a high-contrast pair so table scans stay readable on older phones.</p>
+                                </div>
+                             </div>
+                             <div className="flex flex-wrap gap-2">
+                                {QR_PRESETS.map((preset) => {
+                                  const active = qrConfig.fgColor === preset.fgColor && qrConfig.bgColor === preset.bgColor;
+                                  return (
+                                    <button
+                                      key={preset.label}
+                                      onClick={() => setQrConfig({ fgColor: preset.fgColor, bgColor: preset.bgColor })}
+                                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-black uppercase tracking-[0.12em] transition-all ${
+                                        active ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-500/20' : ''
+                                      }`}
+                                      style={active ? undefined : { borderColor: 'var(--border)', background: 'var(--surface-3)', color: 'var(--text-2)' }}
+                                    >
+                                      <span className="flex items-center gap-1">
+                                        <span className="h-3 w-3 rounded-full border border-black/10" style={{ background: preset.fgColor }} />
+                                        <span className="h-3 w-3 rounded-full border border-black/10" style={{ background: preset.bgColor }} />
+                                      </span>
+                                      {preset.label}
+                                    </button>
+                                  );
+                                })}
+                             </div>
+                          </div>
+
                           <div className="grid grid-cols-2 gap-6">
                              <div className="space-y-3">
                                 <label className="text-xs font-black uppercase tracking-widest text-slate-400 pl-1">Primary Grid</label>
@@ -566,8 +602,8 @@ export function Settings() {
                     <div className="sticky top-8 space-y-6">
                        <div className="bg-slate-900 p-10 rounded-[2.5rem] flex flex-col items-center shadow-[0_40px_80px_-15px_rgba(15,23,42,0.3)] relative group">
                           <div className="absolute top-6 left-1/2 -translate-x-1/2 w-12 h-1 bg-slate-800 rounded-full" />
-                          <div className="mt-8 bg-white p-6 rounded-3xl shadow-2xl flex flex-col items-center" style={{ backgroundColor: qrConfig.bgColor }}>
-                             <span className="text-[11px] font-black uppercase tracking-[0.24em]" style={{ color: qrConfig.fgColor }}>
+                          <div className="mt-8 p-6 rounded-3xl shadow-2xl flex flex-col items-center border" style={{ backgroundColor: qrConfig.bgColor, borderColor: `${qrConfig.fgColor}18` }}>
+                             <span className="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em]" style={{ color: qrConfig.fgColor, backgroundColor: `${qrConfig.fgColor}10` }}>
                                 Scan me for order
                              </span>
                              <QRCodeSVG 
@@ -578,12 +614,15 @@ export function Settings() {
                                 bgColor={qrConfig.bgColor}
                                 includeMargin={false}
                              />
-                             <div className="mt-8 flex flex-col items-center justify-center w-full">
-                                <span className="text-2xl font-black tracking-tighter text-center leading-none" style={{ color: qrConfig.fgColor }}>
+                             <div className="mt-8 flex flex-col items-center justify-center w-full max-w-[240px]">
+                                <span className="text-[11px] font-black uppercase tracking-[0.22em] opacity-70" style={{ color: qrConfig.fgColor }}>
+                                   Venue name
+                                </span>
+                                <span className="mt-2 text-2xl font-black tracking-tighter text-center leading-tight break-words" style={{ color: qrConfig.fgColor }}>
                                    {business?.businessName || 'VENUE IDENTITY'}
                                 </span>
                                 <div className="mt-3 h-px w-full" style={{ backgroundColor: `${qrConfig.fgColor}22` }} />
-                                <span className="mt-3 text-[10px] font-black tracking-[0.2em] uppercase whitespace-nowrap" style={{ color: qrConfig.fgColor }}>
+                                <span className="mt-3 rounded-full px-3 py-1 text-[10px] font-black tracking-[0.2em] uppercase whitespace-nowrap" style={{ color: qrConfig.fgColor, backgroundColor: `${qrConfig.fgColor}10` }}>
                                    Powered by Restoflow
                                 </span>
                              </div>

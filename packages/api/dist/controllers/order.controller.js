@@ -18,6 +18,7 @@ const VALID_ORDER_STATUSES = new Set([
     'RECEIVED',
     'CANCELLED',
 ]);
+const ACTIVE_BOARD_STATUSES = ['NEW', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED'];
 const ASSISTED_FULFILLMENT_MODES = new Set(['SEND_TO_KITCHEN', 'DIRECT_BILL']);
 const ASSISTED_PAYMENT_METHODS = new Set(['cash', 'upi', 'card', 'online']);
 const LIVE_ORDERS_CACHE_TTL_SECONDS = 3;
@@ -259,6 +260,17 @@ function getLiveOrdersCacheKey(tenantId) {
 function getOrderHistoryCacheKey(tenantId, page, limit, statusKey) {
     return cache_keys_1.cacheKeys.dashboardOrderHistory(tenantId, page, limit, statusKey);
 }
+function parseHistoryStatuses(statusQuery) {
+    if (!statusQuery) {
+        return ['RECEIVED', 'CANCELLED'];
+    }
+    const requestedStatuses = statusQuery
+        .split(',')
+        .map((status) => status.trim().toUpperCase())
+        .filter((status) => VALID_ORDER_STATUSES.has(status));
+    const uniqueStatuses = Array.from(new Set(requestedStatuses));
+    return uniqueStatuses.length > 0 ? uniqueStatuses : ['RECEIVED', 'CANCELLED'];
+}
 function isActiveSessionConflictError(error) {
     if (!error || typeof error !== 'object')
         return false;
@@ -281,7 +293,7 @@ const getOrders = async (req, res) => {
         const orders = await (0, cache_service_1.withCache)(getLiveOrdersCacheKey(tenantId), () => (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.order.findMany({
             where: {
                 tenantId,
-                status: { notIn: ['RECEIVED', 'CANCELLED'] },
+                status: { in: ACTIVE_BOARD_STATUSES },
             },
             select: LIVE_ORDERS_SELECT,
             orderBy: { createdAt: 'asc' },
@@ -296,14 +308,14 @@ const getOrders = async (req, res) => {
 exports.getOrders = getOrders;
 const getOrderHistory = async (req, res) => {
     try {
-        const page = parseInt(req.query.page, 10) || 1;
-        const limit = parseInt(req.query.limit, 10) || 50;
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
         const statusQuery = req.query.status?.toUpperCase();
+        const includeCount = String(req.query.includeCount || '').toLowerCase() === 'true';
         const skip = (page - 1) * limit;
-        const statusFilter = statusQuery === 'RECEIVED' || statusQuery === 'CANCELLED'
-            ? { in: [statusQuery] }
-            : { in: ['RECEIVED', 'CANCELLED'] };
-        const historyCacheKey = getOrderHistoryCacheKey(req.tenantId, page, limit, statusQuery || 'terminal');
+        const historyStatuses = parseHistoryStatuses(statusQuery);
+        const statusFilter = { in: historyStatuses };
+        const historyCacheKey = getOrderHistoryCacheKey(req.tenantId, page, limit, `${statusQuery || 'terminal'}_${includeCount ? 'count' : 'nocount'}`);
         const whereClause = {
             tenantId: req.tenantId,
             status: statusFilter,
@@ -312,18 +324,18 @@ const getOrderHistory = async (req, res) => {
             },
         };
         const { orders, total } = await (0, cache_service_1.withCache)(historyCacheKey, async () => {
-            const [orders, total] = await Promise.all([
-                (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.order.findMany({
+            const orders = await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.order.findMany({
+                where: whereClause,
+                select: HISTORY_ORDERS_SELECT,
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: limit,
+            }), `dashboard-order-history:${req.tenantId}:orders`);
+            const total = includeCount
+                ? await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.order.count({
                     where: whereClause,
-                    select: HISTORY_ORDERS_SELECT,
-                    orderBy: { createdAt: 'desc' },
-                    skip,
-                    take: limit,
-                }), `dashboard-order-history:${req.tenantId}:orders`),
-                (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.order.count({
-                    where: whereClause,
-                }), `dashboard-order-history:${req.tenantId}:count`),
-            ]);
+                }), `dashboard-order-history:${req.tenantId}:count`)
+                : null;
             return { orders, total };
         }, ORDER_HISTORY_CACHE_TTL_SECONDS);
         res.json({
@@ -332,7 +344,7 @@ const getOrderHistory = async (req, res) => {
                 total,
                 page,
                 limit,
-                totalPages: Math.ceil(total / limit),
+                totalPages: typeof total === 'number' ? Math.ceil(total / limit) : null,
             },
         });
     }
@@ -469,11 +481,6 @@ const updateOrderStatus = async (req, res) => {
         (0, socket_1.getIO)().to(tenantRoom).emit('order:update', order);
         if (order.diningSessionId) {
             (0, socket_1.getIO)().to((0, socket_1.getSessionRoom)(req.tenantId, order.diningSessionId)).emit('order:update', order);
-            // NOTE: session:update is intentionally NOT emitted here.
-            // Order status changes do NOT change the DiningSession.sessionStatus.
-            // Emitting session:update with order.status (wrong payload) caused the frontend
-            // to display the order status as the session status. Session events are only
-            // emitted by session.controller when session.sessionStatus actually changes.
         }
         if (normalizedStatus === 'READY') {
             (0, socket_1.getIO)().to((0, socket_1.getRoleRoom)(req.tenantId, 'WAITER')).emit('waiter:pickup_ready', buildWaiterPickupPayload(order));
@@ -556,6 +563,7 @@ const createAssistedOrder = async (req, res) => {
         const customerPhone = normalizePhone(req.body?.customerPhone);
         const orderType = String(req.body?.orderType || 'TAKEAWAY').toUpperCase();
         const fulfillmentMode = String(req.body?.fulfillmentMode || 'SEND_TO_KITCHEN').toUpperCase();
+        const isDirectBill = fulfillmentMode === 'DIRECT_BILL';
         const paymentMethod = String(req.body?.paymentMethod || '').trim().toLowerCase();
         const note = String(req.body?.note || '').trim();
         const seat = String(req.body?.seat || '').trim();
@@ -618,267 +626,280 @@ const createAssistedOrder = async (req, res) => {
         const { subtotal, orderItems } = await (0, order_payload_service_1.buildServerPricedOrderPayload)(prisma_1.prisma, tenant.id, req.body?.items);
         const taxAmount = subtotal * (Number(tenant.taxRate || 0) / 100);
         const totalAmount = subtotal + taxAmount;
-        const result = await prisma_1.prisma.$transaction(async (tx) => {
-            const normalizedPhone = customerPhone.length >= 10
-                ? customerPhone
-                : `guest_assisted_${tenant.id}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-            let customer = await tx.customer.findUnique({
-                where: { phone: normalizedPhone },
-                select: { id: true, isActive: true, name: true, phone: true },
-            });
-            if (customer && !customer.isActive) {
-                throw new Error('CUSTOMER_DEACTIVATED');
-            }
-            if (!customer) {
-                customer = await tx.customer.create({
-                    data: {
-                        phone: normalizedPhone,
-                        name: customerName || null,
-                    },
+        try {
+            const result = await prisma_1.prisma.$transaction(async (tx) => {
+                const normalizedPhone = customerPhone.length >= 10
+                    ? customerPhone
+                    : `guest_assisted_${tenant.id}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                let customer = await tx.customer.findUnique({
+                    where: { phone: normalizedPhone },
                     select: { id: true, isActive: true, name: true, phone: true },
                 });
-            }
-            else {
-                customer = await tx.customer.update({
-                    where: { id: customer.id },
-                    data: {
-                        lastSeenAt: new Date(),
-                        ...(customerName ? { name: customerName } : {}),
-                    },
-                    select: { id: true, isActive: true, name: true, phone: true },
-                });
-            }
-            const orderNumber = (0, order_number_service_1.generateOrderNumber)(orderType); // Synchronous \u2014 no DB call, collision-resistant
-            const isDirectBill = fulfillmentMode === 'DIRECT_BILL';
-            const shouldSettleImmediately = isDirectBill && (markPaid || Boolean(paymentMethod));
-            const sessionStatus = isDirectBill
-                ? shouldSettleImmediately
-                    ? 'CLOSED'
-                    : 'AWAITING_BILL'
-                : 'ACTIVE';
-            const session = await tx.diningSession.create({
-                data: {
-                    tenantId: tenant.id,
-                    tableId: table?.id || null,
-                    customerId: customer.id,
-                    partySize: guestCount,
-                    sessionStatus: sessionStatus,
-                    source: isDirectBill ? 'staff_assisted_direct_bill' : 'staff_assisted',
-                    isBillGenerated: isDirectBill,
-                    billGeneratedAt: isDirectBill ? new Date() : null,
-                    closedAt: shouldSettleImmediately ? new Date() : null,
-                    attendedByUserId: req.user.id,
-                    attendedByName: staffName,
-                },
-                select: {
-                    id: true,
-                    tenantId: true,
-                    tableId: true,
-                    sessionStatus: true,
-                    closedAt: true,
-                },
-            });
-            const order = await tx.order.create({
-                data: {
-                    tenantId: tenant.id,
-                    tableId: table?.id || null,
-                    diningSessionId: session.id,
-                    orderNumber,
-                    orderType: orderType,
-                    status: isDirectBill ? 'RECEIVED' : 'NEW',
-                    placedBy: 'vendor',
-                    subtotal,
-                    taxAmount,
-                    discountAmount: 0,
-                    totalAmount,
-                    customerName: customerName || customer.name || null,
-                    customerPhone: customer.phone,
-                    specialInstructions: [note, seat ? `Seat ${seat}` : null].filter(Boolean).join(' | ') || null,
-                    completedAt: isDirectBill ? new Date() : null,
-                    items: {
-                        create: orderItems,
-                    },
-                },
-                select: orderSelect,
-            });
-            const bill = isDirectBill
-                ? await tx.bill.create({
+                if (customer && !customer.isActive) {
+                    throw new Error('CUSTOMER_DEACTIVATED');
+                }
+                if (!customer) {
+                    customer = await tx.customer.create({
+                        data: {
+                            phone: normalizedPhone,
+                            name: customerName || null,
+                        },
+                        select: { id: true, isActive: true, name: true, phone: true },
+                    });
+                }
+                else {
+                    customer = await tx.customer.update({
+                        where: { id: customer.id },
+                        data: {
+                            lastSeenAt: new Date(),
+                            ...(customerName ? { name: customerName } : {}),
+                        },
+                        select: { id: true, isActive: true, name: true, phone: true },
+                    });
+                }
+                const orderNumber = (0, order_number_service_1.generateOrderNumber)(orderType);
+                const isDirectBill = fulfillmentMode === 'DIRECT_BILL';
+                const shouldSettleImmediately = isDirectBill && (markPaid || Boolean(paymentMethod));
+                const sessionStatus = isDirectBill
+                    ? shouldSettleImmediately
+                        ? 'CLOSED'
+                        : 'AWAITING_BILL'
+                    : 'ACTIVE';
+                const session = await tx.diningSession.create({
                     data: {
                         tenantId: tenant.id,
-                        sessionId: session.id,
+                        tableId: table?.id || null,
+                        customerId: customer.id,
+                        partySize: guestCount,
+                        sessionStatus: sessionStatus,
+                        source: isDirectBill ? 'staff_assisted_direct_bill' : 'staff_assisted',
+                        isBillGenerated: isDirectBill,
+                        billGeneratedAt: isDirectBill ? new Date() : null,
+                        closedAt: shouldSettleImmediately ? new Date() : null,
+                        attendedByUserId: req.user.id,
+                        attendedByName: staffName,
+                    },
+                    select: {
+                        id: true,
+                        tenantId: true,
+                        tableId: true,
+                        sessionStatus: true,
+                        closedAt: true,
+                    },
+                });
+                const order = await tx.order.create({
+                    data: {
+                        tenantId: tenant.id,
+                        tableId: table?.id || null,
+                        diningSessionId: session.id,
+                        orderNumber,
+                        orderType: orderType,
+                        status: isDirectBill ? 'RECEIVED' : 'NEW',
+                        placedBy: 'vendor',
                         subtotal,
                         taxAmount,
                         discountAmount: 0,
                         totalAmount,
-                        invoiceNumber: `INV-${(0, crypto_1.randomUUID)().replace(/-/g, '').slice(0, 16).toUpperCase()}`, // UUID-based — no collision risk
-                        paymentStatus: shouldSettleImmediately ? 'PAID' : 'UNPAID',
-                        paymentMethod: shouldSettleImmediately ? paymentMethod || 'cash' : null,
-                        paidAt: shouldSettleImmediately ? new Date() : null,
-                        businessName: tenant.businessName,
-                        businessAddress: tenant.address,
-                        gstin: tenant.gstin,
-                        fssai: tenant.fssai,
+                        customerName: customerName || customer.name || null,
+                        customerPhone: customer.phone,
+                        specialInstructions: [note, seat ? `Seat ${seat}` : null].filter(Boolean).join(' | ') || null,
+                        completedAt: isDirectBill ? new Date() : null,
+                        items: {
+                            create: orderItems,
+                        },
                     },
-                    select: {
-                        id: true,
-                        invoiceNumber: true,
-                        paymentStatus: true,
-                        paymentMethod: true,
-                        totalAmount: true,
+                    select: orderSelect,
+                });
+                const bill = isDirectBill
+                    ? await tx.bill.create({
+                        data: {
+                            tenantId: tenant.id,
+                            sessionId: session.id,
+                            subtotal,
+                            taxAmount,
+                            discountAmount: 0,
+                            totalAmount,
+                            invoiceNumber: `INV-${(0, crypto_1.randomUUID)().replace(/-/g, '').slice(0, 16).toUpperCase()}`,
+                            paymentStatus: shouldSettleImmediately ? 'PAID' : 'UNPAID',
+                            paymentMethod: shouldSettleImmediately ? paymentMethod || 'cash' : null,
+                            paidAt: shouldSettleImmediately ? new Date() : null,
+                            businessName: tenant.businessName,
+                            businessAddress: tenant.address,
+                            gstin: tenant.gstin,
+                            fssai: tenant.fssai,
+                        },
+                        select: {
+                            id: true,
+                            invoiceNumber: true,
+                            paymentStatus: true,
+                            paymentMethod: true,
+                            totalAmount: true,
+                        },
+                    })
+                    : null;
+                if (table?.id) {
+                    await tx.table.update({
+                        where: { id: table.id },
+                        data: {
+                            status: isDirectBill
+                                ? shouldSettleImmediately
+                                    ? 'AVAILABLE'
+                                    : 'AWAITING_BILL'
+                                : 'ORDERING_OPEN',
+                            currentOrderId: isDirectBill ? null : order.id,
+                            currentSessionId: shouldSettleImmediately ? null : session.id,
+                        },
+                    });
+                }
+                return {
+                    order,
+                    session,
+                    bill,
+                };
+            });
+            const billPath = `/order/${tenant.slug}/session/${result.session.id}/bill`;
+            const settledImmediately = Boolean(result.bill && result.bill.paymentStatus === 'PAID');
+            res.status(201).json({
+                source: fulfillmentMode === 'DIRECT_BILL' ? 'STAFF_ASSISTED_DIRECT_BILL' : 'STAFF_ASSISTED',
+                tenantSlug: tenant.slug,
+                sessionId: result.session.id,
+                orderId: result.order.id,
+                billId: result.bill?.id || null,
+                invoiceNumber: result.bill?.invoiceNumber || null,
+                sessionStatus: result.session.sessionStatus,
+                paymentStatus: result.bill?.paymentStatus || null,
+                billPath,
+                createdByStaffUserId: req.user.id,
+                order: result.order,
+                bill: result.bill,
+            });
+            setImmediate(async () => {
+                try {
+                    const io = (0, socket_1.getIO)();
+                    const tenantRoom = (0, socket_1.getTenantRoom)(tenant.id);
+                    const sessionRoom = (0, socket_1.getSessionRoom)(tenant.id, result.session.id);
+                    if (!isDirectBill) {
+                        io.to(tenantRoom).emit('order:new', result.order);
+                        io.to(sessionRoom).emit('order:new', result.order);
+                        io.to(tenantRoom).emit('session:update', {
+                            sessionId: result.session.id,
+                            status: 'ACTIVE',
+                            updatedAt: new Date().toISOString(),
+                        });
+                        io.to(sessionRoom).emit('session:update', {
+                            sessionId: result.session.id,
+                            status: 'ACTIVE',
+                            updatedAt: new Date().toISOString(),
+                        });
+                        if (result.order.tableId) {
+                            io.to(tenantRoom).emit('table:status_change', {
+                                tableId: result.order.tableId,
+                                status: 'ORDERING_OPEN',
+                                orderNumber: result.order.orderNumber,
+                            });
+                        }
+                    }
+                    else if (settledImmediately) {
+                        io.to(tenantRoom).emit('session:completed', {
+                            sessionId: result.session.id,
+                            paymentMethod: result.bill?.paymentMethod || 'cash',
+                            closedAt: result.session.closedAt || new Date(),
+                        });
+                        io.to(sessionRoom).emit('session:completed', {
+                            sessionId: result.session.id,
+                            paymentMethod: result.bill?.paymentMethod || 'cash',
+                            closedAt: result.session.closedAt || new Date(),
+                        });
+                        io.to(tenantRoom).emit('orders:bulk_status', {
+                            sessionId: result.session.id,
+                            status: 'RECEIVED',
+                            updatedAt: new Date().toISOString(),
+                        });
+                        if (result.order.tableId) {
+                            io.to(tenantRoom).emit('table:status_change', {
+                                tableId: result.order.tableId,
+                                status: 'AVAILABLE',
+                            });
+                        }
+                    }
+                    else {
+                        io.to(tenantRoom).emit('session:finished', {
+                            sessionId: result.session.id,
+                            tableName: table?.name,
+                            totalAmount: result.bill?.totalAmount,
+                        });
+                        io.to(sessionRoom).emit('session:finished', {
+                            sessionId: result.session.id,
+                            tableName: table?.name,
+                            totalAmount: result.bill?.totalAmount,
+                        });
+                        io.to(tenantRoom).emit('session:update', {
+                            sessionId: result.session.id,
+                            status: 'AWAITING_BILL',
+                            updatedAt: new Date().toISOString(),
+                        });
+                        io.to(sessionRoom).emit('session:update', {
+                            sessionId: result.session.id,
+                            status: 'AWAITING_BILL',
+                            updatedAt: new Date().toISOString(),
+                        });
+                        if (result.order.tableId) {
+                            io.to(tenantRoom).emit('table:status_change', {
+                                tableId: result.order.tableId,
+                                status: 'AWAITING_BILL',
+                            });
+                        }
+                    }
+                    await invalidateOrderMutationCaches(tenant.id, result.session.id, result.order.id);
+                }
+                catch (err) {
+                    console.error('[ASSISTED_ORDER_POST_CREATE_ERROR]', err);
+                }
+            });
+        }
+        catch (error) {
+            console.error('createAssistedOrder error:', error);
+            const message = error instanceof Error ? error.message : 'Failed to create assisted order';
+            if (message === 'ORDER_ITEMS_REQUIRED' || message === 'ORDER_ITEMS_INVALID') {
+                return res.status(400).json({ error: 'Select at least one valid menu item before creating the order.' });
+            }
+            if (message === 'CUSTOMER_DEACTIVATED') {
+                return res.status(403).json({ error: 'This customer account has been deactivated and cannot be reused.' });
+            }
+            if (message.startsWith('MENU_ITEM_NOT_FOUND')) {
+                return res.status(409).json({ error: 'One or more items are no longer available. Refresh the menu and try again.' });
+            }
+            if (message.startsWith('MODIFIER_REQUIRED')) {
+                return res.status(400).json({ error: `Required choices are missing for ${message.split(':')[1] || 'this item'}.` });
+            }
+            if (message.startsWith('MODIFIER_LIMIT')) {
+                return res.status(400).json({ error: `Too many choices were selected for ${message.split(':')[1] || 'this item'}.` });
+            }
+            if (message.startsWith('MODIFIER_NOT_FOUND')) {
+                return res.status(409).json({ error: 'One or more modifiers are no longer available. Refresh the menu and try again.' });
+            }
+            const conflictTableId = typeof req.body?.tableId === 'string' ? req.body.tableId.trim() : '';
+            if (conflictTableId && isActiveSessionConflictError(error)) {
+                const activeSession = await prisma_1.prisma.diningSession.findFirst({
+                    where: {
+                        tenantId: req.tenantId,
+                        tableId: conflictTableId,
+                        sessionStatus: { notIn: ['CLOSED', 'CANCELLED'] },
                     },
-                })
-                : null;
-            if (table?.id) {
-                await tx.table.update({
-                    where: { id: table.id },
-                    data: {
-                        status: isDirectBill
-                            ? shouldSettleImmediately
-                                ? 'AVAILABLE'
-                                : 'AWAITING_BILL'
-                            : 'ORDERING_OPEN',
-                        currentOrderId: isDirectBill ? null : order.id,
-                        currentSessionId: shouldSettleImmediately ? null : session.id,
-                    },
+                    select: { id: true },
                 });
+                if (activeSession) {
+                    return res.status(409).json({
+                        error: 'This table already has an active session. Choose another table or finish the open session first.',
+                        existingSessionId: activeSession.id,
+                    });
+                }
             }
-            return {
-                order,
-                session,
-                bill,
-            };
-        });
-        const tenantRoom = (0, socket_1.getTenantRoom)(tenant.id);
-        const sessionRoom = (0, socket_1.getSessionRoom)(tenant.id, result.session.id);
-        const billPath = `/order/${tenant.slug}/session/${result.session.id}/bill`;
-        const isDirectBill = fulfillmentMode === 'DIRECT_BILL';
-        const settledImmediately = Boolean(result.bill && result.bill.paymentStatus === 'PAID');
-        if (!isDirectBill) {
-            (0, socket_1.getIO)().to(tenantRoom).emit('order:new', result.order);
-            (0, socket_1.getIO)().to(sessionRoom).emit('order:new', result.order);
-            (0, socket_1.getIO)().to(tenantRoom).emit('session:update', {
-                sessionId: result.session.id,
-                status: 'ACTIVE',
-                updatedAt: new Date().toISOString(),
-            });
-            (0, socket_1.getIO)().to(sessionRoom).emit('session:update', {
-                sessionId: result.session.id,
-                status: 'ACTIVE',
-                updatedAt: new Date().toISOString(),
-            });
-            if (result.order.tableId) {
-                (0, socket_1.getIO)().to(tenantRoom).emit('table:status_change', {
-                    tableId: result.order.tableId,
-                    status: 'ORDERING_OPEN',
-                    orderNumber: result.order.orderNumber,
-                });
-            }
+            res.status(500).json({ error: 'Failed to create assisted order' });
         }
-        else if (settledImmediately) {
-            (0, socket_1.getIO)().to(tenantRoom).emit('session:completed', {
-                sessionId: result.session.id,
-                paymentMethod: result.bill?.paymentMethod || 'cash',
-                closedAt: result.session.closedAt || new Date().toISOString(),
-            });
-            (0, socket_1.getIO)().to(sessionRoom).emit('session:completed', {
-                sessionId: result.session.id,
-                paymentMethod: result.bill?.paymentMethod || 'cash',
-                closedAt: result.session.closedAt || new Date().toISOString(),
-            });
-            (0, socket_1.getIO)().to(tenantRoom).emit('orders:bulk_status', {
-                sessionId: result.session.id,
-                status: 'RECEIVED',
-                updatedAt: new Date().toISOString(),
-            });
-            if (result.order.tableId) {
-                (0, socket_1.getIO)().to(tenantRoom).emit('table:status_change', {
-                    tableId: result.order.tableId,
-                    status: 'AVAILABLE',
-                });
-            }
-        }
-        else {
-            (0, socket_1.getIO)().to(tenantRoom).emit('session:finished', {
-                sessionId: result.session.id,
-                tableName: table?.name,
-                totalAmount: result.bill?.totalAmount,
-            });
-            (0, socket_1.getIO)().to(sessionRoom).emit('session:finished', {
-                sessionId: result.session.id,
-                tableName: table?.name,
-                totalAmount: result.bill?.totalAmount,
-            });
-            (0, socket_1.getIO)().to(tenantRoom).emit('session:update', {
-                sessionId: result.session.id,
-                status: 'AWAITING_BILL',
-                updatedAt: new Date().toISOString(),
-            });
-            (0, socket_1.getIO)().to(sessionRoom).emit('session:update', {
-                sessionId: result.session.id,
-                status: 'AWAITING_BILL',
-                updatedAt: new Date().toISOString(),
-            });
-            if (result.order.tableId) {
-                (0, socket_1.getIO)().to(tenantRoom).emit('table:status_change', {
-                    tableId: result.order.tableId,
-                    status: 'AWAITING_BILL',
-                });
-            }
-        }
-        await invalidateOrderMutationCaches(tenant.id, result.session.id, result.order.id);
-        res.status(201).json({
-            source: isDirectBill ? 'STAFF_ASSISTED_DIRECT_BILL' : 'STAFF_ASSISTED',
-            tenantSlug: tenant.slug,
-            sessionId: result.session.id,
-            orderId: result.order.id,
-            billId: result.bill?.id || null,
-            invoiceNumber: result.bill?.invoiceNumber || null,
-            sessionStatus: result.session.sessionStatus,
-            paymentStatus: result.bill?.paymentStatus || null,
-            billPath,
-            createdByStaffUserId: req.user.id,
-            order: result.order,
-            bill: result.bill,
-        });
     }
     catch (error) {
-        console.error('createAssistedOrder error:', error);
-        const message = error instanceof Error ? error.message : 'Failed to create assisted order';
-        if (message === 'ORDER_ITEMS_REQUIRED' || message === 'ORDER_ITEMS_INVALID') {
-            return res.status(400).json({ error: 'Select at least one valid menu item before creating the order.' });
-        }
-        if (message === 'CUSTOMER_DEACTIVATED') {
-            return res.status(403).json({ error: 'This customer account has been deactivated and cannot be reused.' });
-        }
-        if (message.startsWith('MENU_ITEM_NOT_FOUND')) {
-            return res.status(409).json({ error: 'One or more items are no longer available. Refresh the menu and try again.' });
-        }
-        if (message.startsWith('MODIFIER_REQUIRED')) {
-            return res.status(400).json({ error: `Required choices are missing for ${message.split(':')[1] || 'this item'}.` });
-        }
-        if (message.startsWith('MODIFIER_LIMIT')) {
-            return res.status(400).json({ error: `Too many choices were selected for ${message.split(':')[1] || 'this item'}.` });
-        }
-        if (message.startsWith('MODIFIER_NOT_FOUND')) {
-            return res.status(409).json({ error: 'One or more modifiers are no longer available. Refresh the menu and try again.' });
-        }
-        const conflictTableId = typeof req.body?.tableId === 'string' ? req.body.tableId.trim() : '';
-        if (conflictTableId && isActiveSessionConflictError(error)) {
-            const activeSession = await prisma_1.prisma.diningSession.findFirst({
-                where: {
-                    tenantId: req.tenantId,
-                    tableId: conflictTableId,
-                    sessionStatus: { notIn: ['CLOSED', 'CANCELLED'] },
-                },
-                select: { id: true },
-            });
-            if (activeSession) {
-                return res.status(409).json({
-                    error: 'This table already has an active session. Choose another table or finish the open session first.',
-                    existingSessionId: activeSession.id,
-                });
-            }
-        }
+        console.error('createAssistedOrder outer error:', error);
         res.status(500).json({ error: 'Failed to create assisted order' });
     }
 };

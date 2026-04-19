@@ -226,6 +226,53 @@ body {
 }
 #root { min-height: 100dvh; overflow-x: hidden; }
 
+html.dashboard-nav-open,
+body.dashboard-nav-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body.dashboard-nav-open #root {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.settings-page input,
+.settings-page textarea,
+.settings-page select {
+  color: var(--text-1);
+  caret-color: var(--text-1);
+}
+
+.settings-page input::placeholder,
+.settings-page textarea::placeholder {
+  color: var(--text-3);
+}
+
+.settings-page [class*='text-slate-900'] {
+  color: var(--text-1) !important;
+}
+
+.settings-page [class*='text-slate-700'],
+.settings-page [class*='text-slate-600'],
+.settings-page [class*='text-slate-500'],
+.settings-page [class*='text-slate-400'],
+.settings-page [class*='text-slate-300'] {
+  color: var(--text-3) !important;
+}
+
+.settings-page [class*='bg-slate-50'],
+.settings-page [class*='bg-slate-100'] {
+  background: var(--surface-3) !important;
+}
+
+.settings-page [class*='border-slate-50'],
+.settings-page [class*='border-slate-100'],
+.settings-page [class*='border-slate-200'],
+.settings-page [class*='border-slate-300'] {
+  border-color: var(--border) !important;
+}
+
 /* ─── Scrollbars ─────────────────────────────────────────── */
 .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }

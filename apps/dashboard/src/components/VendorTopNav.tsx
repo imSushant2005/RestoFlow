@@ -151,7 +151,7 @@ export function VendorTopNav({
 
   const { data: authMe } = useQuery<AuthMeResponse>({
     queryKey: ['auth-me'],
-    queryFn: async () => (await api.get('/auth/me')).data,
+    queryFn: async () => (await api.get('/auth/me?includeTips=true')).data,
     enabled: profileOpen,
     staleTime: 1000 * 60,
     retry: false,

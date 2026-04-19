@@ -3,7 +3,7 @@ import { Server as HttpServer } from 'http';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { UserRole } from '@dineflow/prisma';
-import { prisma } from './db/prisma';
+import { prisma, withPrismaRetry } from './db/prisma';
 import { env } from './config/env';
 import { verifyAccessToken } from './utils/jwt';
 import { verifySessionAccessToken } from './utils/public-access';
@@ -420,10 +420,14 @@ async function resolveTenantIdFromSlug(slug: string): Promise<string | null> {
   const cached = tenantSlugCache.get(slug);
   if (cached) return cached;
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { slug },
-    select: { id: true },
-  });
+  const tenant = await withPrismaRetry(
+    () =>
+      prisma.tenant.findUnique({
+        where: { slug },
+        select: { id: true },
+      }),
+    'resolve-tenant-id-from-slug',
+  );
 
   if (!tenant) return null;
 
@@ -473,10 +477,14 @@ async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void):
       const isCached = socketUserAuthCache.get(cacheKey);
 
       if (!isCached) {
-        const user = await prisma.user.findUnique({
-          where: { id: verifiedToken.userId },
-          select: { id: true, isActive: true },
-        });
+        const user = await withPrismaRetry(
+          () =>
+            prisma.user.findUnique({
+              where: { id: verifiedToken.userId },
+              select: { id: true, isActive: true },
+            }),
+          'auth-user-lookup',
+        );
 
         if (!user || !user.isActive) {
           return rejectAuth(socket, next, 'user_missing_or_inactive');
@@ -537,14 +545,18 @@ async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void):
     const isCachedSession = socketSessionAuthCache.get(sessionCacheKey);
 
     if (!isCachedSession) {
-      const session = await prisma.diningSession.findFirst({
-        where: {
-          id: verifiedSession.sessionId,
-          tenantId: verifiedSession.tenantId,
-          customerId: verifiedSession.customerId,
-        },
-        select: { id: true },
-      });
+      const session = await withPrismaRetry(
+        () =>
+          prisma.diningSession.findFirst({
+            where: {
+              id: verifiedSession.sessionId,
+              tenantId: verifiedSession.tenantId,
+              customerId: verifiedSession.customerId,
+            },
+            select: { id: true },
+          }),
+        'auth-session-lookup',
+      );
 
       if (!session) {
         return rejectAuth(socket, next, 'session_missing_or_revoked');

@@ -173,9 +173,16 @@ export function ItemList({ categoryId }: { categoryId: string }) {
   const { data: allItems = [], isLoading } = useQuery({
     queryKey: ['items', categoryId],
     queryFn: async () => {
-      const res = await api.get('/menus/items');
-      return res.data.filter((i: any) => i.categoryId === categoryId);
-    }
+      const res = await api.get('/menus/items', {
+        params: {
+          categoryId,
+          includeModifiers: false,
+        },
+      });
+      return res.data;
+    },
+    staleTime: 1000 * 60,
+    refetchOnWindowFocus: false,
   });
 
   const items = useMemo(

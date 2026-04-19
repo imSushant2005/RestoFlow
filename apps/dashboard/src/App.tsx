@@ -7,7 +7,6 @@ import {
   UtensilsCrossed,
   Receipt,
   CreditCard,
-  LogIn,
   BarChart3,
   Settings2,
   ChevronRight,
@@ -312,6 +311,30 @@ function DashboardShell() {
   const isLoading = shouldFetchBusinessShellData && businessQuery.isLoading && !business;
   const isError = shouldFetchBusinessShellData && businessQuery.isError && !business;
   const demoStorageKey = getDemoStorageKey(business);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const root = document.documentElement;
+    const body = document.body;
+
+    if (mobileNavOpen) {
+      root.classList.add('dashboard-nav-open');
+      body.classList.add('dashboard-nav-open');
+    } else {
+      root.classList.remove('dashboard-nav-open');
+      body.classList.remove('dashboard-nav-open');
+    }
+
+    return () => {
+      root.classList.remove('dashboard-nav-open');
+      body.classList.remove('dashboard-nav-open');
+    };
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
 
   // Derives live order count from React Query cache — no HTTP request fired.
   // Previously called GET /orders on every socket event (~60+ requests/min during service).
@@ -649,7 +672,7 @@ function DashboardShell() {
           className="fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm lg:hidden"
         />
       )}
-      <aside className={`fixed inset-y-0 left-0 z-40 flex h-[100dvh] w-[min(280px,84vw)] flex-col backdrop-blur-xl transition-transform duration-300 lg:sticky lg:top-0 lg:z-10 lg:h-screen lg:flex-shrink-0 ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 ${sidebarCollapsed ? 'lg:w-[68px]' : 'lg:w-[240px]'}`} style={{ background: 'var(--sidebar-bg)', borderRight: '1px solid var(--sidebar-border)' }}>
+      <aside className={`fixed inset-y-0 left-0 z-40 flex h-[100dvh] w-[min(280px,84vw)] flex-col overflow-hidden overscroll-contain backdrop-blur-xl transition-transform duration-300 lg:sticky lg:top-0 lg:z-10 lg:h-screen lg:flex-shrink-0 ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 ${sidebarCollapsed ? 'lg:w-[68px]' : 'lg:w-[240px]'}`} style={{ background: 'var(--sidebar-bg)', borderRight: '1px solid var(--sidebar-border)' }}>
         <div className="px-4 py-6 flex items-center gap-3" style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 shadow-[0_0_15px_rgba(37,99,235,0.4)]" style={{ background: 'var(--sidebar-logo-bg)' }}>
             <UtensilsCrossed size={16} className="text-white" />
@@ -669,7 +692,7 @@ function DashboardShell() {
           </button>
         </div>
 
-        <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto overflow-x-hidden custom-scrollbar">
+        <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto overflow-x-hidden overscroll-contain custom-scrollbar">
           {navItems.map(({ to, label, icon, badge, isLocked }: any) => {
             const active = location.pathname === to;
             return (
@@ -716,16 +739,6 @@ function DashboardShell() {
           >
             <ChevronRight size={18} className={`transition-transform ${sidebarCollapsed ? '' : 'rotate-180'}`} />
             {!sidebarCollapsed && <span>Collapse</span>}
-          </button>
-          <button
-            onClick={() => {
-              setMobileNavOpen(false);
-              logoutAndReload();
-            }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-400/80 hover:bg-red-500/10 hover:text-red-300 text-sm font-medium transition-all"
-          >
-            <LogIn size={18} className="rotate-180" />
-            {(!sidebarCollapsed || mobileNavOpen) && <span>Logout</span>}
           </button>
         </div>
       </aside>

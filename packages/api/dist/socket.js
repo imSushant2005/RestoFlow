@@ -231,10 +231,10 @@ async function resolveTenantIdFromSlug(slug) {
     const cached = tenantSlugCache.get(slug);
     if (cached)
         return cached;
-    const tenant = await prisma_1.prisma.tenant.findUnique({
+    const tenant = await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.tenant.findUnique({
         where: { slug },
         select: { id: true },
-    });
+    }), 'resolve-tenant-id-from-slug');
     if (!tenant)
         return null;
     tenantSlugCache.set(slug, tenant.id);
@@ -277,10 +277,10 @@ async function authMiddleware(socket, next) {
             const cacheKey = `auth_user_${verifiedToken.userId}`;
             const isCached = socketUserAuthCache.get(cacheKey);
             if (!isCached) {
-                const user = await prisma_1.prisma.user.findUnique({
+                const user = await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.user.findUnique({
                     where: { id: verifiedToken.userId },
                     select: { id: true, isActive: true },
-                });
+                }), 'auth-user-lookup');
                 if (!user || !user.isActive) {
                     return rejectAuth(socket, next, 'user_missing_or_inactive');
                 }
@@ -330,14 +330,14 @@ async function authMiddleware(socket, next) {
         const sessionCacheKey = `auth_session_${verifiedSession.tenantId}_${verifiedSession.sessionId}_${verifiedSession.customerId}`;
         const isCachedSession = socketSessionAuthCache.get(sessionCacheKey);
         if (!isCachedSession) {
-            const session = await prisma_1.prisma.diningSession.findFirst({
+            const session = await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.diningSession.findFirst({
                 where: {
                     id: verifiedSession.sessionId,
                     tenantId: verifiedSession.tenantId,
                     customerId: verifiedSession.customerId,
                 },
                 select: { id: true },
-            });
+            }), 'auth-session-lookup');
             if (!session) {
                 return rejectAuth(socket, next, 'session_missing_or_revoked');
             }
