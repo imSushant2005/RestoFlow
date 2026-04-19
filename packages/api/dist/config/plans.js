@@ -9,13 +9,15 @@ const CANONICAL_PLAN_LIMITS = {
     MINI: {
         items: 50,
         tables: 3,
-        staff: 1, // Only Owner
+        staff: 1,
         price: 599,
         name: 'Mini',
         hasKDS: false,
         hasWaiterRole: true,
         hasWaiterApp: false,
         hasAdvancedAnalytics: true,
+        hasAssistedDirectBill: true,
+        hasAssistedCustomerLookup: true,
         maxFloors: 1,
     },
     CAFE: {
@@ -23,11 +25,13 @@ const CANONICAL_PLAN_LIMITS = {
         tables: 9,
         staff: 5,
         price: 1299,
-        name: 'Café',
+        name: 'Cafe',
         hasKDS: true,
         hasWaiterRole: true,
-        hasWaiterApp: false, // Waiter role supported, but not the full app
+        hasWaiterApp: false,
         hasAdvancedAnalytics: false,
+        hasAssistedDirectBill: true,
+        hasAssistedCustomerLookup: false,
         maxFloors: 1,
     },
     DINEPRO: {
@@ -40,6 +44,8 @@ const CANONICAL_PLAN_LIMITS = {
         hasWaiterRole: true,
         hasWaiterApp: true,
         hasAdvancedAnalytics: true,
+        hasAssistedDirectBill: true,
+        hasAssistedCustomerLookup: true,
         maxFloors: 2,
     },
     PREMIUM: {
@@ -52,6 +58,8 @@ const CANONICAL_PLAN_LIMITS = {
         hasWaiterRole: true,
         hasWaiterApp: true,
         hasAdvancedAnalytics: true,
+        hasAssistedDirectBill: true,
+        hasAssistedCustomerLookup: true,
         maxFloors: 10,
     },
 };

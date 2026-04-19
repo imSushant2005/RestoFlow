@@ -9,6 +9,11 @@ import { generateOrderNumber } from '../services/order-number.service';
 import { buildServerPricedOrderPayload } from '../services/order-payload.service';
 import { cacheKeys } from '../utils/cache-keys';
 import {
+  canMoveSessionToBilling,
+  hasServiceInProgress,
+  resolvePostPaymentSessionStatus,
+} from '../utils/session-settlement';
+import {
   authorizeSessionAccess,
   generateSessionAccessToken,
   readTableQrSecret,
@@ -31,6 +36,7 @@ async function resolveTenantBySlugOrThrow(tenantSlug: string) {
           taxRate: true,
           currencySymbol: true,
           address: true,
+          phone: true,
           gstin: true,
           fssai: true,
           plan: true,
@@ -144,6 +150,144 @@ function reconcileSessionBill<
   };
 }
 
+const sessionSnapshotOrderItemSelect = {
+  id: true,
+  orderId: true,
+  menuItemId: true,
+  name: true,
+  description: true,
+  imageUrl: true,
+  unitPrice: true,
+  quantity: true,
+  totalPrice: true,
+  selectedModifiers: true,
+  specialNote: true,
+  isVeg: true,
+  createdAt: true,
+} as const;
+
+const sessionSnapshotOrderSelect = {
+  id: true,
+  version: true,
+  tenantId: true,
+  tableId: true,
+  diningSessionId: true,
+  orderNumber: true,
+  orderType: true,
+  status: true,
+  placedBy: true,
+  subtotal: true,
+  taxAmount: true,
+  discountAmount: true,
+  totalAmount: true,
+  customerName: true,
+  customerPhone: true,
+  specialInstructions: true,
+  estimatedPrepMins: true,
+  acceptedAt: true,
+  preparingAt: true,
+  readyAt: true,
+  servedAt: true,
+  completedAt: true,
+  cancelledAt: true,
+  cancellationReason: true,
+  hasReview: true,
+  createdAt: true,
+  updatedAt: true,
+  items: {
+    select: sessionSnapshotOrderItemSelect,
+  },
+} as const;
+
+async function fetchSessionSnapshot(tenantId: string, sessionId: string) {
+  return withCache(
+    cacheKeys.publicSession(tenantId, sessionId),
+    async () =>
+      withPrismaRetry(
+        async () => {
+          const [session, orders, bill, review] = await prisma.$transaction([
+            prisma.diningSession.findFirst({
+              where: { id: sessionId, tenantId },
+              select: {
+                id: true,
+                tenantId: true,
+                tableId: true,
+                customerId: true,
+                partySize: true,
+                sessionStatus: true,
+                source: true,
+                openedAt: true,
+                closedAt: true,
+                isBillGenerated: true,
+                billGeneratedAt: true,
+                attendedByUserId: true,
+                attendedByName: true,
+                table: { select: { name: true } },
+                customer: { select: { id: true, name: true, phone: true } },
+              },
+            }),
+            prisma.order.findMany({
+              where: {
+                tenantId,
+                diningSessionId: sessionId,
+                status: { not: 'CANCELLED' as any },
+              },
+              select: sessionSnapshotOrderSelect,
+              orderBy: { createdAt: 'asc' },
+            }),
+            prisma.bill.findUnique({
+              where: { sessionId },
+              select: {
+                id: true,
+                tenantId: true,
+                sessionId: true,
+                invoiceNumber: true,
+                subtotal: true,
+                taxAmount: true,
+                discountAmount: true,
+                totalAmount: true,
+                paymentStatus: true,
+                paymentMethod: true,
+                paidAt: true,
+                generatedAt: true,
+                businessName: true,
+                businessAddress: true,
+                gstin: true,
+                fssai: true,
+              },
+            }),
+            prisma.review.findFirst({
+              where: { diningSessionId: sessionId },
+              select: {
+                id: true,
+                overallRating: true,
+                foodRating: true,
+                serviceRating: true,
+                comment: true,
+                tipAmount: true,
+                serviceStaffName: true,
+                createdAt: true,
+              },
+            }),
+          ]);
+
+          if (!session) {
+            return null;
+          }
+
+          return {
+            ...session,
+            orders,
+            bill,
+            review,
+          };
+        },
+        `session-snapshot:${tenantId}:${sessionId}`,
+      ),
+    8,
+  );
+}
+
 /**
  * Internal helper to transition a session to closed state.
  * Marks orders as RECEIVED, frees table, and emits sockets.
@@ -156,7 +300,8 @@ export async function performSessionCompletion(
   sessionId: string,
   tenantId: string,
   paymentMethod: string = 'cash',
-  shouldClose: boolean = true
+  shouldClose: boolean = true,
+  force: boolean = false,
 ) {
   const result = await prisma.$transaction(async (tx) => {
     await lockSessionForMutation(tx, sessionId);
@@ -189,90 +334,33 @@ export async function performSessionCompletion(
 
     let currentSession = existingSession;
     const computedTotals = calculateSessionOrderTotals(existingSession.orders);
+    const hasOrders = existingSession.orders.length > 0;
+    const hasActiveService = hasServiceInProgress(existingSession.orders);
+    const paymentTimestamp = new Date();
 
     if (existingSession.sessionStatus === 'CANCELLED') {
       throw new Error('SESSION_CANCELLED');
     }
 
-    if (existingSession.sessionStatus === 'CLOSED' && shouldClose) {
+    if (existingSession.sessionStatus === 'CLOSED') {
       return {
         ...existingSession,
         bill: reconcileSessionBill(existingSession.bill, computedTotals),
       };
     }
 
-    // Generate Bill if missing
-    if (!existingSession.isBillGenerated) {
-      if (existingSession.orders.length === 0) {
-        // Allow clearing sessions with 0 orders (e.g. accidental opens)
-        currentSession = await tx.diningSession.update({
-          where: { id: sessionId },
-          data: {
-            sessionStatus: shouldClose ? ('CLOSED' as any) : ('OPEN' as any),
-            closedAt: shouldClose ? new Date() : null,
-          },
-          include: { orders: true, bill: true },
-        });
-      } else {
-        const subtotal = existingSession.orders.reduce((sum, o) => sum + o.subtotal, 0);
-        const taxAmount = existingSession.orders.reduce((sum, o) => sum + o.taxAmount, 0);
-        const totalAmount = subtotal + taxAmount;
-        // UUID-based invoice number — guaranteed unique, no collision with @unique constraint
-        const invoiceNumber = `INV-${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
-
-        const bill = await tx.bill.create({
-          data: {
-            tenantId,
-            sessionId,
-            subtotal,
-            taxAmount,
-            discountAmount: 0,
-            totalAmount,
-            invoiceNumber,
-            businessName: tenant.businessName,
-            businessAddress: tenant.address,
-            gstin: (tenant as any).gstin,
-            fssai: (tenant as any).fssai,
-            paymentStatus: 'PAID',
-            paymentMethod,
-            paidAt: new Date(),
-          } as any,
-        });
-
-        currentSession = await tx.diningSession.update({
-          where: { id: sessionId },
-          data: {
-            isBillGenerated: true,
-            billGeneratedAt: new Date(),
-            sessionStatus: shouldClose ? ('CLOSED' as any) : ('AWAITING_BILL' as any),
-            closedAt: shouldClose ? new Date() : null,
-          },
-          include: { orders: true, bill: true },
-        });
-      }
-    } else {
-      // Bill already exists, just update payment status
-      await tx.bill.updateMany({
-        where: { sessionId },
-        data: {
-          paymentStatus: 'PAID',
-          paymentMethod,
-          paidAt: new Date(),
-        },
-      });
-
-      currentSession = await tx.diningSession.update({
-        where: { id: sessionId },
-        data: {
-          sessionStatus: shouldClose ? ('CLOSED' as any) : ('AWAITING_BILL' as any),
-          closedAt: shouldClose ? new Date() : null,
-        },
-        include: { orders: true, bill: true },
-      });
+    if (!shouldClose && !hasOrders) {
+      throw new Error('SESSION_NOT_READY_FOR_PAYMENT');
     }
 
-    if (existingSession.orders.length > 0) {
-      await tx.bill.upsert({
+    if (shouldClose && hasActiveService && !force) {
+      throw new Error('SESSION_HAS_ACTIVE_ORDERS');
+    }
+
+    let billGeneratedAt = existingSession.billGeneratedAt;
+
+    if (hasOrders) {
+      const bill = await tx.bill.upsert({
         where: { sessionId },
         update: {
           subtotal: computedTotals.subtotal,
@@ -285,7 +373,7 @@ export async function performSessionCompletion(
           fssai: (tenant as any).fssai,
           paymentStatus: 'PAID',
           paymentMethod,
-          paidAt: new Date(),
+          paidAt: paymentTimestamp,
         } as any,
         create: {
           tenantId,
@@ -301,8 +389,36 @@ export async function performSessionCompletion(
           fssai: (tenant as any).fssai,
           paymentStatus: 'PAID',
           paymentMethod,
-          paidAt: new Date(),
+          paidAt: paymentTimestamp,
         } as any,
+        select: {
+          generatedAt: true,
+        },
+      });
+      billGeneratedAt = bill.generatedAt;
+    }
+
+    const nextSessionStatus = resolvePostPaymentSessionStatus(
+      String(existingSession.sessionStatus || 'ACTIVE'),
+      existingSession.orders,
+      shouldClose,
+    ) as any;
+
+    currentSession = await tx.diningSession.update({
+      where: { id: sessionId },
+      data: {
+        isBillGenerated: hasOrders ? true : existingSession.isBillGenerated,
+        billGeneratedAt: hasOrders ? billGeneratedAt : existingSession.billGeneratedAt,
+        sessionStatus: nextSessionStatus,
+        closedAt: shouldClose ? paymentTimestamp : existingSession.closedAt,
+      },
+      include: { orders: true, bill: true },
+    });
+
+    if (shouldClose) {
+      await tx.order.updateMany({
+        where: { diningSessionId: sessionId, status: { notIn: ['CANCELLED'] } },
+        data: { status: 'RECEIVED' as any, completedAt: paymentTimestamp },
       });
 
       const refreshedSession = await tx.diningSession.findUnique({
@@ -314,22 +430,13 @@ export async function performSessionCompletion(
       }
     }
 
-    // Mark all orders as completed/received
-    await tx.order.updateMany({
-      where: { diningSessionId: sessionId, status: { notIn: ['CANCELLED'] } },
-      data: { status: 'RECEIVED' as any, completedAt: new Date() },
-    });
-
-    // Handle Table Occupancy
     if (currentSession.tableId) {
       if (shouldClose) {
-        // Fully free up the table
         await tx.table.update({
           where: { id: currentSession.tableId },
           data: { status: 'AVAILABLE', currentOrderId: null, currentSessionId: null },
         });
-      } else {
-        // Keep it occupied but in AWAITING_BILL state
+      } else if (nextSessionStatus === 'AWAITING_BILL') {
         await tx.table.update({
           where: { id: currentSession.tableId },
           data: { status: 'AWAITING_BILL' },
@@ -345,7 +452,7 @@ export async function performSessionCompletion(
   const sessionRoom = getSessionRoom(tenantId, result.id);
 
   const eventType = shouldClose ? 'session:completed' : 'session:settled';
-  const status = shouldClose ? 'CLOSED' : 'AWAITING_BILL';
+  const status = String((result as any).sessionStatus || (shouldClose ? 'CLOSED' : 'ACTIVE'));
 
   const payload = {
     sessionId: result.id,
@@ -369,13 +476,15 @@ export async function performSessionCompletion(
     updatedAt: new Date().toISOString(),
   });
 
-  getIO().to(tenantRoom).emit('orders:bulk_status', {
-    sessionId: result.id,
-    status: 'RECEIVED',
-    updatedAt: new Date().toISOString(),
-  });
+  if (shouldClose) {
+    getIO().to(tenantRoom).emit('orders:bulk_status', {
+      sessionId: result.id,
+      status: 'RECEIVED',
+      updatedAt: new Date().toISOString(),
+    });
+  }
 
-  if (result.tableId) {
+  if (result.tableId && (shouldClose || status === 'AWAITING_BILL')) {
     getIO().to(tenantRoom).emit('table:status_change', {
       tableId: result.tableId,
       status: shouldClose ? 'AVAILABLE' : 'AWAITING_BILL',
@@ -619,61 +728,7 @@ export const getSession = async (req: Request, res: Response) => {
   try {
     const { tenantSlug, sessionId } = req.params;
     const tenant = await resolveTenantBySlugOrThrow(tenantSlug);
-    const cacheKey = cacheKeys.publicSession(tenant.id, sessionId);
-
-    const session = await withCache(
-      cacheKey,
-      async () =>
-        withPrismaRetry(
-          () =>
-            prisma.diningSession.findFirst({
-              where: { id: sessionId, tenantId: tenant.id },
-              select: {
-                id: true,
-                tenantId: true,
-                tableId: true,
-                customerId: true,
-                partySize: true,
-                sessionStatus: true,
-                source: true,
-                openedAt: true,
-                closedAt: true,
-                isBillGenerated: true,
-                billGeneratedAt: true,
-                attendedByUserId: true,
-                attendedByName: true,
-                table: { select: { name: true } },
-                orders: {
-                  where: { status: { not: 'CANCELLED' } },
-                  include: { items: true },
-                  orderBy: { createdAt: 'asc' },
-                },
-                bill: {
-                  select: {
-                    id: true,
-                    tenantId: true,
-                    sessionId: true,
-                    invoiceNumber: true,
-                    subtotal: true,
-                    taxAmount: true,
-                    discountAmount: true,
-                    totalAmount: true,
-                    paymentStatus: true,
-                    paymentMethod: true,
-                    paidAt: true,
-                    generatedAt: true,
-                    businessName: true,
-                    businessAddress: true,
-                    gstin: true,
-                    fssai: true,
-                  },
-                },
-              },
-            }),
-          `public-session:${tenant.id}:${sessionId}`,
-        ),
-      5,
-    );
+    const session = await fetchSessionSnapshot(tenant.id, sessionId);
 
     if (!session) return res.status(404).json({ error: 'Session not found' });
     authorizeSessionAccess(req, {
@@ -682,27 +737,6 @@ export const getSession = async (req: Request, res: Response) => {
       customerId: session.customerId,
       tenantSlug,
     });
-
-    // Auto Session Out for MINI plan: 
-    // If PAID + 1 hour inactivity (updatedAt) + status is AWAITING_BILL
-    if (
-      tenant.plan === 'MINI' && 
-      session.sessionStatus === 'AWAITING_BILL' && 
-      session.bill?.paymentStatus === 'PAID'
-    ) {
-      const oneHourAgo = new Date(Date.now() - 3600000);
-      const paidAt = session.bill?.paidAt ? new Date(session.bill.paidAt) : null;
-      if (paidAt && paidAt < oneHourAgo) {
-        console.log(`[AUTO_SESSION_OUT] Mini plan auto-checkout for session ${sessionId}`);
-        const closedSession = await performSessionCompletion(sessionId, tenant.id, session.bill.paymentMethod || 'cash');
-        return res.json({
-          ...closedSession,
-          runningTotal: 0,
-          itemCount: 0,
-          isAutoClosed: true,
-        });
-      }
-    }
 
     const reconciledBill = reconcileSessionBill(session.bill, calculateSessionOrderTotals(session.orders));
     const runningTotal = reconciledBill
@@ -757,19 +791,21 @@ export const addOrderToSession = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Order items required' });
     }
 
-    const [tenant, session] = await Promise.all([
-      resolveTenantBySlugOrThrow(tenantSlug),
-      prisma.diningSession.findFirst({
-        where: { id: sessionId, tenant: { slug: tenantSlug } },
-        select: {
-          id: true,
-          tenantId: true,
-          tableId: true,
-          customerId: true,
-          sessionStatus: true,
-        },
-      }),
-    ]);
+    const tenant = await resolveTenantBySlugOrThrow(tenantSlug);
+    const session = await withPrismaRetry(
+      () =>
+        prisma.diningSession.findFirst({
+          where: { id: sessionId, tenantId: tenant.id },
+          select: {
+            id: true,
+            tenantId: true,
+            tableId: true,
+            customerId: true,
+            sessionStatus: true,
+          },
+        }),
+      `session-orderable:${tenant.id}:${sessionId}`,
+    );
 
     if (!session) return res.status(404).json({ error: 'Session not found' });
     authorizeSessionAccess(req, {
@@ -930,16 +966,7 @@ export const finishSession = async (req: Request, res: Response) => {
 
     const tenant = await resolveTenantBySlugOrThrow(tenantSlug);
 
-    const session = await prisma.diningSession.findFirst({
-      where: { id: sessionId, tenantId: tenant.id },
-      include: {
-        orders: {
-          where: { status: { notIn: ['CANCELLED'] } },
-          include: { items: true },
-        },
-        bill: true,
-      },
-    });
+    const session = await fetchSessionSnapshot(tenant.id, sessionId);
 
     if (!session) return res.status(404).json({ error: 'Session not found' });
     authorizeSessionAccess(req, {
@@ -1144,6 +1171,7 @@ export const completeSession = async (req: Request, res: Response) => {
     const { tenantSlug, sessionId } = req.params;
     const requestedPaymentMethod = typeof req.body?.paymentMethod === 'string' ? req.body.paymentMethod.toLowerCase() : 'cash';
     const shouldClose = req.body?.shouldClose !== undefined ? Boolean(req.body.shouldClose) : true;
+    const force = Boolean(req.body?.force);
     
     const allowedPaymentMethods = new Set(['cash', 'online', 'upi', 'card', 'other']);
 
@@ -1152,7 +1180,7 @@ export const completeSession = async (req: Request, res: Response) => {
     }
 
     const tenant = await resolveTenantBySlugOrThrow(tenantSlug);
-    const result = await performSessionCompletion(sessionId, tenant.id, requestedPaymentMethod, shouldClose);
+    const result = await performSessionCompletion(sessionId, tenant.id, requestedPaymentMethod, shouldClose, force);
 
     res.json(result);
   } catch (error) {
@@ -1165,6 +1193,9 @@ export const completeSession = async (req: Request, res: Response) => {
     }
     if (error instanceof Error && error.message === 'SESSION_NOT_READY_FOR_PAYMENT') {
       return res.status(409).json({ error: 'Generate the final bill before marking payment complete.' });
+    }
+    if (error instanceof Error && error.message === 'SESSION_HAS_ACTIVE_ORDERS') {
+      return res.status(409).json({ error: 'Active service is still in progress. Finish service or force archive to close this session.' });
     }
     if (error instanceof Error && error.message === 'SESSION_CANCELLED') {
       return res.status(409).json({ error: 'Cancelled sessions cannot be marked as paid.' });
@@ -1181,24 +1212,7 @@ export const getBill = async (req: Request, res: Response) => {
   try {
     const { tenantSlug, sessionId } = req.params;
     const tenant = await resolveTenantBySlugOrThrow(tenantSlug);
-
-    const session = await prisma.diningSession.findFirst({
-      where: { id: sessionId, tenantId: tenant.id },
-      include: {
-        tenant: {
-          select: { businessName: true, currencySymbol: true, taxRate: true, address: true, phone: true },
-        },
-        table: { select: { name: true } },
-        customer: { select: { name: true, phone: true } },
-        orders: {
-          where: { status: { notIn: ['CANCELLED'] } },
-          include: { items: true },
-          orderBy: { createdAt: 'asc' },
-        },
-        bill: true,
-        review: true,
-      },
-    });
+    const session = await fetchSessionSnapshot(tenant.id, sessionId);
 
     if (!session) return res.status(404).json({ error: 'Session not found' });
     authorizeSessionAccess(req, {
@@ -1212,6 +1226,14 @@ export const getBill = async (req: Request, res: Response) => {
     res.json(
       withSessionAccessToken({
         ...session,
+        tenant: {
+          businessName: tenant.businessName,
+          slug: tenant.slug,
+          currencySymbol: tenant.currencySymbol,
+          taxRate: tenant.taxRate,
+          address: tenant.address,
+          phone: tenant.phone,
+        },
         bill: reconcileSessionBill(session.bill, calculateSessionOrderTotals(session.orders)),
       }),
     );
@@ -1242,10 +1264,14 @@ export const getActiveSession = async (req: Request, res: Response) => {
 
     const tenant = await resolveTenantBySlugOrThrow(tenantSlug);
 
-    const table = await prisma.table.findFirst({
-      where: { id: tableId, tenantId: tenant.id },
-      select: { id: true, qrSecret: true },
-    });
+    const table = await withPrismaRetry(
+      () =>
+        prisma.table.findFirst({
+          where: { id: tableId, tenantId: tenant.id },
+          select: { id: true, qrSecret: true },
+        }),
+      `active-session-table:${tenant.id}:${tableId}`,
+    );
 
     if (!table) {
       return res.status(404).json({ error: 'Table not found' });
@@ -1255,17 +1281,21 @@ export const getActiveSession = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Valid table QR is required.' });
     }
 
-    const session = await prisma.diningSession.findFirst({
-      where: {
-        tableId: table.id,
-        tenantId: tenant.id,
-        sessionStatus: { notIn: ['CLOSED' as any, 'CANCELLED' as any] },
-      },
-      include: {
-        customer: { select: { id: true, name: true } },
-        table: { select: { name: true } },
-      },
-    });
+    const session = await withPrismaRetry(
+      () =>
+        prisma.diningSession.findFirst({
+          where: {
+            tableId: table.id,
+            tenantId: tenant.id,
+            sessionStatus: { notIn: ['CLOSED' as any, 'CANCELLED' as any] },
+          },
+          include: {
+            customer: { select: { id: true, name: true } },
+            table: { select: { name: true } },
+          },
+        }),
+      `active-session:${tenant.id}:${table.id}`,
+    );
 
     res.json({ activeSession: session || null });
   } catch (error) {

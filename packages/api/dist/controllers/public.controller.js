@@ -284,7 +284,7 @@ const createOrder = async (req, res) => {
             }
         }
         let resolvedSession = incomingSessionToken
-            ? await prisma_1.prisma.diningSession.findFirst({
+            ? await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.diningSession.findFirst({
                 where: {
                     id: incomingSessionToken,
                     tenantId: tenant.id,
@@ -296,10 +296,10 @@ const createOrder = async (req, res) => {
                     customerId: true,
                     sessionStatus: true,
                 },
-            })
+            }), `public-create-order-session:${tenant.id}:${incomingSessionToken}`)
             : null;
         const staleSession = incomingSessionToken && !resolvedSession
-            ? await prisma_1.prisma.diningSession.findFirst({
+            ? await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.diningSession.findFirst({
                 where: {
                     id: incomingSessionToken,
                     tenantId: tenant.id,
@@ -309,7 +309,7 @@ const createOrder = async (req, res) => {
                     tableId: true,
                     sessionStatus: true,
                 },
-            })
+            }), `public-create-order-stale-session:${tenant.id}:${incomingSessionToken}`)
             : null;
         if (!safeTableId && staleSession?.tableId) {
             safeTableId = staleSession.tableId;
@@ -324,7 +324,7 @@ const createOrder = async (req, res) => {
             });
         }
         if (!resolvedSession && safeTableId) {
-            const activeTableSession = await prisma_1.prisma.diningSession.findFirst({
+            const activeTableSession = await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.diningSession.findFirst({
                 where: {
                     tenantId: tenant.id,
                     tableId: safeTableId,
@@ -337,7 +337,7 @@ const createOrder = async (req, res) => {
                     customerId: true,
                     sessionStatus: true,
                 },
-            });
+            }), `public-create-order-active-table-session:${tenant.id}:${safeTableId}`);
             if (activeTableSession) {
                 (0, public_access_1.authorizeSessionAccess)(req, {
                     tenantId: tenant.id,
@@ -626,10 +626,10 @@ const getSessionOrders = async (req, res) => {
     try {
         const { tenantSlug, sessionToken: sessionId } = req.params;
         const tenant = await resolveTenantBySlug(tenantSlug);
-        const session = await prisma_1.prisma.diningSession.findFirst({
+        const session = await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.diningSession.findFirst({
             where: { id: sessionId, tenantId: tenant.id },
             select: { id: true, customerId: true },
-        });
+        }), `public-session-orders-session:${tenant.id}:${sessionId}`);
         if (!session)
             return res.status(404).json({ error: 'Session not found' });
         (0, public_access_1.authorizeSessionAccess)(req, {

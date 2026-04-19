@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { 
@@ -123,6 +123,8 @@ export function BillPage() {
   const [reviewComment, setReviewComment] = useState('');
   const [tipAmount, setTipAmount] = useState(0);
   const [submittingReview, setSubmittingReview] = useState(false);
+  const fetchInFlightRef = useRef(false);
+  const lastFetchStartedAtRef = useRef(0);
 
   const fetchBill = useCallback(
     async (silent = false) => {
@@ -131,11 +133,17 @@ export function BillPage() {
         return;
       }
 
+      if (fetchInFlightRef.current) {
+        return;
+      }
+
       if (!silent) {
         setLoading(true);
       }
 
       try {
+        fetchInFlightRef.current = true;
+        lastFetchStartedAtRef.current = Date.now();
         const res = await publicApi.get(`/${tenantSlug}/sessions/${sessionId}/bill`);
         setSession(res.data);
       } catch (error) {
@@ -144,6 +152,7 @@ export function BillPage() {
           setSession(null);
         }
       } finally {
+        fetchInFlightRef.current = false;
         if (!silent) {
           setLoading(false);
         }
@@ -170,6 +179,7 @@ export function BillPage() {
     });
 
     const refreshBill = () => {
+      if (Date.now() - lastFetchStartedAtRef.current < 1500) return;
       void fetchBill(true);
     };
 

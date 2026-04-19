@@ -134,13 +134,17 @@ async function issueSessionForUser(res: Response, user: {
   });
 
   const expiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS);
-  await prisma.refreshToken.create({
-    data: {
-      userId: user.id,
-      token: tokens.refreshToken,
-      expiresAt,
-    },
-  });
+  await withPrismaRetry(
+    () =>
+      prisma.refreshToken.create({
+        data: {
+          userId: user.id,
+          token: tokens.refreshToken,
+          expiresAt,
+        },
+      }),
+    `issue-session-refresh-token:${user.id}`,
+  );
 
   issueRefreshCookie(res, tokens.refreshToken);
 
@@ -234,13 +238,19 @@ async function invalidateAuthMeCache(userId: string, tenantId: string) {
 
 async function buildUniqueTenantSlug(tenantName: string) {
   const base = tenantName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'restaurant';
-  const initial = await prisma.tenant.findUnique({ where: { slug: base }, select: { id: true } });
+  const initial = await withPrismaRetry(
+    () => prisma.tenant.findUnique({ where: { slug: base }, select: { id: true } }),
+    `tenant-slug:${base}`,
+  );
   if (!initial) return base;
 
   let attempt = 2;
   while (attempt < 10000) {
     const candidate = `${base}-${attempt}`;
-    const existing = await prisma.tenant.findUnique({ where: { slug: candidate }, select: { id: true } });
+    const existing = await withPrismaRetry(
+      () => prisma.tenant.findUnique({ where: { slug: candidate }, select: { id: true } }),
+      `tenant-slug:${candidate}`,
+    );
     if (!existing) return candidate;
     attempt += 1;
   }
@@ -260,10 +270,14 @@ export const register = async (req: Request, res: Response) => {
     const validatedData = registerSchema.parse(req.body);
     const normalizedEmail = normalizeEmail(validatedData.email);
 
-    const existingUser = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
-      select: { id: true },
-    });
+    const existingUser = await withPrismaRetry(
+      () =>
+        prisma.user.findUnique({
+          where: { email: normalizedEmail },
+          select: { id: true },
+        }),
+      `register-existing-user:${normalizedEmail}`,
+    );
 
     if (existingUser) {
       return res.status(400).json({ error: 'Email already exists' });
@@ -274,32 +288,35 @@ export const register = async (req: Request, res: Response) => {
     const finalTenantName = validatedData.tenantName?.trim() || buildProvisionalWorkspaceName(resolvedName);
     const slug = await buildUniqueTenantSlug(validatedData.tenantName || 'workspace');
 
-    const result = await prisma.$transaction(async (tx: any) => {
-      const tenant = await tx.tenant.create({
-        data: {
-          businessName: finalTenantName,
-          slug,
-          email: normalizedEmail,
-          trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day free trial on signup
-          plan: 'MINI',
-          planStartedAt: new Date(),
-        },
-      });
+    const result = await withPrismaRetry(
+      () =>
+        prisma.$transaction(async (tx: any) => {
+          const tenant = await tx.tenant.create({
+            data: {
+              businessName: finalTenantName,
+              slug,
+              email: normalizedEmail,
+              trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day free trial on signup
+              plan: 'MINI',
+              planStartedAt: new Date(),
+            },
+          });
 
-      const user = await tx.user.create({
-        data: {
-          email: normalizedEmail,
-          passwordHash: hashedPassword,
-          name: resolvedName,
-          role: UserRole.OWNER,
-          tenantId: tenant.id,
-          mustChangePassword: false,
-        },
-      });
+          const user = await tx.user.create({
+            data: {
+              email: normalizedEmail,
+              passwordHash: hashedPassword,
+              name: resolvedName,
+              role: UserRole.OWNER,
+              tenantId: tenant.id,
+              mustChangePassword: false,
+            },
+          });
 
-
-      return { user, tenant };
-    });
+          return { user, tenant };
+        }),
+      `register-create:${normalizedEmail}`,
+    );
 
     const session = await issueSessionForUser(res, {
       id: result.user.id,
@@ -332,41 +349,49 @@ export const clerkSync = async (req: Request, res: Response) => {
     const normalizedProvider = payload.authProvider === 'GOOGLE' ? 'GOOGLE' : 'EMAIL';
     const normalizedIntent = payload.intent === 'LOGIN' ? 'LOGIN' : 'SIGNUP';
 
-    const existingByClerk = await prisma.user.findFirst({
-      where: { clerkUserId: payload.clerkUserId },
-      select: {
-        id: true,
-        tenantId: true,
-        role: true,
-        email: true,
-        name: true,
-        employeeCode: true,
-        mustChangePassword: true,
-        securityQuestion: true,
-        preferredLanguage: true,
-      },
-    });
+    const existingByClerk = await withPrismaRetry(
+      () =>
+        prisma.user.findFirst({
+          where: { clerkUserId: payload.clerkUserId },
+          select: {
+            id: true,
+            tenantId: true,
+            role: true,
+            email: true,
+            name: true,
+            employeeCode: true,
+            mustChangePassword: true,
+            securityQuestion: true,
+            preferredLanguage: true,
+          },
+        }),
+      `clerk-sync-user:${payload.clerkUserId}`,
+    );
 
     if (existingByClerk) {
       const session = await issueSessionForUser(res, existingByClerk);
       return res.json({ ...session, synced: true, created: false, linked: false });
     }
 
-    const existingByEmail = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
-      select: {
-        id: true,
-        tenantId: true,
-        role: true,
-        email: true,
-        name: true,
-        employeeCode: true,
-        mustChangePassword: true,
-        securityQuestion: true,
-        preferredLanguage: true,
-        clerkUserId: true,
-      },
-    });
+    const existingByEmail = await withPrismaRetry(
+      () =>
+        prisma.user.findUnique({
+          where: { email: normalizedEmail },
+          select: {
+            id: true,
+            tenantId: true,
+            role: true,
+            email: true,
+            name: true,
+            employeeCode: true,
+            mustChangePassword: true,
+            securityQuestion: true,
+            preferredLanguage: true,
+            clerkUserId: true,
+          },
+        }),
+      `clerk-sync-email:${normalizedEmail}`,
+    );
 
     if (existingByEmail) {
       if (existingByEmail.clerkUserId && existingByEmail.clerkUserId !== payload.clerkUserId) {
@@ -378,21 +403,25 @@ export const clerkSync = async (req: Request, res: Response) => {
       const linkedUser =
         existingByEmail.clerkUserId === payload.clerkUserId
           ? existingByEmail
-          : await prisma.user.update({
-              where: { id: existingByEmail.id },
-              data: { clerkUserId: payload.clerkUserId },
-              select: {
-                id: true,
-                tenantId: true,
-                role: true,
-                email: true,
-                name: true,
-                employeeCode: true,
-                mustChangePassword: true,
-                securityQuestion: true,
-                preferredLanguage: true,
-              },
-            });
+          : await withPrismaRetry(
+              () =>
+                prisma.user.update({
+                  where: { id: existingByEmail.id },
+                  data: { clerkUserId: payload.clerkUserId },
+                  select: {
+                    id: true,
+                    tenantId: true,
+                    role: true,
+                    email: true,
+                    name: true,
+                    employeeCode: true,
+                    mustChangePassword: true,
+                    securityQuestion: true,
+                    preferredLanguage: true,
+                  },
+                }),
+              `clerk-sync-link:${existingByEmail.id}`,
+            );
 
       const session = await issueSessionForUser(res, linkedUser);
       return res.json({ ...session, synced: true, created: false, linked: true });
@@ -415,33 +444,36 @@ export const clerkSync = async (req: Request, res: Response) => {
       `${normalizedProvider.toLowerCase()}_${randomBytes(24).toString('base64url')}`;
     const hashedPassword = await hashPassword(localPassword);
 
-    const created = await prisma.$transaction(async (tx: any) => {
-      const tenant = await tx.tenant.create({
-        data: {
-          businessName: finalTenantName,
-          slug: tenantSlug,
-          email: normalizedEmail,
-          trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day free trial on signup
-          plan: 'MINI',
-          planStartedAt: new Date(),
-        },
-      });
+    const created = await withPrismaRetry(
+      () =>
+        prisma.$transaction(async (tx: any) => {
+          const tenant = await tx.tenant.create({
+            data: {
+              businessName: finalTenantName,
+              slug: tenantSlug,
+              email: normalizedEmail,
+              trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day free trial on signup
+              plan: 'MINI',
+              planStartedAt: new Date(),
+            },
+          });
 
+          const user = await tx.user.create({
+            data: {
+              tenantId: tenant.id,
+              email: normalizedEmail,
+              name: resolvedName,
+              passwordHash: hashedPassword,
+              role: UserRole.OWNER,
+              clerkUserId: payload.clerkUserId,
+              mustChangePassword: normalizedProvider === 'GOOGLE',
+            },
+          });
 
-      const user = await tx.user.create({
-        data: {
-          tenantId: tenant.id,
-          email: normalizedEmail,
-          name: resolvedName,
-          passwordHash: hashedPassword,
-          role: UserRole.OWNER,
-          clerkUserId: payload.clerkUserId,
-          mustChangePassword: normalizedProvider === 'GOOGLE',
-        },
-      });
-
-      return { user, tenant };
-    });
+          return { user, tenant };
+        }),
+      `clerk-sync-create:${normalizedEmail}`,
+    );
 
     const session = await issueSessionForUser(res, {
       id: created.user.id,
@@ -513,19 +545,44 @@ export const login = async (req: Request, res: Response) => {
 
     const normalized = normalizeIdentifier(rawIdentifier);
     const normalizedEmployeeCode = normalizeEmployeeCode(rawIdentifier);
+    const loginUserSelect = {
+      id: true,
+      tenantId: true,
+      role: true,
+      email: true,
+      name: true,
+      employeeCode: true,
+      mustChangePassword: true,
+      securityQuestion: true,
+      preferredLanguage: true,
+      passwordHash: true,
+    } as const;
+    const isEmailLogin = rawIdentifier.includes('@');
 
-    const user = await withPrismaRetry(
+    let user = await withPrismaRetry(
       () =>
-        prisma.user.findFirst({
-          where: {
-            OR: [
-              { email: normalized },
-              { employeeCode: normalizedEmployeeCode },
-            ],
-          },
-        }),
+        isEmailLogin
+          ? prisma.user.findUnique({
+              where: { email: normalized },
+              select: loginUserSelect,
+            })
+          : prisma.user.findFirst({
+              where: { employeeCode: normalizedEmployeeCode },
+              select: loginUserSelect,
+            }),
       'login-user-lookup',
     );
+
+    if (!user && !isEmailLogin) {
+      user = await withPrismaRetry(
+        () =>
+          prisma.user.findUnique({
+            where: { email: normalized },
+            select: loginUserSelect,
+          }),
+        'login-user-email-fallback',
+      );
+    }
 
     if (!user) {
       return res.status(401).json({ error: 'User not found. Please create an account first from the signup page.' });
@@ -549,10 +606,14 @@ export const login = async (req: Request, res: Response) => {
         securityQuestion: user.securityQuestion,
         preferredLanguage: user.preferredLanguage,
       }),
-      prisma.user.update({
-        where: { id: user.id },
-        data: { lastLoginAt: new Date() },
-      }).catch(err => console.error('[NON_CRITICAL_UPDATE_FAILED]:', err))
+      withPrismaRetry(
+        () =>
+          prisma.user.update({
+            where: { id: user.id },
+            data: { lastLoginAt: new Date() },
+          }),
+        `login-last-login:${user.id}`,
+      ).catch(err => console.error('[NON_CRITICAL_UPDATE_FAILED]:', err))
     ]);
 
     return res.json(session);
@@ -785,22 +846,26 @@ export const getMe = async (req: Request, res: Response) => {
     const user = await withCache(
       cacheKeys.authMeUser(userId),
       () =>
-        prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-            tenantId: true,
-            employeeCode: true,
-            mustChangePassword: true,
-            securityQuestion: true,
-            preferredLanguage: true,
-            avatarUrl: true,
-            isActive: true,
-          },
-        }),
+        withPrismaRetry(
+          () =>
+            prisma.user.findUnique({
+              where: { id: userId },
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                role: true,
+                tenantId: true,
+                employeeCode: true,
+                mustChangePassword: true,
+                securityQuestion: true,
+                preferredLanguage: true,
+                avatarUrl: true,
+                isActive: true,
+              },
+            }),
+          `auth-me-user:${userId}`,
+        ),
       15,
     );
 
@@ -811,14 +876,18 @@ export const getMe = async (req: Request, res: Response) => {
     const tenant = await withCache(
       cacheKeys.authTenantBrief(tenantId),
       () =>
-        prisma.tenant.findUnique({
-          where: { id: tenantId },
-          select: {
-            id: true,
-            slug: true,
-            businessName: true,
-          },
-        }),
+        withPrismaRetry(
+          () =>
+            prisma.tenant.findUnique({
+              where: { id: tenantId },
+              select: {
+                id: true,
+                slug: true,
+                businessName: true,
+              },
+            }),
+          `auth-me-tenant:${tenantId}`,
+        ),
       60,
     );
 

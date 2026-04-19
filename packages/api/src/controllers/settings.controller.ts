@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { prisma } from '../db/prisma';
+import { prisma, withPrismaRetry } from '../db/prisma';
 import { getPlanLimits } from '../config/plans';
 import { UserRole, Plan } from '@dineflow/prisma';
 import { hashPassword } from '../utils/hash';
@@ -115,26 +115,30 @@ export const getBusinessSettings = async (req: Request, res: Response) => {
     const tenant = await withCache(
       `tenant:${req.tenantId}:business-settings`,
       () =>
-        prisma.tenant.findUnique({
-          where: { id: req.tenantId },
-          select: {
-            id: true,
-            businessName: true,
-            slug: true,
-            email: true,
-            phone: true,
-            gstin: true,
-            taxRate: true,
-            description: true,
-            logoUrl: true,
-            coverImageUrl: true,
-            primaryColor: true,
-            accentColor: true,
-            isActive: true,
-            plan: true,
-            trialEndsAt: true,
-          },
-        }),
+        withPrismaRetry(
+          () =>
+            prisma.tenant.findUnique({
+              where: { id: req.tenantId },
+              select: {
+                id: true,
+                businessName: true,
+                slug: true,
+                email: true,
+                phone: true,
+                gstin: true,
+                taxRate: true,
+                description: true,
+                logoUrl: true,
+                coverImageUrl: true,
+                primaryColor: true,
+                accentColor: true,
+                isActive: true,
+                plan: true,
+                trialEndsAt: true,
+              },
+            }),
+          `business-settings:${req.tenantId}`,
+        ),
       20,
     );
     res.json(tenant);

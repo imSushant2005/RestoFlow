@@ -106,7 +106,7 @@ async function ensureUniqueEmployeeCode(base, excludeUserId) {
 }
 const getBusinessSettings = async (req, res) => {
     try {
-        const tenant = await (0, cache_service_1.withCache)(`tenant:${req.tenantId}:business-settings`, () => prisma_1.prisma.tenant.findUnique({
+        const tenant = await (0, cache_service_1.withCache)(`tenant:${req.tenantId}:business-settings`, () => (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.tenant.findUnique({
             where: { id: req.tenantId },
             select: {
                 id: true,
@@ -125,7 +125,7 @@ const getBusinessSettings = async (req, res) => {
                 plan: true,
                 trialEndsAt: true,
             },
-        }), 20);
+        }), `business-settings:${req.tenantId}`), 20);
         res.json(tenant);
     }
     catch (error) {

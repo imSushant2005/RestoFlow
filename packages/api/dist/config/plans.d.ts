@@ -8,6 +8,8 @@ export type PlanLimit = {
     hasWaiterRole: boolean;
     hasWaiterApp: boolean;
     hasAdvancedAnalytics: boolean;
+    hasAssistedDirectBill: boolean;
+    hasAssistedCustomerLookup: boolean;
     maxFloors: number;
 };
 export type CanonicalPlan = 'MINI' | 'CAFE' | 'DINEPRO' | 'PREMIUM';

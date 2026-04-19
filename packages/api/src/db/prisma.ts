@@ -113,6 +113,7 @@ export async function withPrismaRetry<T>(
       );
 
       try {
+        await disconnectPrisma();
         await ensurePrismaConnected();
       } catch {}
 

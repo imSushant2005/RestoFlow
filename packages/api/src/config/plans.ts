@@ -8,6 +8,8 @@ export type PlanLimit = {
   hasWaiterRole: boolean;
   hasWaiterApp: boolean;
   hasAdvancedAnalytics: boolean;
+  hasAssistedDirectBill: boolean;
+  hasAssistedCustomerLookup: boolean;
   maxFloors: number;
 };
 
@@ -17,13 +19,15 @@ const CANONICAL_PLAN_LIMITS: Record<CanonicalPlan, PlanLimit> = {
   MINI: {
     items: 50,
     tables: 3,
-    staff: 1, // Only Owner
+    staff: 1,
     price: 599,
     name: 'Mini',
     hasKDS: false,
     hasWaiterRole: true,
     hasWaiterApp: false,
     hasAdvancedAnalytics: true,
+    hasAssistedDirectBill: true,
+    hasAssistedCustomerLookup: true,
     maxFloors: 1,
   },
   CAFE: {
@@ -31,11 +35,13 @@ const CANONICAL_PLAN_LIMITS: Record<CanonicalPlan, PlanLimit> = {
     tables: 9,
     staff: 5,
     price: 1299,
-    name: 'Café',
+    name: 'Cafe',
     hasKDS: true,
     hasWaiterRole: true,
-    hasWaiterApp: false, // Waiter role supported, but not the full app
+    hasWaiterApp: false,
     hasAdvancedAnalytics: false,
+    hasAssistedDirectBill: true,
+    hasAssistedCustomerLookup: false,
     maxFloors: 1,
   },
   DINEPRO: {
@@ -48,6 +54,8 @@ const CANONICAL_PLAN_LIMITS: Record<CanonicalPlan, PlanLimit> = {
     hasWaiterRole: true,
     hasWaiterApp: true,
     hasAdvancedAnalytics: true,
+    hasAssistedDirectBill: true,
+    hasAssistedCustomerLookup: true,
     maxFloors: 2,
   },
   PREMIUM: {
@@ -60,6 +68,8 @@ const CANONICAL_PLAN_LIMITS: Record<CanonicalPlan, PlanLimit> = {
     hasWaiterRole: true,
     hasWaiterApp: true,
     hasAdvancedAnalytics: true,
+    hasAssistedDirectBill: true,
+    hasAssistedCustomerLookup: true,
     maxFloors: 10,
   },
 };

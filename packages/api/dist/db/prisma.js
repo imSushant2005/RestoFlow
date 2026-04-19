@@ -89,6 +89,7 @@ async function withPrismaRetry(operation, label = 'prisma-operation', maxRetries
             const waitMs = PRISMA_RETRY_BACKOFF_MS * 2 ** (attempt - 1);
             console.warn(`[PRISMA_RETRY] ${label} attempt ${attempt}/${maxRetries} after transient error:`, error instanceof Error ? error.message : String(error));
             try {
+                await disconnectPrisma();
                 await ensurePrismaConnected();
             }
             catch { }

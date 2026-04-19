@@ -59,6 +59,8 @@ export function SessionTracker() {
   const [socketStatus, setSocketStatus] = useState<SocketStatus>('connecting');
 
   const refreshTimerRef = useRef<number | null>(null);
+  const lastFetchStartedAtRef = useRef(0);
+  const fetchInFlightRef = useRef(false);
   const sessionId =
     routeSessionId || getActiveSessionForTenant(tenantSlug);
   const sessionAccessToken = getSessionAccessTokenForTenant(tenantSlug);
@@ -70,13 +72,20 @@ export function SessionTracker() {
       return;
     }
 
+    if (fetchInFlightRef.current) {
+      return;
+    }
+
     try {
+      fetchInFlightRef.current = true;
+      lastFetchStartedAtRef.current = Date.now();
       const res = await publicApi.get(`/${tenantSlug}/sessions/${sessionId}`);
       setSession(withSessionMetrics(res.data));
     } catch (err) {
       console.error('[SESSION_FETCH_ERROR]', err);
       setSession(null);
     } finally {
+      fetchInFlightRef.current = false;
       setLoading(false);
     }
   }, [sessionId, tenantSlug]);
@@ -85,6 +94,7 @@ export function SessionTracker() {
     (delayMs = 220) => {
       if (!sessionId || !tenantSlug) return;
       if (refreshTimerRef.current != null) return;
+      if (Date.now() - lastFetchStartedAtRef.current < 1500) return;
       refreshTimerRef.current = window.setTimeout(() => {
         refreshTimerRef.current = null;
         void fetchSession();
@@ -138,7 +148,7 @@ export function SessionTracker() {
 
     socket.on('connect', () => {
       setSocketStatus('connected');
-      scheduleRefresh(80);
+      scheduleRefresh(180);
     });
 
     socket.on('connect_error', () => {

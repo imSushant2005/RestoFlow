@@ -8,6 +8,7 @@ import { transitionOrderStatus, ConflictError } from '../services/order.service'
 import { generateOrderNumber } from '../services/order-number.service';
 import { buildServerPricedOrderPayload } from '../services/order-payload.service';
 import { cacheKeys } from '../utils/cache-keys';
+import { getPlanLimits } from '../config/plans';
 
 const VALID_ORDER_STATUSES = new Set([
   'NEW',
@@ -588,6 +589,26 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
 
 export const lookupAssistedCustomer = async (req: Request, res: Response) => {
   try {
+    const tenant = await withPrismaRetry(
+      () =>
+        prisma.tenant.findUnique({
+          where: { id: req.tenantId },
+          select: { plan: true },
+        }),
+      `assisted-lookup-plan:${req.tenantId}`,
+    );
+
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+
+    const planLimits = getPlanLimits(tenant.plan);
+    if (!planLimits.hasAssistedCustomerLookup) {
+      return res.status(403).json({
+        error: `The ${planLimits.name} plan does not include assisted customer lookup.`,
+      });
+    }
+
     const phone = normalizePhone(req.query.phone);
     if (phone.length < 10) {
       return res.status(400).json({ error: 'A valid mobile number is required for lookup.' });
@@ -685,6 +706,7 @@ export const createAssistedOrder = async (req: Request, res: Response) => {
       select: {
         id: true,
         slug: true,
+        plan: true,
         businessName: true,
         taxRate: true,
         address: true,
@@ -695,6 +717,13 @@ export const createAssistedOrder = async (req: Request, res: Response) => {
 
     if (!tenant) {
       return res.status(404).json({ error: 'Tenant not found' });
+    }
+
+    const planLimits = getPlanLimits(tenant.plan);
+    if (isDirectBill && !planLimits.hasAssistedDirectBill) {
+      return res.status(403).json({
+        error: `The ${planLimits.name} plan does not support direct bill assisted orders.`,
+      });
     }
 
     const table = requestedTableId

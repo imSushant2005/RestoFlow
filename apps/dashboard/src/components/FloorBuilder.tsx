@@ -360,9 +360,10 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
         onClose={() => setShowClearConfirm(null)}
         onConfirm={async () => {
           try {
-            await api.post(`/sessions/${showClearConfirm.currentSessionId}/complete`, { 
+            await api.post(`/public/${tenantSlug}/sessions/${showClearConfirm.currentSessionId}/complete`, { 
               paymentMethod: 'cash', 
-              shouldClose: true 
+              shouldClose: true,
+              force: true,
             });
             queryClient.invalidateQueries({ queryKey: ['zones'] });
           } catch (err) {

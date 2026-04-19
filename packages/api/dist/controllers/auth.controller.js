@@ -108,13 +108,13 @@ async function issueSessionForUser(res, user) {
         email: user.email,
     });
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_MAX_AGE_MS);
-    await prisma_2.prisma.refreshToken.create({
+    await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.refreshToken.create({
         data: {
             userId: user.id,
             token: tokens.refreshToken,
             expiresAt,
         },
-    });
+    }), `issue-session-refresh-token:${user.id}`);
     issueRefreshCookie(res, tokens.refreshToken);
     return {
         accessToken: tokens.accessToken,
@@ -181,13 +181,13 @@ async function invalidateAuthMeCache(userId, tenantId) {
 }
 async function buildUniqueTenantSlug(tenantName) {
     const base = tenantName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'restaurant';
-    const initial = await prisma_2.prisma.tenant.findUnique({ where: { slug: base }, select: { id: true } });
+    const initial = await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.tenant.findUnique({ where: { slug: base }, select: { id: true } }), `tenant-slug:${base}`);
     if (!initial)
         return base;
     let attempt = 2;
     while (attempt < 10000) {
         const candidate = `${base}-${attempt}`;
-        const existing = await prisma_2.prisma.tenant.findUnique({ where: { slug: candidate }, select: { id: true } });
+        const existing = await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.tenant.findUnique({ where: { slug: candidate }, select: { id: true } }), `tenant-slug:${candidate}`);
         if (!existing)
             return candidate;
         attempt += 1;
@@ -205,10 +205,10 @@ const register = async (req, res) => {
     try {
         const validatedData = registerSchema.parse(req.body);
         const normalizedEmail = normalizeEmail(validatedData.email);
-        const existingUser = await prisma_2.prisma.user.findUnique({
+        const existingUser = await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.user.findUnique({
             where: { email: normalizedEmail },
             select: { id: true },
-        });
+        }), `register-existing-user:${normalizedEmail}`);
         if (existingUser) {
             return res.status(400).json({ error: 'Email already exists' });
         }
@@ -216,7 +216,7 @@ const register = async (req, res) => {
         const resolvedName = validatedData.name || 'Owner';
         const finalTenantName = validatedData.tenantName?.trim() || buildProvisionalWorkspaceName(resolvedName);
         const slug = await buildUniqueTenantSlug(validatedData.tenantName || 'workspace');
-        const result = await prisma_2.prisma.$transaction(async (tx) => {
+        const result = await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.$transaction(async (tx) => {
             const tenant = await tx.tenant.create({
                 data: {
                     businessName: finalTenantName,
@@ -238,7 +238,7 @@ const register = async (req, res) => {
                 },
             });
             return { user, tenant };
-        });
+        }), `register-create:${normalizedEmail}`);
         const session = await issueSessionForUser(res, {
             id: result.user.id,
             tenantId: result.user.tenantId,
@@ -269,7 +269,7 @@ const clerkSync = async (req, res) => {
         const normalizedEmail = normalizeEmail(payload.email);
         const normalizedProvider = payload.authProvider === 'GOOGLE' ? 'GOOGLE' : 'EMAIL';
         const normalizedIntent = payload.intent === 'LOGIN' ? 'LOGIN' : 'SIGNUP';
-        const existingByClerk = await prisma_2.prisma.user.findFirst({
+        const existingByClerk = await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.user.findFirst({
             where: { clerkUserId: payload.clerkUserId },
             select: {
                 id: true,
@@ -282,12 +282,12 @@ const clerkSync = async (req, res) => {
                 securityQuestion: true,
                 preferredLanguage: true,
             },
-        });
+        }), `clerk-sync-user:${payload.clerkUserId}`);
         if (existingByClerk) {
             const session = await issueSessionForUser(res, existingByClerk);
             return res.json({ ...session, synced: true, created: false, linked: false });
         }
-        const existingByEmail = await prisma_2.prisma.user.findUnique({
+        const existingByEmail = await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.user.findUnique({
             where: { email: normalizedEmail },
             select: {
                 id: true,
@@ -301,7 +301,7 @@ const clerkSync = async (req, res) => {
                 preferredLanguage: true,
                 clerkUserId: true,
             },
-        });
+        }), `clerk-sync-email:${normalizedEmail}`);
         if (existingByEmail) {
             if (existingByEmail.clerkUserId && existingByEmail.clerkUserId !== payload.clerkUserId) {
                 return res.status(409).json({
@@ -310,7 +310,7 @@ const clerkSync = async (req, res) => {
             }
             const linkedUser = existingByEmail.clerkUserId === payload.clerkUserId
                 ? existingByEmail
-                : await prisma_2.prisma.user.update({
+                : await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.user.update({
                     where: { id: existingByEmail.id },
                     data: { clerkUserId: payload.clerkUserId },
                     select: {
@@ -324,7 +324,7 @@ const clerkSync = async (req, res) => {
                         securityQuestion: true,
                         preferredLanguage: true,
                     },
-                });
+                }), `clerk-sync-link:${existingByEmail.id}`);
             const session = await issueSessionForUser(res, linkedUser);
             return res.json({ ...session, synced: true, created: false, linked: true });
         }
@@ -341,7 +341,7 @@ const clerkSync = async (req, res) => {
         const localPassword = payload.password ||
             `${normalizedProvider.toLowerCase()}_${(0, crypto_1.randomBytes)(24).toString('base64url')}`;
         const hashedPassword = await (0, hash_1.hashPassword)(localPassword);
-        const created = await prisma_2.prisma.$transaction(async (tx) => {
+        const created = await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.$transaction(async (tx) => {
             const tenant = await tx.tenant.create({
                 data: {
                     businessName: finalTenantName,
@@ -364,7 +364,7 @@ const clerkSync = async (req, res) => {
                 },
             });
             return { user, tenant };
-        });
+        }), `clerk-sync-create:${normalizedEmail}`);
         const session = await issueSessionForUser(res, {
             id: created.user.id,
             tenantId: created.user.tenantId,
@@ -427,14 +427,34 @@ const login = async (req, res) => {
         }
         const normalized = normalizeIdentifier(rawIdentifier);
         const normalizedEmployeeCode = normalizeEmployeeCode(rawIdentifier);
-        const user = await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.user.findFirst({
-            where: {
-                OR: [
-                    { email: normalized },
-                    { employeeCode: normalizedEmployeeCode },
-                ],
-            },
-        }), 'login-user-lookup');
+        const loginUserSelect = {
+            id: true,
+            tenantId: true,
+            role: true,
+            email: true,
+            name: true,
+            employeeCode: true,
+            mustChangePassword: true,
+            securityQuestion: true,
+            preferredLanguage: true,
+            passwordHash: true,
+        };
+        const isEmailLogin = rawIdentifier.includes('@');
+        let user = await (0, prisma_2.withPrismaRetry)(() => isEmailLogin
+            ? prisma_2.prisma.user.findUnique({
+                where: { email: normalized },
+                select: loginUserSelect,
+            })
+            : prisma_2.prisma.user.findFirst({
+                where: { employeeCode: normalizedEmployeeCode },
+                select: loginUserSelect,
+            }), 'login-user-lookup');
+        if (!user && !isEmailLogin) {
+            user = await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.user.findUnique({
+                where: { email: normalized },
+                select: loginUserSelect,
+            }), 'login-user-email-fallback');
+        }
         if (!user) {
             return res.status(401).json({ error: 'User not found. Please create an account first from the signup page.' });
         }
@@ -455,10 +475,10 @@ const login = async (req, res) => {
                 securityQuestion: user.securityQuestion,
                 preferredLanguage: user.preferredLanguage,
             }),
-            prisma_2.prisma.user.update({
+            (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.user.update({
                 where: { id: user.id },
                 data: { lastLoginAt: new Date() },
-            }).catch(err => console.error('[NON_CRITICAL_UPDATE_FAILED]:', err))
+            }), `login-last-login:${user.id}`).catch(err => console.error('[NON_CRITICAL_UPDATE_FAILED]:', err))
         ]);
         return res.json(session);
     }
@@ -662,7 +682,7 @@ const getMe = async (req, res) => {
         const userId = req.user.id;
         const tenantId = req.tenantId;
         const includeTips = String(req.query.includeTips || '').toLowerCase() === 'true';
-        const user = await (0, cache_service_1.withCache)(cache_keys_1.cacheKeys.authMeUser(userId), () => prisma_2.prisma.user.findUnique({
+        const user = await (0, cache_service_1.withCache)(cache_keys_1.cacheKeys.authMeUser(userId), () => (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.user.findUnique({
             where: { id: userId },
             select: {
                 id: true,
@@ -677,18 +697,18 @@ const getMe = async (req, res) => {
                 avatarUrl: true,
                 isActive: true,
             },
-        }), 15);
+        }), `auth-me-user:${userId}`), 15);
         if (!user || !user.isActive) {
             return res.status(404).json({ error: 'User not found' });
         }
-        const tenant = await (0, cache_service_1.withCache)(cache_keys_1.cacheKeys.authTenantBrief(tenantId), () => prisma_2.prisma.tenant.findUnique({
+        const tenant = await (0, cache_service_1.withCache)(cache_keys_1.cacheKeys.authTenantBrief(tenantId), () => (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.tenant.findUnique({
             where: { id: tenantId },
             select: {
                 id: true,
                 slug: true,
                 businessName: true,
             },
-        }), 60);
+        }), `auth-me-tenant:${tenantId}`), 60);
         const tipsSummary = includeTips ? await buildTipSummaryForUser(user.id) : undefined;
         return res.json({
             tenantId,

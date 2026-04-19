@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
-import { prisma } from '../db/prisma';
+import { prisma, withPrismaRetry } from '../db/prisma';
 
 /**
  * Middleware to authenticate customer JWT tokens.
@@ -21,10 +21,14 @@ export const customerAuth = async (req: Request, res: Response, next: NextFuncti
       tenantSlug?: string | null;
     };
 
-    const customer = await prisma.customer.findUnique({
-      where: { id: decoded.customerId },
-      select: { id: true, isActive: true },
-    });
+    const customer = await withPrismaRetry(
+      () =>
+        prisma.customer.findUnique({
+          where: { id: decoded.customerId },
+          select: { id: true, isActive: true },
+        }),
+      `customer-auth:${decoded.customerId}`,
+    );
 
     if (!customer || !customer.isActive) {
       return res.status(403).json({ error: 'Customer account is inactive' });

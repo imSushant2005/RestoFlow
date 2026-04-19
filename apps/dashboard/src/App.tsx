@@ -51,6 +51,9 @@ const MarketingBillingPage = lazy(() =>
 const ProductPage = lazy(() => import('./pages/ProductPage').then((m) => ({ default: m.ProductPage })));
 const SignupPage = lazy(() => import('./pages/SignupPage').then((m) => ({ default: m.SignupPage })));
 const SetupFlowPage = lazy(() => import('./pages/SetupFlowPage').then((m) => ({ default: m.SetupFlowPage })));
+const ClerkFinalizePage = lazy(() =>
+  import('./pages/ClerkFinalizePage').then((m) => ({ default: m.ClerkFinalizePage })),
+);
 
 // Pre-load notification sounds at module level — avoids creating a new Audio object
 // (and a CDN HTTP request) on every notification.
@@ -239,28 +242,11 @@ function MarketingTermsRoute() {
 
 function PostLoginRedirect({ mustChangePassword }: { mustChangePassword: boolean }) {
   const role = normalizeDashboardRole(localStorage.getItem('userRole'));
-  const shouldCheckWorkspace = FULL_ACCESS_ROLES.has(role);
   const shouldForceSecuritySetup = role === 'OWNER' && mustChangePassword;
-
-  const { data: business, isLoading } = useQuery({
-    queryKey: ['post-login-business'],
-    queryFn: async () => (await api.get('/settings/business')).data,
-    retry: false,
-    staleTime: 1000 * 30,
-    enabled: shouldCheckWorkspace,
-  });
 
   if (role === 'UNKNOWN') {
     clearDashboardAuthStorage();
     return <Navigate to="/login" replace />;
-  }
-
-  if (shouldCheckWorkspace && isLoading) {
-    return <ScreenLoader message="Preparing your workspace..." />;
-  }
-
-  if (shouldCheckWorkspace && business && needsWorkspaceSetup(business)) {
-    return <Navigate to="/setup" replace />;
   }
 
   if (shouldForceSecuritySetup) {
@@ -930,6 +916,14 @@ function App() {
     <Routes>
       <Route path="/admin" element={withScreenFallback(<Admin />, 'Loading admin tools...')} />
       <Route path="/sso-callback" element={clerkConfigured ? <AuthenticateWithRedirectCallback /> : <Navigate to="/login" replace />} />
+      <Route
+        path="/auth/finalize"
+        element={
+          clerkConfigured
+            ? withScreenFallback(<ClerkFinalizePage onLogin={handleLogin} />, 'Completing Google access...')
+            : <Navigate to="/login" replace />
+        }
+      />
 
       <Route path="/" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingHomeRoute />} />
       <Route path="/product" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : <MarketingProductRoute />} />

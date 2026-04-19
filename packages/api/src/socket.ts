@@ -250,7 +250,7 @@ const tenantSlugCache = new BoundedTTLCache<string>(
 
 // Cache validated user IDs for 5 minutes to prevent DB hit on every reconnect
 const socketUserAuthCache = new BoundedTTLCache<boolean>(10_000, 5 * 60 * 1000);
-const socketSessionAuthCache = new BoundedTTLCache<boolean>(20_000, 20 * 1000);
+const socketSessionAuthCache = new BoundedTTLCache<boolean>(20_000, 60 * 1000);
 
 // Debounce presence broadcasts per tenant to prevent reconnect-storm fan-out
 const presenceDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>();

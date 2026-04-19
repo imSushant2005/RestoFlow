@@ -96,7 +96,7 @@ class BoundedTTLCache {
 const tenantSlugCache = new BoundedTTLCache(TENANT_SLUG_CACHE_MAX, TENANT_SLUG_CACHE_TTL_MS);
 // Cache validated user IDs for 5 minutes to prevent DB hit on every reconnect
 const socketUserAuthCache = new BoundedTTLCache(10_000, 5 * 60 * 1000);
-const socketSessionAuthCache = new BoundedTTLCache(20_000, 20 * 1000);
+const socketSessionAuthCache = new BoundedTTLCache(20_000, 60 * 1000);
 // Debounce presence broadcasts per tenant to prevent reconnect-storm fan-out
 const presenceDebounceTimers = new Map();
 function emitTenantPresenceDebounced(tenantId) {

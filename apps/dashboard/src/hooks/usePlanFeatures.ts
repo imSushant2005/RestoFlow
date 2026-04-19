@@ -34,7 +34,7 @@ const PLAN_FEATURES_MAP: Record<PlanTier, PlanFeatures> = {
     maxFloors: 1,
   },
   CAFE: {
-    name: 'Café',
+    name: 'Cafe',
     tables: 9,
     staff: 5,
     hasKDS: true,
@@ -81,7 +81,7 @@ export function usePlanFeatures() {
   const { data: business, isLoading } = useQuery({
     queryKey: ['settings-business'],
     queryFn: async () => (await api.get('/settings/business')).data,
-    staleTime: 1000 * 60 * 5, // 5 minutes cache
+    staleTime: 1000 * 60 * 5,
   });
 
   const plan = (business?.plan?.toUpperCase() || 'MINI') as PlanTier;
@@ -92,8 +92,8 @@ export function usePlanFeatures() {
     features,
     isLoading,
     isTrial: !!business?.trialEndsAt,
-    daysLeft: business?.trialEndsAt 
+    daysLeft: business?.trialEndsAt
       ? Math.ceil((new Date(business.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-      : 0
+      : 0,
   };
 }

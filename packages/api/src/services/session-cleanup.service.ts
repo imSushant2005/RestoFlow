@@ -102,14 +102,9 @@ export async function cleanupStaleSessions(expectedStartedAtMs?: number) {
         tenantId: true,
         tableId: true,
         openedAt: true,
-        _count: {
-          select: {
-            orders: {
-              where: { status: { notIn: ['CANCELLED'] } },
-            },
-          },
-        },
       },
+      orderBy: { openedAt: 'asc' },
+      take: 250,
     });
 
     if (staleSessions.length === 0) {
@@ -120,32 +115,6 @@ export async function cleanupStaleSessions(expectedStartedAtMs?: number) {
     logger.info(`[SESSION_CLEANUP] Evaluating ${staleSessions.length} stale sessions`);
 
     for (const session of staleSessions) {
-      const orderCount = session._count.orders;
-
-      if (orderCount > 0) {
-        skipped++;
-        const ageHours = ((Date.now() - session.openedAt.getTime()) / 3_600_000).toFixed(1);
-        logger.warn(
-          { sessionId: session.id, tenantId: session.tenantId, orderCount, ageHours },
-          `[SESSION_CLEANUP] SKIPPED ${session.id} - has ${orderCount} live orders, open for ${ageHours}h. Manual closure required.`,
-        );
-        Sentry.captureMessage(
-          `[RestoFlow] Long-running session ${session.id} needs attention (${ageHours}h, ${orderCount} orders)`,
-          {
-            level: 'warning',
-            extra: {
-              sessionId: session.id,
-              tenantId: session.tenantId,
-              tableId: session.tableId,
-              openedAt: session.openedAt.toISOString(),
-              orderCount,
-              ageHours,
-            },
-          },
-        );
-        continue;
-      }
-
       try {
         const outcome = await prisma.$transaction(async (tx) => {
           await lockSessionForMutation(tx, session.id);

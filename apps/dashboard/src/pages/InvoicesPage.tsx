@@ -43,21 +43,33 @@ export function InvoicesPage() {
   const queryClient = useQueryClient();
   const [selectedInvoice, setSelectedInvoice] = useState<OrderRow | null>(null);
 
+  const { data: business } = useQuery({
+    queryKey: ['settings-business'],
+    queryFn: async () => (await api.get('/settings/business')).data,
+    retry: false,
+  });
+
   const completeSessionMutation = useMutation({
-    mutationFn: async ({ sessionId, paymentMethod, shouldClose }: { sessionId: string; paymentMethod: 'cash' | 'online'; shouldClose: boolean }) => {
-      const res = await api.post(`/sessions/${sessionId}/complete`, { paymentMethod, shouldClose });
+    mutationFn: async ({
+      sessionId,
+      paymentMethod,
+      shouldClose,
+    }: {
+      sessionId: string;
+      paymentMethod: 'cash' | 'online';
+      shouldClose: boolean;
+    }) => {
+      const tenantSlug = typeof business?.slug === 'string' ? business.slug.trim() : '';
+      if (!tenantSlug) {
+        throw new Error('Tenant slug missing. Complete Business Profile setup first.');
+      }
+      const res = await api.post(`/public/${tenantSlug}/sessions/${sessionId}/complete`, { paymentMethod, shouldClose });
       return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
       queryClient.invalidateQueries({ queryKey: ['live-orders'] });
     },
-  });
-
-  const { data: business } = useQuery({
-    queryKey: ['settings-business'],
-    queryFn: async () => (await api.get('/settings/business')).data,
-    retry: false,
   });
 
   const { data: historyResponse, isLoading } = useQuery({

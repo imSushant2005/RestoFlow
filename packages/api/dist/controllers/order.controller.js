@@ -9,6 +9,7 @@ const order_service_1 = require("../services/order.service");
 const order_number_service_1 = require("../services/order-number.service");
 const order_payload_service_1 = require("../services/order-payload.service");
 const cache_keys_1 = require("../utils/cache-keys");
+const plans_1 = require("../config/plans");
 const VALID_ORDER_STATUSES = new Set([
     'NEW',
     'ACCEPTED',
@@ -499,6 +500,19 @@ const updateOrderStatus = async (req, res) => {
 exports.updateOrderStatus = updateOrderStatus;
 const lookupAssistedCustomer = async (req, res) => {
     try {
+        const tenant = await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.tenant.findUnique({
+            where: { id: req.tenantId },
+            select: { plan: true },
+        }), `assisted-lookup-plan:${req.tenantId}`);
+        if (!tenant) {
+            return res.status(404).json({ error: 'Tenant not found' });
+        }
+        const planLimits = (0, plans_1.getPlanLimits)(tenant.plan);
+        if (!planLimits.hasAssistedCustomerLookup) {
+            return res.status(403).json({
+                error: `The ${planLimits.name} plan does not include assisted customer lookup.`,
+            });
+        }
         const phone = normalizePhone(req.query.phone);
         if (phone.length < 10) {
             return res.status(400).json({ error: 'A valid mobile number is required for lookup.' });
@@ -587,6 +601,7 @@ const createAssistedOrder = async (req, res) => {
             select: {
                 id: true,
                 slug: true,
+                plan: true,
                 businessName: true,
                 taxRate: true,
                 address: true,
@@ -596,6 +611,12 @@ const createAssistedOrder = async (req, res) => {
         });
         if (!tenant) {
             return res.status(404).json({ error: 'Tenant not found' });
+        }
+        const planLimits = (0, plans_1.getPlanLimits)(tenant.plan);
+        if (isDirectBill && !planLimits.hasAssistedDirectBill) {
+            return res.status(403).json({
+                error: `The ${planLimits.name} plan does not support direct bill assisted orders.`,
+            });
         }
         const table = requestedTableId
             ? await prisma_1.prisma.table.findFirst({

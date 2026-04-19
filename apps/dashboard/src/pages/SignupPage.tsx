@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { FormEvent, useCallback, useState } from 'react';
 import { CheckCircle2, Loader2, Mail, ShieldCheck } from 'lucide-react';
 import { useSignUp, useUser } from '@clerk/clerk-react';
 import { AuthFrame } from '../components/AuthFrame';
@@ -7,7 +7,6 @@ import { api } from '../lib/api';
 import {
   getClerkDisplayName,
   getClerkPrimaryEmail,
-  hasRecentManualLogout,
   parseApiError,
   parseClerkError,
   persistSession,
@@ -23,7 +22,6 @@ export function SignupPage({ onLogin }: SignupPageProps) {
   );
   const { isLoaded: isSignUpLoaded, signUp, setActive } = useSignUp();
   const { isLoaded: isUserLoaded, user } = useUser();
-  const syncInFlight = useRef(false);
 
   const [name, setName] = useState('');
   const [restaurantName, setRestaurantName] = useState('');
@@ -57,26 +55,6 @@ export function SignupPage({ onLogin }: SignupPageProps) {
     });
     persistSession(res.data, onLogin);
   }, [onLogin]);
-
-  useEffect(() => {
-    if (!clerkEnabled || !isUserLoaded || !user) return;
-    if (localStorage.getItem('accessToken')) return;
-    if (syncInFlight.current) return;
-    if (hasRecentManualLogout()) return;
-    if (!getClerkPrimaryEmail(user)) return;
-
-    syncInFlight.current = true;
-    setAuthLoading(true);
-    setAuthError('');
-    syncGoogleSignup(user)
-      .catch((err: any) => {
-        setAuthError(parseGoogleSyncError(err, 'Unable to continue with Google signup.'));
-      })
-      .finally(() => {
-        syncInFlight.current = false;
-        setAuthLoading(false);
-      });
-  }, [clerkEnabled, isUserLoaded, syncGoogleSignup, user]);
 
   const signupSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -199,7 +177,7 @@ export function SignupPage({ onLogin }: SignupPageProps) {
       await signUp.authenticateWithRedirect({
         strategy: 'oauth_google',
         redirectUrl: `${window.location.origin}/sso-callback`,
-        redirectUrlComplete: `${window.location.origin}/signup`,
+        redirectUrlComplete: `${window.location.origin}/auth/finalize?flow=signup`,
         continueSignUp: true,
       });
     } catch (err: any) {

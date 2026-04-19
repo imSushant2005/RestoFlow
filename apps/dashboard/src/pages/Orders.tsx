@@ -895,16 +895,18 @@ export function Orders({ role }: { role?: string }) {
       sessionId,
       paymentMethod,
       shouldClose,
+      force = false,
     }: {
       sessionId: string;
       paymentMethod: SessionPaymentMethod;
       shouldClose?: boolean;
+      force?: boolean;
     }) => {
       const slug = await resolveTenantSlug();
       if (!slug) {
         throw new Error('Tenant slug missing. Complete Business Profile setup first.');
       }
-      return api.post(`/public/${slug}/sessions/${sessionId}/complete`, { paymentMethod, shouldClose });
+      return api.post(`/public/${slug}/sessions/${sessionId}/complete`, { paymentMethod, shouldClose, force });
     },
     onSuccess: refreshOperationalData,
   });
@@ -977,7 +979,7 @@ export function Orders({ role }: { role?: string }) {
     const ensureBillFirst = options?.ensureBillFirst ?? false;
     const force = options?.force ?? false;
 
-    const settle = () => completeSessionMutation.mutateAsync({ sessionId, paymentMethod, shouldClose });
+    const settle = () => completeSessionMutation.mutateAsync({ sessionId, paymentMethod, shouldClose, force });
 
     try {
       if (ensureBillFirst) {
@@ -1077,6 +1079,7 @@ export function Orders({ role }: { role?: string }) {
         sessionId: order.diningSessionId,
         paymentMethod,
         shouldClose,
+        force: false,
       });
 
       if (!shouldClose) {

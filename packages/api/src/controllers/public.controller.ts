@@ -327,34 +327,42 @@ export const createOrder = async (req: Request, res: Response) => {
     }
 
     let resolvedSession = incomingSessionToken
-      ? await prisma.diningSession.findFirst({
-          where: {
-            id: incomingSessionToken,
-            tenantId: tenant.id,
-            sessionStatus: { in: ORDERABLE_SESSION_STATUSES as any },
-          },
-          select: {
-            id: true,
-            tableId: true,
-            customerId: true,
-            sessionStatus: true,
-          },
-        })
+      ? await withPrismaRetry(
+          () =>
+            prisma.diningSession.findFirst({
+              where: {
+                id: incomingSessionToken,
+                tenantId: tenant.id,
+                sessionStatus: { in: ORDERABLE_SESSION_STATUSES as any },
+              },
+              select: {
+                id: true,
+                tableId: true,
+                customerId: true,
+                sessionStatus: true,
+              },
+            }),
+          `public-create-order-session:${tenant.id}:${incomingSessionToken}`,
+        )
       : null;
 
     const staleSession =
       incomingSessionToken && !resolvedSession
-        ? await prisma.diningSession.findFirst({
-            where: {
-              id: incomingSessionToken,
-              tenantId: tenant.id,
-            },
-            select: {
-              id: true,
-              tableId: true,
-              sessionStatus: true,
-            },
-          })
+        ? await withPrismaRetry(
+            () =>
+              prisma.diningSession.findFirst({
+                where: {
+                  id: incomingSessionToken,
+                  tenantId: tenant.id,
+                },
+                select: {
+                  id: true,
+                  tableId: true,
+                  sessionStatus: true,
+                },
+              }),
+            `public-create-order-stale-session:${tenant.id}:${incomingSessionToken}`,
+          )
         : null;
 
     if (!safeTableId && staleSession?.tableId) {
@@ -373,20 +381,24 @@ export const createOrder = async (req: Request, res: Response) => {
     }
 
     if (!resolvedSession && safeTableId) {
-      const activeTableSession = await prisma.diningSession.findFirst({
-        where: {
-          tenantId: tenant.id,
-          tableId: safeTableId,
-          sessionStatus: { in: ORDERABLE_SESSION_STATUSES as any },
-        },
-        orderBy: { openedAt: 'desc' },
-        select: {
-          id: true,
-          tableId: true,
-          customerId: true,
-          sessionStatus: true,
-        },
-      });
+      const activeTableSession = await withPrismaRetry(
+        () =>
+          prisma.diningSession.findFirst({
+            where: {
+              tenantId: tenant.id,
+              tableId: safeTableId,
+              sessionStatus: { in: ORDERABLE_SESSION_STATUSES as any },
+            },
+            orderBy: { openedAt: 'desc' },
+            select: {
+              id: true,
+              tableId: true,
+              customerId: true,
+              sessionStatus: true,
+            },
+          }),
+        `public-create-order-active-table-session:${tenant.id}:${safeTableId}`,
+      );
 
       if (activeTableSession) {
         authorizeSessionAccess(req, {
@@ -721,10 +733,14 @@ export const getSessionOrders = async (req: Request, res: Response) => {
     const { tenantSlug, sessionToken: sessionId } = req.params;
     const tenant = await resolveTenantBySlug(tenantSlug);
 
-    const session = await prisma.diningSession.findFirst({
-      where: { id: sessionId, tenantId: tenant.id },
-      select: { id: true, customerId: true },
-    });
+    const session = await withPrismaRetry(
+      () =>
+        prisma.diningSession.findFirst({
+          where: { id: sessionId, tenantId: tenant.id },
+          select: { id: true, customerId: true },
+        }),
+      `public-session-orders-session:${tenant.id}:${sessionId}`,
+    );
 
     if (!session) return res.status(404).json({ error: 'Session not found' });
     authorizeSessionAccess(req, {

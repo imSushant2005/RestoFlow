@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { FormEvent, useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, Lock, LogIn, ShieldCheck } from 'lucide-react';
 import { useSignIn, useUser } from '@clerk/clerk-react';
@@ -8,7 +8,6 @@ import { api } from '../lib/api';
 import {
   getClerkDisplayName,
   getClerkPrimaryEmail,
-  hasRecentManualLogout,
   parseApiError,
   parseClerkError,
   persistSession,
@@ -26,7 +25,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   );
   const { isLoaded: isSignInLoaded, signIn } = useSignIn();
   const { isLoaded: isUserLoaded, user } = useUser();
-  const syncInFlight = useRef(false);
 
   const rememberedIdentifier = localStorage.getItem(REMEMBER_KEY) || '';
   const [identifier, setIdentifier] = useState(rememberedIdentifier);
@@ -65,26 +63,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     });
     persistSession(res.data, onLogin);
   }, [onLogin]);
-
-  useEffect(() => {
-    if (!clerkEnabled || !isUserLoaded || !user) return;
-    if (localStorage.getItem('accessToken')) return;
-    if (syncInFlight.current) return;
-    if (hasRecentManualLogout()) return;
-    if (!getClerkPrimaryEmail(user)) return;
-
-    syncInFlight.current = true;
-    setAuthLoading(true);
-    setAuthError('');
-    syncGoogleLogin(user)
-      .catch((err: any) => {
-        setAuthError(parseGoogleSyncError(err, 'Unable to continue with Google login.'));
-      })
-      .finally(() => {
-        syncInFlight.current = false;
-        setAuthLoading(false);
-      });
-  }, [clerkEnabled, isUserLoaded, syncGoogleLogin, user]);
 
   const loginSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -141,7 +119,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       await signIn.authenticateWithRedirect({
         strategy: 'oauth_google',
         redirectUrl: `${window.location.origin}/sso-callback`,
-        redirectUrlComplete: `${window.location.origin}/login`,
+        redirectUrlComplete: `${window.location.origin}/auth/finalize?flow=login`,
         continueSignIn: true,
       });
     } catch (err: any) {

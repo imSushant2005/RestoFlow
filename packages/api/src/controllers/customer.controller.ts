@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { prisma } from '../db/prisma';
+import { prisma, withPrismaRetry } from '../db/prisma';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 
@@ -33,24 +33,41 @@ export const login = async (req: Request, res: Response) => {
     // Optimization: Parallelize tenant lookup and customer identification
     const [customer, tenant] = await Promise.all([
       (async () => {
-        let c = await prisma.customer.findUnique({ where: { phone } });
+        let c = await withPrismaRetry(
+          () => prisma.customer.findUnique({ where: { phone } }),
+          `customer-login-find:${phone}`,
+        );
         if (c) {
           if (!c.isActive) {
             throw new Error('CUSTOMER_DEACTIVATED');
           }
-          return prisma.customer.update({
-            where: { id: c.id },
-            data: { lastSeenAt: new Date(), ...(name && { name }) },
-          });
+          return withPrismaRetry(
+            () =>
+              prisma.customer.update({
+                where: { id: c.id },
+                data: { lastSeenAt: new Date(), ...(name && { name }) },
+              }),
+            `customer-login-touch:${c.id}`,
+          );
         }
-        return prisma.customer.create({
-          data: { phone, name: name || null },
-        });
+        return withPrismaRetry(
+          () =>
+            prisma.customer.create({
+              data: { phone, name: name || null },
+            }),
+          `customer-login-create:${phone}`,
+        );
       })(),
-      tenantSlug ? prisma.tenant.findUnique({
-        where: { slug: tenantSlug.trim() },
-        select: { id: true },
-      }) : Promise.resolve(null)
+      tenantSlug
+        ? withPrismaRetry(
+            () =>
+              prisma.tenant.findUnique({
+                where: { slug: tenantSlug.trim() },
+                select: { id: true },
+              }),
+            `customer-login-tenant:${tenantSlug.trim()}`,
+          )
+        : Promise.resolve(null)
     ]);
 
     if (tenantSlug && !tenant) {

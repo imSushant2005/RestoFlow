@@ -219,7 +219,7 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
           return;
         }
         navigate(`/order/${tenantSlug}/status`);
-      }, 1800);
+      }, 650);
     } catch (error: any) {
       if (!navigator.onLine || error?.message === 'Network Error') {
         const queue: any[] = (await get('offline_orders')) || [];
