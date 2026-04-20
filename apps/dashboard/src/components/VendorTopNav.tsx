@@ -15,6 +15,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { normalizePlanTier } from '../hooks/usePlanFeatures';
 import { getCustomerAppUrl } from '../lib/network';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -147,7 +148,7 @@ export function VendorTopNav({
   const notificationRef = useRef<HTMLDivElement | null>(null);
   const headerLabel = ROUTE_LABELS[path] || 'Overview';
   const formattedNow = format(now, 'MMM d, yyyy | h:mm a');
-  const planName = (billing?.plan || business?.plan || 'FREE').toUpperCase();
+  const planName = normalizePlanTier(billing?.plan || business?.plan || 'MINI');
 
   const { data: authMe } = useQuery<AuthMeResponse>({
     queryKey: ['auth-me'],

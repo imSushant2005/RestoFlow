@@ -139,7 +139,7 @@ const createMenuItem = async (req, res) => {
         const count = await prisma_1.prisma.menuItem.count({ where: { tenantId: req.tenantId } });
         const planLimits = (0, plans_1.getPlanLimits)(tenant.plan);
         if (count >= planLimits.items) {
-            return res.status(403).json({ error: `Plan limit reached. Your ${tenant.plan} plan allows up to ${planLimits.items} menu items.` });
+            return res.status(403).json({ error: `Plan limit reached. Your ${(0, plans_1.normalizePlan)(tenant.plan)} plan allows up to ${planLimits.items} menu items.` });
         }
         const tags = Array.isArray(dietaryTags) ? dietaryTags : [];
         const isVeg = tags.includes('VEG') || tags.includes('VEGETARIAN');

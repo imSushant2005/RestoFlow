@@ -17,10 +17,10 @@ const razorpay = hasRazorpayConfig
 
 // Razorpay amounts use paise.
 const PLAN_PRICING = {
-  MINI: 599 * 100,
-  CAFE: 1299 * 100,
-  DINEPRO: 2999 * 100,
-  PREMIUM: 6999 * 100,
+  MINI: 799 * 100,
+  CAFE: 1599 * 100,
+  DINEPRO: 3499 * 100,
+  PREMIUM: 6499 * 100,
 } as const;
 
 export const createSubscriptionOrder = async (req: Request, res: Response) => {

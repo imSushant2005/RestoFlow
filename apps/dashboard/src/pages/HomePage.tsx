@@ -31,7 +31,7 @@ export function HomePage({ onLoginClick, onSignupClick, onContactClick }: HomePa
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <button onClick={onSignupClick} className="inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-sm font-black text-white" style={{ background: 'var(--brand)' }}>
-                Create Workspace
+                Start 30-Day Trial
                 <ArrowRight size={16} />
               </button>
               <Link to="/demo" className="rounded-full px-6 py-3.5 text-sm font-black" style={{ border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)' }}>
@@ -39,12 +39,16 @@ export function HomePage({ onLoginClick, onSignupClick, onContactClick }: HomePa
               </Link>
             </div>
             <div className="mt-8 flex flex-wrap gap-2">
-              {['Customer ordering that feels trustworthy', 'Live kitchen and waiter coordination', 'GST-aware billing and settlement'].map((chip) => (
+              {['30-day founder-led pilot', 'Live kitchen and waiter coordination', 'GST-aware billing and settlement'].map((chip) => (
                 <span key={chip} className="rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em]" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-2)' }}>
                   {chip}
                 </span>
               ))}
             </div>
+            <p className="mt-5 max-w-2xl text-sm leading-7" style={{ color: 'var(--text-3)' }}>
+              RestoFlow manages ordering, session flow, and bill generation. Guests still pay the restaurant directly by
+              cash, UPI, card, or the venue&apos;s existing collection method.
+            </p>
           </div>
 
           <div className="grid gap-4">

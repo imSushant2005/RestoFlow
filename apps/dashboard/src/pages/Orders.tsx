@@ -514,6 +514,7 @@ const PipelineCard = memo(({
                   order.orderType === 'TAKEAWAY' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' :
                   order.orderType === 'ZOMATO' ? 'bg-red-600/20 text-red-400 border border-red-500/30' :
                   order.orderType === 'SWIGGY' ? 'bg-orange-600/20 text-orange-400 border border-orange-500/30' :
+                  order.orderType === 'ROAMING' ? 'bg-violet-600/20 text-violet-400 border border-violet-500/30' :
                   'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
                 }`}
                 title={order.orderNumber || `T-${asOrderCode(order?.id)}`}
@@ -526,6 +527,9 @@ const PipelineCard = memo(({
               {order.orderType === 'SWIGGY' && (
                 <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-orange-600/10 text-orange-500 uppercase tracking-widest border border-orange-500/20">SWIGGY</span>
               )}
+              {order.orderType === 'ROAMING' && (
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-violet-600/10 text-violet-400 uppercase tracking-widest border border-violet-500/20">ROAMING</span>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {order.table?.name ? (
@@ -537,7 +541,15 @@ const PipelineCard = memo(({
                 <div className="flex items-center gap-1">
                   <ShoppingBag size={10} className="text-blue-400" />
                   <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest leading-none">
-                    {order.orderType === 'TAKEAWAY' ? 'Takeaway' : order.orderType === 'ZOMATO' ? 'Zomato Delivery' : order.orderType === 'SWIGGY' ? 'Swiggy Delivery' : 'Quick Order'}
+                    {order.orderType === 'TAKEAWAY'
+                      ? 'Takeaway'
+                      : order.orderType === 'ZOMATO'
+                        ? 'Zomato Delivery'
+                        : order.orderType === 'SWIGGY'
+                          ? 'Swiggy Delivery'
+                          : order.orderType === 'ROAMING'
+                            ? 'Roaming Order'
+                            : 'Quick Order'}
                   </span>
                 </div>
               )}
@@ -606,7 +618,7 @@ const PipelineCard = memo(({
                     <button
                       onClick={(e) => { 
                         e.stopPropagation(); 
-                        onUpdateStatus(order.id, (plan === 'MINI' || !hasKDS) ? 'READY' : 'ACCEPTED'); 
+                        onUpdateStatus(order.id, (plan !== 'MINI' && !hasKDS) ? 'READY' : 'ACCEPTED'); 
                       }}
                       disabled={isStatusPending}
                       className={`col-span-3 rounded-xl py-3 text-xs font-black text-white transition-all active:scale-[0.97] disabled:opacity-50 ${plan === 'MINI' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20' : 'bg-blue-600 hover:bg-blue-500'}`}

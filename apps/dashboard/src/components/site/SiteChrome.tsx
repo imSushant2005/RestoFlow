@@ -103,8 +103,8 @@ export function SiteChrome({ children, onLoginClick, onSignupClick, onContactCli
                 className="inline-flex items-center gap-2 rounded-full px-4 py-2 sm:px-5 sm:py-2.5 text-xs sm:text-sm font-black text-white shadow-xl shadow-blue-500/20 transition-all hover:brightness-110 active:scale-95 whitespace-nowrap"
                 style={{ background: 'var(--brand)' }}
               >
-                <span className="hidden sm:inline">Start free</span>
-                <span className="sm:hidden text-[10px] uppercase tracking-wider">Join</span>
+                <span className="hidden sm:inline">Start 30-Day Trial</span>
+                <span className="sm:hidden text-[10px] uppercase tracking-wider">Trial</span>
                 <ArrowRight size={14} />
               </button>
             </div>
@@ -131,15 +131,15 @@ export function SiteChrome({ children, onLoginClick, onSignupClick, onContactCli
               <div className="h-8 w-8 rounded-xl flex items-center justify-center text-white" style={{ background: 'var(--brand)' }}>
                 <UtensilsCrossed size={14} />
               </div>
-              <div>
-                <p className="text-sm font-black tracking-tight leading-none" style={{ color: 'var(--text-1)' }}>
-                  RestoFlow
-                </p>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#5bc0be]" style={{ color: 'var(--brand)' }}>
-                  PREMIUM
-                </p>
+                <div>
+                  <p className="text-sm font-black tracking-tight leading-none" style={{ color: 'var(--text-1)' }}>
+                    RestoFlow
+                  </p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#5bc0be]" style={{ color: 'var(--brand)' }}>
+                    Founder-Led Pilot
+                  </p>
+                </div>
               </div>
-            </div>
             <button
               type="button"
               onClick={() => setMobileNavOpen(false)}
@@ -221,7 +221,7 @@ export function SiteChrome({ children, onLoginClick, onSignupClick, onContactCli
               className="w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition-all active:scale-[0.98]"
               style={{ background: 'var(--brand)' }}
             >
-              Start RestoFlow Free
+              Start 30-Day Trial
               <ArrowRight size={14} />
             </button>
           </div>

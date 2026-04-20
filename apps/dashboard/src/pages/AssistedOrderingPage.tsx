@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { usePlanFeatures } from '../hooks/usePlanFeatures';
 import { ArrowRight, BadgeCheck, Phone, ReceiptText, RefreshCw, Search, ShoppingBag, Sparkles, Users, X } from 'lucide-react';
@@ -240,7 +240,7 @@ export function AssistedOrderingPage() {
   const [note, setNote] = useState('');
   const [seat, setSeat] = useState('');
   const [guestCount, setGuestCount] = useState(1);
-  const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'ZOMATO' | 'SWIGGY'>('TAKEAWAY');
+  const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'ROAMING'>('TAKEAWAY');
   const [selectedTableId, setSelectedTableId] = useState('');
   const [fulfillmentMode, setFulfillmentMode] = useState<AssistedMode>('SEND_TO_KITCHEN');
   const [paymentPreset, setPaymentPreset] = useState<'UNPAID' | 'cash' | 'upi' | 'card' | 'online'>('UNPAID');
@@ -360,6 +360,14 @@ export function AssistedOrderingPage() {
   );
   const previewTotal = previewSubtotal + previewTax;
   const billUrl = result?.billPath ? `${getCustomerAppUrl()}${result.billPath}` : '';
+  const canUseDirectBill = features.hasAssistedDirectBill && orderType !== 'DINE_IN';
+
+  useEffect(() => {
+    if (orderType === 'DINE_IN' && fulfillmentMode === 'DIRECT_BILL') {
+      setFulfillmentMode('SEND_TO_KITCHEN');
+      setPaymentPreset('UNPAID');
+    }
+  }, [fulfillmentMode, orderType]);
 
   const addSimpleItem = (item: any) => {
     const basePrice = readPrice(item?.price);
@@ -492,17 +500,19 @@ export function AssistedOrderingPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (features.hasAssistedDirectBill) {
+                        if (orderType === 'DINE_IN') {
+                          window.alert('Dine-in assisted orders need kitchen/service flow first. Send the order to kitchen, then bill the session when service is complete.');
+                        } else if (features.hasAssistedDirectBill) {
                           setFulfillmentMode('DIRECT_BILL');
-                        } else {
+                          return;
                           window.alert(`Direct billing is a ${features.name === 'Mini' ? 'Café' : 'Pro'} feature. Please upgrade your plan.`);
                         }
                       }}
                       className={`rounded-full px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 relative overflow-hidden group ${fulfillmentMode === 'DIRECT_BILL' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 ring-2 ring-blue-500/10' : 'bg-transparent border'}`}
-                      style={fulfillmentMode === 'DIRECT_BILL' ? {} : { borderColor: 'var(--border)', color: 'var(--text-3)', opacity: features.hasAssistedDirectBill ? 1 : 0.6 }}
+                      style={fulfillmentMode === 'DIRECT_BILL' ? {} : { borderColor: 'var(--border)', color: 'var(--text-3)', opacity: canUseDirectBill ? 1 : 0.6 }}
                     >
-                      {!features.hasAssistedDirectBill && <span className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                      Direct bill {!features.hasAssistedDirectBill && <Sparkles size={10} className="inline ml-1 text-blue-500 animate-pulse" />}
+                      {!canUseDirectBill && <span className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                      Direct bill {!canUseDirectBill && <Sparkles size={10} className="inline ml-1 text-blue-500 animate-pulse" />}
                     </button>
                   </div>
 
@@ -537,7 +547,7 @@ export function AssistedOrderingPage() {
                                 if (features.hasAssistedCustomerLookup) {
                                   lookupMutation.mutate(customerPhone);
                                 } else {
-                                  window.alert('Returning guest insights are only available on the DinePro plan.');
+                                  window.alert(`Returning guest lookup is not available on the ${features.name} plan.`);
                                 }
                               }}
                               className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-[0.15em] transition-all relative overflow-hidden group shadow-md ${lookupAllowed && features.hasAssistedCustomerLookup ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-60'}`}
@@ -597,8 +607,7 @@ export function AssistedOrderingPage() {
                           >
                             <option value="TAKEAWAY">Takeaway (T-)</option>
                             <option value="DINE_IN">Dine in (D-)</option>
-                            <option value="ZOMATO">Zomato (Z-)</option>
-                            <option value="SWIGGY">Swiggy (S-)</option>
+                            <option value="ROAMING">Roaming / delivery (R-)</option>
                           </select>
                         </label>
                         <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>

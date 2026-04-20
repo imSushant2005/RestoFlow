@@ -701,6 +701,12 @@ export const createAssistedOrder = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Select a table for dine-in assisted orders.' });
     }
 
+    if (isDirectBill && orderType === 'DINE_IN') {
+      return res.status(409).json({
+        error: 'Dine-in assisted orders must go through service flow before billing. Use Send to Kitchen, then move the session to billing when service is complete.',
+      });
+    }
+
     const tenant = await prisma.tenant.findUnique({
       where: { id: req.tenantId },
       select: {

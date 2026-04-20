@@ -11,6 +11,7 @@ export type PlanLimit = {
     hasAssistedDirectBill: boolean;
     hasAssistedCustomerLookup: boolean;
     maxFloors: number;
+    hasFranchiseControls: boolean;
 };
 export type CanonicalPlan = 'MINI' | 'CAFE' | 'DINEPRO' | 'PREMIUM';
 export declare const PLAN_LIMITS: Record<string, PlanLimit>;

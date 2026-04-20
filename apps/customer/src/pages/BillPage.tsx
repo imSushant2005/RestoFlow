@@ -185,6 +185,7 @@ export function BillPage() {
 
     socket.on('connect', refreshBill);
     socket.on('session:finished', refreshBill);
+    socket.on('session:settled', refreshBill);
     socket.on('session:completed', refreshBill);
     socket.on('session:update', refreshBill);
     socket.on('orders:bulk_status', refreshBill);

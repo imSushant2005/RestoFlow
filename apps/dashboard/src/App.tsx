@@ -497,6 +497,10 @@ function DashboardShell() {
         queryClient.invalidateQueries({ queryKey: ['live-orders'] });
         queryClient.invalidateQueries({ queryKey: ['order-history'] });
       },
+      'session:settled': () => {
+        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+        queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
+      },
       'session:completed': () => {
         queryClient.invalidateQueries({ queryKey: ['live-orders'] });
         queryClient.invalidateQueries({ queryKey: ['order-history'] });

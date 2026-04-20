@@ -135,6 +135,7 @@ export function useRealtimeSocket({
       'session:new',
       'session:update',
       'session:finished',
+      'session:settled',
       'session:completed'
     ];
 

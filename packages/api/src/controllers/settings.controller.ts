@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma, withPrismaRetry } from '../db/prisma';
-import { getPlanLimits } from '../config/plans';
+import { getPlanLimits, normalizePlan } from '../config/plans';
 import { UserRole, Plan } from '@dineflow/prisma';
 import { hashPassword } from '../utils/hash';
 import { z } from 'zod';
@@ -141,7 +141,15 @@ export const getBusinessSettings = async (req: Request, res: Response) => {
         ),
       20,
     );
-    res.json(tenant);
+    if (!tenant) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    res.json({
+      ...tenant,
+      plan: normalizePlan(tenant.plan),
+      planLimits: getPlanLimits(tenant.plan),
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch settings' });
   }
@@ -168,6 +176,13 @@ export const updateBusinessSettings = async (req: Request, res: Response) => {
 
     const normalizedSlug = slug?.trim().toLowerCase();
     const normalizedGstin = normalizeGstin(gstin);
+    const normalizedPlan = plan ? normalizePlan(plan) : undefined;
+
+    if ((normalizedPlan !== undefined || trialEndsAt !== undefined) && req.user?.role !== UserRole.OWNER) {
+      return res.status(403).json({
+        error: 'Only the workspace owner can change plan or trial settings.',
+      });
+    }
     
     // Check if slug is taken by another tenant
     if (normalizedSlug) {
@@ -207,9 +222,9 @@ export const updateBusinessSettings = async (req: Request, res: Response) => {
         phone,
         gstin: gstin === undefined ? undefined : normalizedGstin || null,
         isActive,
-        plan,
-        trialEndsAt: plan ? null : trialEndsAt, // Remove trial on manual plan change/upgrade
-        planStartedAt: plan ? new Date() : undefined,
+        plan: normalizedPlan,
+        trialEndsAt: normalizedPlan ? null : trialEndsAt, // Remove trial on manual plan change/upgrade
+        planStartedAt: normalizedPlan ? new Date() : undefined,
       },
       select: {
         id: true,
@@ -234,7 +249,11 @@ export const updateBusinessSettings = async (req: Request, res: Response) => {
       deleteCache(`tenant:${req.tenantId}:billing`),
     ]);
     
-    res.json(tenant);
+    res.json({
+      ...tenant,
+      plan: normalizePlan(tenant.plan),
+      planLimits: getPlanLimits(tenant.plan),
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update settings' });
   }

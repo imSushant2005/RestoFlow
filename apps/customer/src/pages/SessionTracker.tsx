@@ -188,6 +188,23 @@ export function SessionTracker() {
       navigate(`/order/${tenantSlug}/session/${sessionId}/bill`);
     });
 
+    socket.on('session:settled', (payload: { sessionId?: string; status?: string; totalAmount?: number }) => {
+      if (!payload?.sessionId || payload.sessionId !== sessionId) return;
+      setSession((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              sessionStatus: payload.status || prev.sessionStatus,
+              runningTotal: Number(payload.totalAmount || prev.runningTotal || 0),
+            }
+          : prev,
+      );
+      scheduleRefresh(160);
+      if (payload.status === 'AWAITING_BILL') {
+        navigate(`/order/${tenantSlug}/session/${sessionId}/bill`);
+      }
+    });
+
     socket.on('session:completed', (payload: { sessionId?: string }) => {
       if (!payload?.sessionId || payload.sessionId !== sessionId) return;
       setSession((prev: any) => (prev ? { ...prev, sessionStatus: 'CLOSED' } : prev));

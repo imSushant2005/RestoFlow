@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db/prisma';
 import { getIO } from '../socket';
-import { getPlanLimits } from '../config/plans';
+import { getPlanLimits, normalizePlan } from '../config/plans';
 import { deleteCache, withCache } from '../services/cache.service';
 import { cacheKeys } from '../utils/cache-keys';
 
@@ -153,7 +153,7 @@ export const createMenuItem = async (req: Request, res: Response) => {
     const planLimits = getPlanLimits(tenant.plan);
 
     if (count >= planLimits.items) {
-      return res.status(403).json({ error: `Plan limit reached. Your ${tenant.plan} plan allows up to ${planLimits.items} menu items.` });
+      return res.status(403).json({ error: `Plan limit reached. Your ${normalizePlan(tenant.plan)} plan allows up to ${planLimits.items} menu items.` });
     }
 
     const tags = Array.isArray(dietaryTags) ? dietaryTags : [];

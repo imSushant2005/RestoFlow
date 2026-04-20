@@ -8,6 +8,7 @@ import { generateOrderNumber } from '../services/order-number.service';
 import { buildServerPricedOrderPayload } from '../services/order-payload.service';
 import { cacheKeys } from '../utils/cache-keys';
 import { authorizeSessionAccess, generateSessionAccessToken } from '../utils/public-access';
+import { normalizePlan } from '../config/plans';
 
 const WAITER_CALL_TYPES = new Set(['WAITER', 'BILL', 'WATER', 'EXTRA', 'HELP']);
 const ORDERABLE_SESSION_STATUSES = ['OPEN', 'PARTIALLY_SENT', 'ACTIVE'] as const;
@@ -260,7 +261,7 @@ export const getPublicMenu = async (req: Request, res: Response) => {
         accentColor: tenant.accentColor,
         taxRate: tenant.taxRate,
         businessHours: tenant.businessHours,
-        plan: tenant.plan,
+        plan: normalizePlan(tenant.plan),
       };
     }, `public-menu:${tenantSlug}`), 1800); // 30-minute cache
 

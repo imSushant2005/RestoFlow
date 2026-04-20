@@ -61,7 +61,7 @@ export function Onboarding({ nextPath }: OnboardingProps) {
   const recommendedPlan = useMemo(() => {
     if (businessType === 'chain' || tableCount > 18) return 'PREMIUM';
     if (businessType === 'resto' || tableCount > 9) return 'DINEPRO';
-    if (businessType === 'cafe' || tableCount > 3) return 'CAFE';
+    if (businessType === 'cafe' || tableCount > 4) return 'CAFE';
     return 'MINI';
   }, [businessType, tableCount]);
 
@@ -365,7 +365,7 @@ export function Onboarding({ nextPath }: OnboardingProps) {
                       { id: 'kiosk', title: 'Street Food / Kiosk', sub: 'Orders are self-pickup' },
                       { id: 'cafe', title: 'Cafe / Quick Service', sub: 'Counter or scan-to-order' },
                       { id: 'resto', title: 'Full Restaurant', sub: 'Full waiter service' },
-                      { id: 'chain', title: 'Large Multi-branch', sub: 'Multiple outlets' },
+                      { id: 'chain', title: 'Hotel / Multi-outlet', sub: 'Multiple outlets or complex properties' },
                     ].map((type) => (
                       <button
                         key={type.id}
@@ -403,7 +403,9 @@ export function Onboarding({ nextPath }: OnboardingProps) {
                     <div className="flex items-center justify-between">
                       <div>
                         <h4 className="text-2xl font-black text-white">{recommendedPlan} Plan</h4>
-                        <p className="text-xs text-slate-400 mt-1">Includes 30 days of full Pro access.</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Start this plan free for 30 days. If anything feels off during live use, we help fix it before you decide.
+                        </p>
                       </div>
                       <button
                         disabled={planMutation.isPending}

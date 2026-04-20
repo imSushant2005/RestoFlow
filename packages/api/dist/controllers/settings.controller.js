@@ -126,7 +126,14 @@ const getBusinessSettings = async (req, res) => {
                 trialEndsAt: true,
             },
         }), `business-settings:${req.tenantId}`), 20);
-        res.json(tenant);
+        if (!tenant) {
+            return res.status(404).json({ error: 'Workspace not found' });
+        }
+        res.json({
+            ...tenant,
+            plan: (0, plans_1.normalizePlan)(tenant.plan),
+            planLimits: (0, plans_1.getPlanLimits)(tenant.plan),
+        });
     }
     catch (error) {
         res.status(500).json({ error: 'Failed to fetch settings' });
@@ -139,6 +146,12 @@ const updateBusinessSettings = async (req, res) => {
         const { businessName, slug, description, primaryColor, accentColor, logoUrl, coverImageUrl, email, phone, gstin, isActive, plan, trialEndsAt, } = payload;
         const normalizedSlug = slug?.trim().toLowerCase();
         const normalizedGstin = normalizeGstin(gstin);
+        const normalizedPlan = plan ? (0, plans_1.normalizePlan)(plan) : undefined;
+        if ((normalizedPlan !== undefined || trialEndsAt !== undefined) && req.user?.role !== prisma_2.UserRole.OWNER) {
+            return res.status(403).json({
+                error: 'Only the workspace owner can change plan or trial settings.',
+            });
+        }
         // Check if slug is taken by another tenant
         if (normalizedSlug) {
             const existing = await prisma_1.prisma.tenant.findUnique({ where: { slug: normalizedSlug } });
@@ -174,9 +187,9 @@ const updateBusinessSettings = async (req, res) => {
                 phone,
                 gstin: gstin === undefined ? undefined : normalizedGstin || null,
                 isActive,
-                plan,
-                trialEndsAt: plan ? null : trialEndsAt, // Remove trial on manual plan change/upgrade
-                planStartedAt: plan ? new Date() : undefined,
+                plan: normalizedPlan,
+                trialEndsAt: normalizedPlan ? null : trialEndsAt, // Remove trial on manual plan change/upgrade
+                planStartedAt: normalizedPlan ? new Date() : undefined,
             },
             select: {
                 id: true,
@@ -200,7 +213,11 @@ const updateBusinessSettings = async (req, res) => {
             (0, cache_service_1.deleteCache)(`tenant:${req.tenantId}:business-settings`),
             (0, cache_service_1.deleteCache)(`tenant:${req.tenantId}:billing`),
         ]);
-        res.json(tenant);
+        res.json({
+            ...tenant,
+            plan: (0, plans_1.normalizePlan)(tenant.plan),
+            planLimits: (0, plans_1.getPlanLimits)(tenant.plan),
+        });
     }
     catch (error) {
         res.status(500).json({ error: 'Failed to update settings' });

@@ -10,6 +10,7 @@ const order_number_service_1 = require("../services/order-number.service");
 const order_payload_service_1 = require("../services/order-payload.service");
 const cache_keys_1 = require("../utils/cache-keys");
 const public_access_1 = require("../utils/public-access");
+const plans_1 = require("../config/plans");
 const WAITER_CALL_TYPES = new Set(['WAITER', 'BILL', 'WATER', 'EXTRA', 'HELP']);
 const ORDERABLE_SESSION_STATUSES = ['OPEN', 'PARTIALLY_SENT', 'ACTIVE'];
 const publicOrderSelect = {
@@ -222,7 +223,7 @@ const getPublicMenu = async (req, res) => {
                 accentColor: tenant.accentColor,
                 taxRate: tenant.taxRate,
                 businessHours: tenant.businessHours,
-                plan: tenant.plan,
+                plan: (0, plans_1.normalizePlan)(tenant.plan),
             };
         }, `public-menu:${tenantSlug}`), 1800); // 30-minute cache
         res.json(publicData);

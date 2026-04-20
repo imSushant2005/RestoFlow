@@ -62,6 +62,12 @@ type ServerToClientEvents = {
         tableName?: string;
         totalAmount?: number;
     }) => void;
+    'session:settled': (payload: {
+        sessionId: string;
+        paymentMethod: string;
+        status?: string;
+        totalAmount?: number;
+    }) => void;
     'session:completed': (payload: {
         sessionId: string;
         paymentMethod: string;
