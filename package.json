@@ -26,6 +26,8 @@
     "docker:down": "cd infrastructure/docker && docker-compose down"
   },
   "devDependencies": {
+    "@types/pg": "^8.20.0",
+    "pg": "^8.20.0",
     "prettier": "^3.2.5",
     "typescript": "^5.3.3"
   }
