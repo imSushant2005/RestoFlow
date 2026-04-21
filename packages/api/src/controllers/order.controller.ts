@@ -730,20 +730,6 @@ export const createAssistedOrder = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Guest count exceeds table capacity.' });
     }
 
-    const activeTableSession = table
-      ? await prisma.diningSession.findFirst({
-          where: {
-            tenantId: tenant.id,
-            tableId: table.id,
-            sessionStatus: { notIn: ['CLOSED' as any, 'CANCELLED' as any] },
-          },
-          select: { id: true },
-        })
-      : null;
-
-    if (activeTableSession) {
-      return res.status(409).json({ error: 'This table already has an active session. Choose another table or finish the open session first.' });
-    }
 
     const staffName = await resolveStaffName(prisma, req.user!.id);
     const { subtotal, orderItems } = await buildServerPricedOrderPayload(prisma, tenant.id, req.body?.items);
@@ -789,34 +775,64 @@ export const createAssistedOrder = async (req: Request, res: Response) => {
         const orderNumber = generateOrderNumber(orderType);
         const isDirectBill = fulfillmentMode === 'DIRECT_BILL';
         const shouldSettleImmediately = isDirectBill && (markPaid || Boolean(paymentMethod));
-        const sessionStatus = isDirectBill
-          ? shouldSettleImmediately
-            ? 'CLOSED'
-            : 'AWAITING_BILL'
-          : 'ACTIVE';
 
-        const session = await tx.diningSession.create({
-          data: {
-            tenantId: tenant.id,
-            tableId: table?.id || null,
-            customerId: customer.id,
-            partySize: guestCount,
-            sessionStatus: sessionStatus as any,
-            source: isDirectBill ? 'staff_assisted_direct_bill' : 'staff_assisted',
-            isBillGenerated: isDirectBill,
-            billGeneratedAt: isDirectBill ? new Date() : null,
-            closedAt: shouldSettleImmediately ? new Date() : null,
-            attendedByUserId: req.user!.id,
-            attendedByName: staffName,
-          },
-          select: {
-            id: true,
-            tenantId: true,
-            tableId: true,
-            sessionStatus: true,
-            closedAt: true,
-          },
-        });
+        let session;
+        if (!isDirectBill) {
+          if (table) {
+            session = await tx.diningSession.findFirst({
+              where: {
+                tenantId: tenant.id,
+                tableId: table.id,
+                sessionStatus: { in: ['ACTIVE' as any, 'AWAITING_BILL' as any] },
+              },
+              select: { id: true, tenantId: true, tableId: true, sessionStatus: true, closedAt: true },
+            });
+          } else if (customerPhone.length >= 10) {
+            session = await tx.diningSession.findFirst({
+              where: {
+                tenantId: tenant.id,
+                customerId: customer.id,
+                tableId: null,
+                sessionStatus: 'ACTIVE' as any,
+              },
+              select: { id: true, tenantId: true, tableId: true, sessionStatus: true, closedAt: true },
+            });
+          }
+        }
+
+        if (session && session.sessionStatus === 'AWAITING_BILL') {
+          session = await tx.diningSession.update({
+            where: { id: session.id },
+            data: { sessionStatus: 'ACTIVE' as any, isBillGenerated: false, billGeneratedAt: null },
+            select: { id: true, tenantId: true, tableId: true, sessionStatus: true, closedAt: true },
+          });
+        }
+
+        if (!session) {
+          const sessionStatus = isDirectBill ? (shouldSettleImmediately ? 'CLOSED' : 'AWAITING_BILL') : 'ACTIVE';
+          session = await tx.diningSession.create({
+            data: {
+              tenantId: tenant.id,
+              tableId: table?.id || null,
+              customerId: customer.id,
+              partySize: guestCount,
+              sessionStatus: sessionStatus as any,
+              source: isDirectBill ? 'staff_assisted_direct_bill' : 'staff_assisted',
+              isBillGenerated: isDirectBill,
+              billGeneratedAt: isDirectBill ? new Date() : null,
+              closedAt: shouldSettleImmediately ? new Date() : null,
+              attendedByUserId: req.user!.id,
+              attendedByName: staffName,
+            },
+            select: {
+              id: true,
+              tenantId: true,
+              tableId: true,
+              sessionStatus: true,
+              closedAt: true,
+            },
+          });
+        }
 
         const order = await tx.order.create({
           data: {

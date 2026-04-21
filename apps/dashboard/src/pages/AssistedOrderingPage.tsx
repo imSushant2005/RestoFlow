@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { usePlanFeatures } from '../hooks/usePlanFeatures';
-import { ArrowRight, BadgeCheck, Phone, ReceiptText, RefreshCw, Search, ShoppingBag, Sparkles, Users, X } from 'lucide-react';
+import { 
+  BadgeCheck, Phone, RefreshCw, 
+  Search, ShoppingBag, Sparkles, X, Plus, Minus, 
+  ChevronDown, Edit3, Image as ImageIcon
+} from 'lucide-react';
 import { api } from '../lib/api';
 import { formatINR } from '../lib/currency';
 import { getCustomerAppUrl } from '../lib/network';
 
+// --- Types & Helpers ---
 type AssistedMode = 'SEND_TO_KITCHEN' | 'DIRECT_BILL';
 
 type AssistedLineModifier = {
@@ -58,7 +63,30 @@ function normalizeModifierGroups(item: any) {
     : [];
 }
 
-function AssistedItemModal({
+const generateGradient = (seed: string) => {
+  const hash = Array.from(seed).reduce((acc, char) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
+  const h = Math.abs(hash % 360);
+  return `linear-gradient(135deg, hsl(${h}, 70%, 20%), hsl(${(h + 40) % 360}, 80%, 10%))`;
+};
+
+const parseImageUrl = (url: string | null | undefined): string => {
+  if (!url) return '';
+  if (url.includes('drive.google.com/file/d/')) {
+    const match = url.match(/\/d\/([^/]+)/);
+    if (match && match[1]) {
+      return `https://drive.google.com/uc?export=view&id=${match[1]}`;
+    }
+  } else if (url.includes('drive.google.com/open?id=')) {
+    const match = url.match(/id=([^&]+)/);
+    if (match && match[1]) {
+      return `https://drive.google.com/uc?export=view&id=${match[1]}`;
+    }
+  }
+  return url;
+};
+
+// --- Sheet Component (Replaces strict Modal) ---
+function ModifierSheet({
   item,
   onClose,
   onAdd,
@@ -70,6 +98,7 @@ function AssistedItemModal({
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
   const [validationError, setValidationError] = useState('');
+  
   const [selectedModifierIds, setSelectedModifierIds] = useState<Record<string, string[]>>(() => {
     const next: Record<string, string[]> = {};
     normalizeModifierGroups(item).forEach((group: any) => {
@@ -105,12 +134,15 @@ function AssistedItemModal({
     const current = selectedModifierIds[group.id] || [];
     const modifierId = String(modifier.id);
     const maxSelections = Math.max(1, Number(group.maxSelections || 1));
+    
     if (current.includes(modifierId)) {
       setSelectedModifierIds((previous) => ({ ...previous, [group.id]: current.filter((entry) => entry !== modifierId) }));
+      setValidationError('');
       return;
     }
     if (maxSelections === 1) {
       setSelectedModifierIds((previous) => ({ ...previous, [group.id]: [modifierId] }));
+      setValidationError('');
       return;
     }
     if (current.length >= maxSelections) {
@@ -118,6 +150,7 @@ function AssistedItemModal({
       return;
     }
     setSelectedModifierIds((previous) => ({ ...previous, [group.id]: [...current, modifierId] }));
+    setValidationError('');
   };
 
   const handleAdd = () => {
@@ -129,7 +162,7 @@ function AssistedItemModal({
     });
 
     if (invalidGroup) {
-      setValidationError(`Complete the required choices for ${invalidGroup.name}.`);
+      setValidationError(`Complete required choices for ${invalidGroup.name}.`);
       return;
     }
 
@@ -148,83 +181,101 @@ function AssistedItemModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl overflow-hidden rounded-[28px] border shadow-2xl" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-        <div className="flex items-start justify-between gap-4 border-b px-6 py-5" style={{ borderColor: 'var(--border)' }}>
+    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/60 backdrop-blur-sm sm:items-center p-0 sm:p-4 animate-in fade-in duration-200">
+      <div className="w-full sm:max-w-xl max-h-[90vh] sm:max-h-[85vh] flex flex-col sm:rounded-3xl rounded-t-3xl bg-slate-900 border border-slate-800 shadow-2xl animate-in slide-in-from-bottom-8 duration-300">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md rounded-t-3xl z-10">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>Assisted item setup</p>
-            <h3 className="mt-2 text-2xl font-black" style={{ color: 'var(--text-1)' }}>{item?.name || 'Customize item'}</h3>
-            <p className="mt-2 text-sm font-medium" style={{ color: 'var(--text-2)' }}>Server-side pricing is recalculated before the order is saved.</p>
+            <h3 className="text-xl font-black text-white">{item?.name || 'Customize item'}</h3>
+            <p className="text-xs font-semibold text-slate-400 mt-1">{formatINR(basePrice)} Base</p>
           </div>
-          <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>
-            <X size={18} />
+          <button onClick={onClose} className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+            <X size={20} />
           </button>
         </div>
-        <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
-          <div className="grid gap-5 lg:grid-cols-[1.2fr,0.8fr]">
-            <div className="space-y-5">
-              {normalizedGroups.map((group: any) => (
-                <section key={group.id} className="rounded-3xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-                  <div className="mb-3 flex items-end justify-between gap-3">
-                    <div>
-                      <h4 className="text-lg font-black" style={{ color: 'var(--text-1)' }}>{group.name}</h4>
-                      <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--text-3)' }}>
-                        Choose {Math.max(0, Number(group.minSelections || 0))} to {Math.max(1, Number(group.maxSelections || 1))}
-                      </p>
-                    </div>
-                    <span className="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em]" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>
-                      {(selectedModifierIds[group.id] || []).length} selected
-                    </span>
-                  </div>
-                  <div className="grid gap-3">
-                    {(group.modifiers || []).map((modifier: any) => {
-                      const selected = (selectedModifierIds[group.id] || []).includes(String(modifier.id));
-                      return (
-                        <button
-                          key={modifier.id}
-                          type="button"
-                          onClick={() => toggleModifier(group, modifier)}
-                          className="flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition-all"
-                          style={{ borderColor: selected ? 'var(--brand)' : 'var(--border)', background: selected ? 'var(--brand-soft)' : 'var(--surface)' }}
-                        >
-                          <div>
-                            <p className="text-sm font-black" style={{ color: selected ? 'var(--brand)' : 'var(--text-1)' }}>{modifier.name}</p>
-                            {modifier.isDefault ? <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--text-3)' }}>Default suggestion</p> : null}
-                          </div>
-                          <span className="text-xs font-black" style={{ color: selected ? 'var(--brand)' : 'var(--text-2)' }}>
-                            {readPrice(modifier.priceAdjustment) > 0 ? `+${formatINR(readPrice(modifier.priceAdjustment))}` : 'Included'}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
-            </div>
-            <div className="space-y-4">
-              <section className="rounded-3xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-                <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>Quantity</p>
-                <div className="mt-3 flex items-center gap-3 rounded-2xl px-2 py-2" style={{ background: 'var(--surface-3)' }}>
-                  <button type="button" onClick={() => setQuantity((current) => Math.max(1, current - 1))} className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: 'var(--surface)', color: 'var(--text-1)' }}>-</button>
-                  <span className="flex-1 text-center text-2xl font-black" style={{ color: 'var(--text-1)' }}>{quantity}</span>
-                  <button type="button" onClick={() => setQuantity((current) => current + 1)} className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: 'var(--surface)', color: 'var(--text-1)' }}>+</button>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-8 scroll-smooth will-change-scroll">
+          
+          {normalizedGroups.map((group: any) => (
+            <div key={group.id} className="space-y-3">
+              <div className="flex items-end justify-between">
+                <div>
+                  <h4 className="text-base font-bold text-white">{group.name}</h4>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1">
+                    Choose {Math.max(0, Number(group.minSelections || 0))} to {Math.max(1, Number(group.maxSelections || 1))}
+                  </p>
                 </div>
-              </section>
-              <section className="rounded-3xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-                <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>Item note</p>
-                <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} placeholder="Kitchen note or customer preference" className="mt-3 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none" style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-1)' }} />
-              </section>
-              <section className="rounded-3xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-                <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>Preview total</p>
-                <p className="mt-3 text-3xl font-black" style={{ color: 'var(--brand)' }}>{formatINR(total)}</p>
-                {validationError ? <p className="mt-3 text-sm font-bold text-red-500">{validationError}</p> : null}
-              </section>
+                <span className="px-2.5 py-1 rounded-md bg-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  {(selectedModifierIds[group.id] || []).length} Selected
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(group.modifiers || []).map((modifier: any) => {
+                  const selected = (selectedModifierIds[group.id] || []).includes(String(modifier.id));
+                  return (
+                    <button
+                      key={modifier.id}
+                      type="button"
+                      onClick={() => toggleModifier(group, modifier)}
+                      className={`flex items-center justify-between p-3.5 rounded-xl border-2 transition-all active:scale-[0.98] ${
+                        selected 
+                          ? 'border-blue-500 bg-blue-500/10' 
+                          : 'border-slate-800 bg-slate-800/50 hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="text-left">
+                        <p className={`text-sm font-bold ${selected ? 'text-blue-400' : 'text-slate-200'}`}>
+                          {modifier.name}
+                        </p>
+                      </div>
+                      <span className={`text-xs font-black ${selected ? 'text-blue-500' : 'text-slate-400'}`}>
+                        {readPrice(modifier.priceAdjustment) > 0 ? `+${formatINR(readPrice(modifier.priceAdjustment))}` : 'Incl.'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+          ))}
+
+          <div className="space-y-3">
+            <h4 className="text-base font-bold text-white">Item Notes</h4>
+            <textarea 
+              value={notes} 
+              onChange={(e) => setNotes(e.target.value)} 
+              placeholder="e.g., Extra spicy, sauce on the side" 
+              className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              rows={2} 
+            />
           </div>
+
+          <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-2xl border border-slate-700/50">
+             <span className="text-sm font-bold text-slate-300">Quantity</span>
+             <div className="flex items-center gap-4 bg-slate-800 rounded-xl p-1 shadow-inner">
+               <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-700/50 hover:bg-slate-700 text-white transition-colors"><Minus size={16} /></button>
+               <span className="w-6 text-center text-lg font-black text-white">{quantity}</span>
+               <button onClick={() => setQuantity(q => q + 1)} className="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"><Plus size={16} /></button>
+             </div>
+          </div>
+          
+          {validationError && (
+             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-xs font-bold text-center animate-in shake">
+               {validationError}
+             </div>
+          )}
+
         </div>
-        <div className="border-t px-6 py-5" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-          <button type="button" onClick={handleAdd} className="w-full rounded-2xl px-5 py-4 text-base font-black text-white" style={{ background: 'var(--brand)' }}>
-            Add to assisted order
+
+        {/* Footer */}
+        <div className="p-4 border-t border-slate-800 bg-slate-900/50 backdrop-blur-md pb-safe">
+          <button 
+            onClick={handleAdd}
+            className="w-full flex items-center justify-between p-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black transition-colors active:scale-[0.98]"
+          >
+            <span>Add Item</span>
+            <span>{formatINR(total)}</span>
           </button>
         </div>
       </div>
@@ -232,26 +283,30 @@ function AssistedItemModal({
   );
 }
 
+// --- Main Page Component ---
 export function AssistedOrderingPage() {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  
+  // Guest Context State
+  const [isContextExpanded, setIsContextExpanded] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [note, setNote] = useState('');
-  const [modeNotice, setModeNotice] = useState('');
   const [seat, setSeat] = useState('');
-  const [guestCount, setGuestCount] = useState(1);
+  const [guestCount] = useState(1);
   const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'ROAMING'>('TAKEAWAY');
   const [selectedTableId, setSelectedTableId] = useState('');
   const [fulfillmentMode, setFulfillmentMode] = useState<AssistedMode>('SEND_TO_KITCHEN');
   const [paymentPreset, setPaymentPreset] = useState<'UNPAID' | 'cash' | 'upi' | 'card' | 'online'>('UNPAID');
+  
   const [lineItems, setLineItems] = useState<AssistedLineItem[]>([]);
   const [activeModalItem, setActiveModalItem] = useState<any | null>(null);
-  const [isIntakeOpen, setIsIntakeOpen] = useState(false);
-  const [lookupResult, setLookupResult] = useState<any>(null);
-  const [lookupError, setLookupError] = useState('');
+  const [, setLookupResult] = useState<any>(null);
   const [result, setResult] = useState<AssistedResult | null>(null);
+  
   const { features } = usePlanFeatures();
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
 
   const { data: business } = useQuery({
     queryKey: ['settings-business'],
@@ -266,9 +321,9 @@ export function AssistedOrderingPage() {
     retry: false,
   });
 
-  const { data: menuResponse, isLoading: menuLoading, refetch: refetchMenu } = useQuery({
+  const { data: menuResponse, isLoading: menuLoading } = useQuery({
     queryKey: ['assist-order-menu', business?.slug],
-    queryFn: async () => (await api.get(`/public/${business.slug}/menu`)).data,
+    queryFn: async () => (await api.get(`/public/${business?.slug}/menu`)).data,
     enabled: Boolean(business?.slug),
     staleTime: 1000 * 60,
   });
@@ -277,14 +332,9 @@ export function AssistedOrderingPage() {
     mutationFn: async (phone: string) => (await api.get('/orders/assisted/customer-lookup', { params: { phone } })).data,
     onSuccess: (data) => {
       setLookupResult(data?.customer || null);
-      setLookupError('');
       if (data?.customer?.name && !customerName.trim()) {
         setCustomerName(String(data.customer.name));
       }
-    },
-    onError: (error: any) => {
-      setLookupResult(null);
-      setLookupError(error?.response?.data?.error || 'Customer lookup failed.');
     },
   });
 
@@ -313,18 +363,18 @@ export function AssistedOrderingPage() {
     onSuccess: (data) => {
       setResult(data);
       setLineItems([]);
+      setCustomerName('');
+      setCustomerPhone('');
       setNote('');
       setSeat('');
-      setGuestCount(1);
       setSelectedTableId('');
       setPaymentPreset('UNPAID');
+      setIsContextExpanded(false);
     },
   });
 
-  const categories = useMemo(
-    () => (Array.isArray(menuResponse?.categories) ? menuResponse.categories : []),
-    [menuResponse?.categories],
-  );
+  // --- Memoized Data Transformations ---
+  const categories = useMemo(() => (Array.isArray(menuResponse?.categories) ? menuResponse.categories : []), [menuResponse?.categories]);
 
   const allTables = useMemo(
     () =>
@@ -337,7 +387,6 @@ export function AssistedOrderingPage() {
   const filteredCategories = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     return categories
-      .filter((category: any) => selectedCategory === 'ALL' || category.id === selectedCategory)
       .map((category: any) => ({
         ...category,
         menuItems: (Array.isArray(category?.menuItems) ? category.menuItems : []).filter((item: any) => {
@@ -349,27 +398,25 @@ export function AssistedOrderingPage() {
         }),
       }))
       .filter((category: any) => category.menuItems.length > 0);
-  }, [categories, search, selectedCategory]);
+  }, [categories, search]);
 
-  const previewSubtotal = useMemo(
-    () => lineItems.reduce((sum, item) => sum + readPrice(item.lineTotal), 0),
-    [lineItems],
-  );
-  const previewTax = useMemo(
-    () => previewSubtotal * (readPrice(menuResponse?.taxRate) / 100),
-    [menuResponse?.taxRate, previewSubtotal],
-  );
+  const displayedCategories = useMemo(() => {
+    if (selectedCategory === 'ALL') return filteredCategories;
+    return filteredCategories.filter((c: any) => c.id === selectedCategory);
+  }, [filteredCategories, selectedCategory]);
+
+  const previewSubtotal = useMemo(() => lineItems.reduce((sum, item) => sum + readPrice(item.lineTotal), 0), [lineItems]);
+  const taxRate = readPrice(menuResponse?.taxRate);
+  const previewTax = useMemo(() => previewSubtotal * (taxRate / 100), [taxRate, previewSubtotal]);
   const previewTotal = previewSubtotal + previewTax;
-  const billUrl = result?.billPath ? `${getCustomerAppUrl()}${result.billPath}` : '';
-  const canUseDirectBill = features.hasAssistedDirectBill && orderType !== 'DINE_IN';
+
   const requiresTableSelection = orderType === 'DINE_IN';
   const canSubmitOrder = lineItems.length > 0 && (!requiresTableSelection || Boolean(selectedTableId));
-  const submitLabel =
-    fulfillmentMode === 'DIRECT_BILL'
-      ? paymentPreset === 'UNPAID'
-        ? 'Create direct bill'
-        : `Create ${String(paymentPreset).toUpperCase()} bill`
-      : 'Send order to kitchen';
+  const canUseDirectBill = features.hasAssistedDirectBill && orderType !== 'DINE_IN';
+  
+  const submitLabel = fulfillmentMode === 'DIRECT_BILL'
+    ? paymentPreset === 'UNPAID' ? 'Generate Bill' : `Mark ${String(paymentPreset).toUpperCase()} & Bill`
+    : 'Send to Kitchen';
 
   useEffect(() => {
     if (orderType === 'DINE_IN' && fulfillmentMode === 'DIRECT_BILL') {
@@ -378,634 +425,377 @@ export function AssistedOrderingPage() {
     }
   }, [fulfillmentMode, orderType]);
 
+  // --- Handlers ---
   const addSimpleItem = (item: any) => {
     const basePrice = readPrice(item?.price);
-    setLineItems((current) => [
-      ...current,
-      {
-        id: `assisted_${item.id}_${Date.now()}`,
-        menuItemId: String(item.id),
-        name: String(item.name || 'Item'),
-        basePrice,
-        quantity: 1,
-        notes: '',
-        selectedModifierIds: [],
-        selectedModifiers: [],
-        lineTotal: basePrice,
-      },
-    ]);
+    setLineItems((current) => {
+      // Small optimistic merge for identical simple items
+      const existing = current.find(i => i.menuItemId === item.id && i.selectedModifiers.length === 0 && !i.notes);
+      if (existing) {
+        return current.map(i => i.id === existing.id ? { ...i, quantity: i.quantity + 1, lineTotal: buildLineTotal(basePrice, i.quantity + 1, []) } : i);
+      }
+      return [
+        ...current,
+        {
+          id: `assisted_${item.id}_${Date.now()}`,
+          menuItemId: String(item.id),
+          name: String(item.name || 'Item'),
+          basePrice,
+          quantity: 1,
+          notes: '',
+          selectedModifierIds: [],
+          selectedModifiers: [],
+          lineTotal: basePrice,
+        },
+      ];
+    });
   };
 
-  const updateLineItemQuantity = (id: string, nextQuantity: number) => {
+  const updateQuantity = (id: string, delta: number) => {
     setLineItems((current) =>
-      nextQuantity <= 0
-        ? current.filter((item) => item.id !== id)
-        : current.map((item) =>
-            item.id === id
-              ? {
-                  ...item,
-                  quantity: nextQuantity,
-                  lineTotal: buildLineTotal(item.basePrice, nextQuantity, item.selectedModifiers),
-                }
-              : item,
-          ),
+      current.map((item) => {
+        if (item.id !== id) return item;
+        const nq = Math.max(0, item.quantity + delta);
+        if (nq === 0) return { ...item, _delete: true } as any; 
+        return { ...item, quantity: nq, lineTotal: buildLineTotal(item.basePrice, nq, item.selectedModifiers) };
+      }).filter(item => !item._delete)
     );
   };
 
-
-  const lookupAllowed = customerPhone.trim().length >= 8;
-
-  const removeLineItem = (id: string) => {
-    setLineItems((current) => current.filter((item) => item.id !== id));
-  };
-
-  const resetSession = () => {
-    setResult(null);
-    setLineItems([]);
-    setNote('');
-    setModeNotice('');
-    setSeat('');
-    setGuestCount(1);
-    setSelectedTableId('');
-    setPaymentPreset('UNPAID');
-  };
-
-  const submitAssistedOrder = () => {
-    if (lineItems.length === 0) {
-      setModeNotice('Add at least one menu item before sending the assisted order.');
-      return;
-    }
-
-    if (requiresTableSelection && !selectedTableId) {
-      setModeNotice('Select the guest table before sending a dine-in assisted order.');
-      return;
-    }
-
-    setModeNotice('');
-    submitMutation.mutate();
-  };
-
+  // --- Render ---
   return (
-    <div className="space-y-6 pb-28 lg:pb-10">
-      <section
-        className="rounded-[32px] border p-5 lg:p-8"
-        style={{ borderColor: 'var(--border)', background: 'linear-gradient(135deg, rgba(15,23,42,0.96), rgba(30,41,59,0.9))' }}
-      >
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Staff-assisted ordering</p>
-              <div className="h-1 w-1 rounded-full bg-cyan-700" />
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-500/50">{business?.businessName}</p>
-            </div>
-            <h1 className="mt-2 text-2xl font-black tracking-tight text-white lg:text-3xl">Venue Point of Sale</h1>
+    <div className="flex flex-col lg:flex-row h-[100dvh] lg:h-[calc(100vh-2rem)] gap-4 overflow-hidden -mx-4 -mt-4 lg:m-0">
+      
+      {/* --------------------------- */}
+      {/* LEFT PANE: Menu Interaction */}
+      {/* --------------------------- */}
+      <div className="flex-1 flex flex-col min-w-0 bg-slate-950/50 lg:rounded-3xl border-r lg:border border-slate-800/60 shadow-inner overflow-hidden">
+        
+        {/* Header & Search */}
+        <div className="shrink-0 p-4 lg:p-6 bg-slate-900/80 backdrop-blur-md border-b border-slate-800/60 z-10">
+          <div className="flex items-center gap-3">
+             <div className="flex-1 relative group">
+                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors" />
+                <input 
+                  type="text"
+                  placeholder="Search dishes, tags, or modifiers... (Press /)"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full text-sm bg-slate-950 border border-slate-800 rounded-2xl pl-11 pr-4 py-3.5 text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold"
+                />
+             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-3 rounded-2xl bg-white/5 border border-white/10 px-4 py-2">
-               <div className="flex flex-col">
-                  <span className="text-[9px] font-black text-white/40 uppercase tracking-widest">Pricing Mode</span>
-                  <span className="text-xs font-black text-emerald-400 uppercase">{fulfillmentMode === 'DIRECT_BILL' ? 'Instant Bill' : 'Kitchen Flow'}</span>
-               </div>
-               <div className="w-[1px] h-6 bg-white/10 mx-1" />
-               <div className="flex flex-col">
-                  <span className="text-[9px] font-black text-white/40 uppercase tracking-widest">Guest Context</span>
-                  <span className="text-xs font-black text-white truncate max-w-[100px]">{customerName.trim() || 'Walk-in'}</span>
-               </div>
-            </div>
-            <div className="flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 shadow-lg shadow-blue-500/20">
-               <ShoppingBag size={14} className="text-blue-100" />
-               <span className="text-sm font-black text-white">{formatINR(previewTotal)}</span>
-            </div>
+
+          {/* Sticky Category Nav */}
+          <div className="mt-4 -mx-2 px-2 overflow-x-auto no-scrollbar flex items-center gap-2 pb-1" ref={categoryScrollRef}>
+            <button
+              onClick={() => setSelectedCategory('ALL')}
+              className={`shrink-0 px-5 py-2.5 rounded-[14px] text-xs font-black tracking-widest uppercase transition-all duration-200 ${
+                selectedCategory === 'ALL' 
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                  : 'bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-700/50'
+              }`}
+            >
+              All Items
+            </button>
+            {categories.map((c: any) => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedCategory(c.id)}
+                className={`shrink-0 px-5 py-2.5 rounded-[14px] text-xs font-black tracking-widest uppercase transition-all duration-200 ${
+                  selectedCategory === c.id 
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                    : 'bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-700/50'
+                }`}
+              >
+                {c.name}
+              </button>
+            ))}
           </div>
         </div>
-      </section>
 
-      <div className="grid gap-6 lg:grid-cols-[1.35fr,0.65fr]">
-        <div className="space-y-6">
-          <section className="rounded-[28px] border overflow-hidden shadow-sm" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-            <div 
-              className="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer hover:bg-white/5 transition-colors"
-              onClick={() => setIsIntakeOpen(!isIntakeOpen)}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
-                  <Users size={18} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>Step 1</p>
-                  <h2 className="text-base font-black" style={{ color: 'var(--text-1)' }}>Guest Intake & Config</h2>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="hidden sm:flex flex-wrap gap-1.5 mr-2">
-                   {customerName && <span className="bg-slate-500/10 px-2 py-0.5 rounded text-[9px] font-bold" style={{ color: 'var(--text-2)' }}>{customerName}</span>}
-                   {orderType && <span className="bg-slate-500/10 px-2 py-0.5 rounded text-[9px] font-bold" style={{ color: 'var(--text-2)' }}>{orderType}</span>}
-                </div>
-                <button
-                  type="button"
-                  className={`p-1.5 rounded-lg transition-transform ${isIntakeOpen ? 'rotate-180' : ''}`}
-                  style={{ color: 'var(--text-3)' }}
-                >
-                  <ArrowRight size={18} className="rotate-90" />
-                </button>
-              </div>
+        {/* Menu Grid Scroll Area */}
+        <div className="flex-1 overflow-y-auto p-4 lg:p-6 scroll-smooth will-change-scroll pb-32 lg:pb-6">
+          {menuLoading && (
+            <div className="h-full flex items-center justify-center">
+               <div className="animate-pulse flex flex-col items-center">
+                 <div className="w-10 h-10 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin" />
+                 <p className="mt-4 text-xs font-black text-slate-500 uppercase tracking-widest">Warming Up Grid</p>
+               </div>
             </div>
-            
-            <div className={`transition-all duration-300 ease-in-out ${isIntakeOpen ? 'max-h-[1200px] opacity-100 border-t' : 'max-h-0 opacity-0'} overflow-hidden`} style={{ borderColor: 'var(--border)' }}>
-               <div className="px-5 py-6">
-                 <div className="flex flex-wrap gap-2 mb-6">
-                    <button
-                      type="button"
-                      onClick={() => setFulfillmentMode('SEND_TO_KITCHEN')}
-                      className={`rounded-full px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${fulfillmentMode === 'SEND_TO_KITCHEN' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 ring-2 ring-blue-500/10' : 'bg-transparent border'}`}
-                      style={fulfillmentMode === 'SEND_TO_KITCHEN' ? {} : { borderColor: 'var(--border)', color: 'var(--text-3)' }}
-                    >
-                      Send to kitchen
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (orderType === 'DINE_IN') {
-                          setModeNotice('Dine-in assisted orders must go to kitchen first. Bill the session after service is complete.');
-                          return;
-                        } else if (features.hasAssistedDirectBill) {
-                          setModeNotice('');
-                          setFulfillmentMode('DIRECT_BILL');
-                          return;
-                        }
-                        setModeNotice(`Direct billing is available from the ${features.name === 'Mini' ? 'Cafe' : 'Dine Pro'} plan onwards.`);
-                      }}
-                      className={`rounded-full px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 relative overflow-hidden group ${fulfillmentMode === 'DIRECT_BILL' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 ring-2 ring-blue-500/10' : 'bg-transparent border'}`}
-                      style={fulfillmentMode === 'DIRECT_BILL' ? {} : { borderColor: 'var(--border)', color: 'var(--text-3)', opacity: canUseDirectBill ? 1 : 0.6 }}
-                    >
-                      {!canUseDirectBill && <span className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                      Direct bill {!canUseDirectBill && <Sparkles size={10} className="inline ml-1 text-blue-500 animate-pulse" />}
-                    </button>
-                  </div>
-                  {modeNotice ? (
-                    <div className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
-                      <p className="text-sm font-bold text-amber-500">{modeNotice}</p>
-                    </div>
-                  ) : null}
+          )}
 
-                  <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr,0.9fr]">
-                    <div className="space-y-4">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                          Guest name
-                          <input
-                            value={customerName}
-                            onChange={(event) => setCustomerName(event.target.value)}
-                            placeholder="Walk-in guest"
-                            className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
-                            style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
-                          />
-                        </label>
-                        <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                          Mobile number
-                          <div className="mt-2 flex items-center gap-2 rounded-2xl border px-3 py-2" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-                            <Phone size={16} style={{ color: 'var(--text-3)' }} />
-                            <input
-                              value={customerPhone}
-                              onChange={(event) => setCustomerPhone(event.target.value)}
-                              placeholder="10-digit phone"
-                              className="w-full bg-transparent text-sm font-semibold outline-none"
-                              style={{ color: 'var(--text-1)' }}
-                            />
+          {filteredCategories.length === 0 && !menuLoading && (
+            <div className="h-full flex items-center justify-center flex-col text-slate-500">
+               <Search size={40} className="opacity-20 mb-4" />
+               <p className="text-sm font-bold">No results for "{search}"</p>
+            </div>
+          )}
+
+          <div className="space-y-8">
+            {displayedCategories.map((category: any) => (
+              <section key={category.id} className="animate-in fade-in duration-300">
+                <div className="sticky top-0 z-10 py-2 mb-4 bg-slate-950/90 backdrop-blur-md rounded-xl px-2">
+                  <h3 className="text-lg font-black text-white">{category.name}</h3>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">{category.menuItems.length} items</p>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-2 2xl:grid-cols-3 gap-3 sm:gap-4">
+                  {category.menuItems.map((item: any) => {
+                    const modifiersExist = hasModifiers(item);
+                    return (
+                      <div 
+                        key={item.id} 
+                        className="group flex flex-col bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl overflow-hidden hover:border-slate-600 transition-all active:scale-[0.98]"
+                      >
+                        {/* Image Layer */}
+                        <div 
+                          className="w-full aspect-[4/3] bg-slate-800 relative flex items-center justify-center overflow-hidden" 
+                          style={{ background: item.imageUrl ? `url('${parseImageUrl(item.imageUrl)}') center/cover` : generateGradient(item.id) }}
+                        >
+                          {!item.imageUrl && <ImageIcon size={24} className="text-white/10" />}
+                          <div className="absolute top-2 right-2 sm:top-3 sm:right-3">
+                             <div className={`px-2 py-1 rounded bg-slate-900/80 backdrop-blur border border-white/5 text-[9px] font-black uppercase tracking-widest ${item.isVeg ? 'text-green-400' : 'text-red-400'}`}>
+                               {item.isVeg ? 'Veg' : 'Non'}
+                             </div>
+                          </div>
+                        </div>
+
+                        {/* Content Layer */}
+                        <div className="p-3 sm:p-4 flex flex-1 flex-col">
+                          <h4 className="text-sm font-black text-white truncate">{item.name}</h4>
+                          <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed flex-1 font-medium">{item.description || "No description available"}</p>
+                          
+                          {/* Action Layer */}
+                          <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <span className="text-base font-black text-white">{formatINR(readPrice(item.price))}</span>
+                            
                             <button
-                              type="button"
-                              disabled={!lookupAllowed || lookupMutation.isPending || !features.hasAssistedCustomerLookup}
-                              onClick={() => {
-                                if (features.hasAssistedCustomerLookup) {
-                                  lookupMutation.mutate(customerPhone);
-                                } else {
-                                  window.alert(`Returning guest lookup is not available on the ${features.name} plan.`);
-                                }
-                              }}
-                              className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-[0.15em] transition-all relative overflow-hidden group shadow-md ${lookupAllowed && features.hasAssistedCustomerLookup ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-60'}`}
+                              onClick={() => modifiersExist ? setActiveModalItem(item) : addSimpleItem(item)}
+                              className={`h-9 sm:h-10 px-4 rounded-xl flex items-center justify-center gap-1.5 text-xs font-black uppercase tracking-wider transition-colors ${
+                                modifiersExist 
+                                  ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' 
+                                  : 'bg-blue-600/10 text-blue-500 hover:bg-blue-600/20'
+                              }`}
                             >
-                              {lookupMutation.isPending ? (
-                                <RefreshCw size={14} className="animate-spin" />
+                              {modifiersExist ? (
+                                <>Customize</>
                               ) : (
-                                <>
-                                  {features.hasAssistedCustomerLookup ? 'Lookup' : 'Pro Gated'}
-                                  {!features.hasAssistedCustomerLookup && <Sparkles size={10} className="ml-1.5 inline text-blue-500" />}
-                                </>
+                                <><Plus size={14} /> Add</>
                               )}
                             </button>
                           </div>
-                        </label>
+                        </div>
                       </div>
-                      {lookupError ? <p className="text-sm font-semibold text-red-500">{lookupError}</p> : null}
-                      {lookupResult ? (
-                        <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-black" style={{ color: 'var(--text-1)' }}>{lookupResult.name || 'Known guest'}</p>
-                              <p className="mt-1 text-xs font-semibold" style={{ color: 'var(--text-2)' }}>Visits: {lookupResult.visitCount || 0}</p>
-                            </div>
-                            <span className="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>
-                              Returning
-                            </span>
-                          </div>
-                          <div className="mt-3 grid gap-2 text-xs font-semibold" style={{ color: 'var(--text-2)' }}>
-                            <span>Last visit: {lookupResult.lastSessionAt ? new Date(lookupResult.lastSessionAt).toLocaleDateString() : 'Unknown'}</span>
-                            <span>Last table: {lookupResult.lastTableName || 'N/A'}</span>
-                            <span>Last source: {lookupResult.lastSource || 'N/A'}</span>
-                          </div>
-                        </div>
-                      ) : null}
-                      <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                        Guest note
-                        <textarea
-                          value={note}
-                          onChange={(event) => setNote(event.target.value)}
-                          placeholder="Allergies, seating note, delivery detail"
-                          rows={3}
-                          className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
-                          style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
-                        />
-                      </label>
-                    </div>
-                    <div className="space-y-4">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                          Order type
-                          <select
-                            value={orderType}
-                            onChange={(event) => setOrderType(event.target.value as any)}
-                            className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
-                            style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
-                          >
-                            <option value="TAKEAWAY">Takeaway (T-)</option>
-                            <option value="DINE_IN">Dine in (D-)</option>
-                            <option value="ROAMING">Roaming / delivery (R-)</option>
-                          </select>
-                        </label>
-                        <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                          Guest count
-                          <input
-                            type="number"
-                            min={1}
-                            max={24}
-                            value={guestCount}
-                            onChange={(event) => setGuestCount(Math.max(1, Math.min(24, Number(event.target.value) || 1)))}
-                            className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
-                            style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
-                          />
-                        </label>
-                      </div>
-                      <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                        Table selection
-                        <select
-                          value={selectedTableId}
-                          onChange={(event) => setSelectedTableId(event.target.value)}
-                          disabled={orderType !== 'DINE_IN'}
-                          className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none disabled:opacity-60"
-                          style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
-                        >
-                          <option value="">Select table</option>
-                          {allTables.map((table: any) => (
-                            <option key={table.id} value={table.id}>
-                              {table.floorName ? `${table.floorName} | ` : ''}{table.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                        Seat / reference
-                        <input
-                          value={seat}
-                          onChange={(event) => setSeat(event.target.value)}
-                          placeholder="Seat or counter info"
-                          className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none"
-                          style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-1)' }}
-                        />
-                      </label>
-                      {fulfillmentMode === 'DIRECT_BILL' ? (
-                        <label className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                          Payment status
-                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                            {[
-                              { value: 'UNPAID', label: 'Unpaid' },
-                              { value: 'cash', label: 'Cash' },
-                              { value: 'upi', label: 'UPI' },
-                              { value: 'card', label: 'Card' },
-                              { value: 'online', label: 'Online' },
-                            ].map((entry) => (
-                              <button
-                                key={entry.value}
-                                type="button"
-                                onClick={() => setPaymentPreset(entry.value as any)}
-                                className="rounded-2xl border px-4 py-3 text-left text-xs font-black uppercase tracking-[0.14em]"
-                                style={{ borderColor: paymentPreset === entry.value ? 'var(--brand)' : 'var(--border)', background: paymentPreset === entry.value ? 'var(--brand-soft)' : 'var(--bg)', color: paymentPreset === entry.value ? 'var(--brand)' : 'var(--text-2)' }}
-                              >
-                                {entry.label}
-                              </button>
-                            ))}
-                          </div>
-                        </label>
-                      ) : null}
-                    </div>
-                  </div>
-               </div>
-            </div>
-          </section>
-
-          <section className="rounded-[28px] border p-5" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>Menu selection</p>
-                <h2 className="mt-2 text-xl font-black" style={{ color: 'var(--text-1)' }}>Find items fast and build the order with modifiers.</h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => refetchMenu()}
-                className="flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-black uppercase tracking-[0.18em]"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-2)' }}
-              >
-                <RefreshCw size={14} />
-                Refresh menu
-              </button>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <div className="flex flex-1 items-center gap-2 rounded-2xl border px-3 py-2" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-                <Search size={16} style={{ color: 'var(--text-3)' }} />
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search dish, tag, or modifier"
-                  className="w-full bg-transparent text-sm font-semibold outline-none"
-                  style={{ color: 'var(--text-1)' }}
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedCategory('ALL')}
-                  className="rounded-full px-4 py-2 text-[11px] font-black uppercase tracking-[0.16em]"
-                  style={{ background: selectedCategory === 'ALL' ? 'var(--brand)' : 'var(--surface-3)', color: selectedCategory === 'ALL' ? 'white' : 'var(--text-2)' }}
-                >
-                  All
-                </button>
-                {categories.map((category: any) => (
-                  <button
-                    key={category.id}
-                    type="button"
-                    onClick={() => setSelectedCategory(category.id)}
-                    className="rounded-full px-4 py-2 text-[11px] font-black uppercase tracking-[0.16em]"
-                    style={{ background: selectedCategory === category.id ? 'var(--brand)' : 'var(--surface-3)', color: selectedCategory === category.id ? 'white' : 'var(--text-2)' }}
-                  >
-                    {category.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="mt-5 space-y-4">
-              {menuLoading ? (
-                <div className="rounded-3xl border px-4 py-6 text-center text-sm font-semibold" style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-2)' }}>
-                  Loading menu items...
+                    );
+                  })}
                 </div>
-              ) : null}
-              {!menuLoading && filteredCategories.length === 0 ? (
-                <div className="rounded-3xl border px-4 py-6 text-center text-sm font-semibold" style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-2)' }}>
-                  No menu items match this search.
-                </div>
-              ) : null}
-              {filteredCategories.map((category: any) => (
-                <div key={category.id} className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-black" style={{ color: 'var(--text-1)' }}>{category.name}</h3>
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text-3)' }}>{category.menuItems.length} items</span>
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {category.menuItems.map((item: any) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => (hasModifiers(item) ? setActiveModalItem(item) : addSimpleItem(item))}
-                        className="flex h-full flex-col justify-between rounded-3xl border p-4 text-left transition-all hover:-translate-y-0.5"
-                        style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}
-                      >
-                        <div>
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-base font-black" style={{ color: 'var(--text-1)' }}>{item.name}</p>
-                              <p className="mt-1 text-xs font-semibold" style={{ color: 'var(--text-2)' }}>{item.description || 'No description provided.'}</p>
-                            </div>
-                            <span className="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>
-                              {item.isVeg ? 'Veg' : 'Non-veg'}
-                            </span>
-                          </div>
-                          {Array.isArray(item.tags) && item.tags.length > 0 ? (
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              {item.tags.slice(0, 3).map((tag: string) => (
-                                <span key={tag} className="rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em]" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                        <div className="mt-4 flex items-center justify-between">
-                          <span className="text-sm font-black" style={{ color: 'var(--text-1)' }}>{formatINR(readPrice(item.price))}</span>
-                          <span className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em]" style={{ color: 'var(--brand)' }}>
-                            {hasModifiers(item) ? <Sparkles size={14} /> : <ShoppingBag size={14} />}
-                            {hasModifiers(item) ? 'Customize' : 'Add'}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <aside className={`${lineItems.length > 0 ? 'block' : 'hidden lg:block'} space-y-6 lg:sticky lg:top-8 self-start`}>
-          <section className="rounded-[28px] border p-5 shadow-sm" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>Step 3</p>
-                <h2 className="mt-1 text-xl font-black" style={{ color: 'var(--text-1)' }}>BASKET</h2>
-              </div>
-            </div>
-            <div className="mt-4 space-y-4">
-              {lineItems.length === 0 ? (
-                <div className="rounded-3xl border px-4 py-6 text-center text-sm font-semibold" style={{ borderColor: 'var(--border)', background: 'var(--bg)', color: 'var(--text-2)' }}>
-                  Add menu items to start building the assisted order.
-                </div>
-              ) : null}
-              {lineItems.map((item) => (
-                <div key={item.id} className="rounded-3xl border px-4 py-4" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-black" style={{ color: 'var(--text-1)' }}>{item.name}</p>
-                      <p className="mt-1 text-xs font-semibold" style={{ color: 'var(--text-2)' }}>{formatINR(item.basePrice)} base</p>
-                    </div>
-                    <button type="button" onClick={() => removeLineItem(item.id)} className="rounded-full p-2" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>
-                      <X size={14} />
-                    </button>
-                  </div>
-                  {item.selectedModifiers.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {item.selectedModifiers.map((modifier) => (
-                        <span key={modifier.id} className="rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em]" style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}>
-                          {modifier.groupName}: {modifier.name}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  {item.notes ? <p className="mt-2 text-xs font-semibold" style={{ color: 'var(--text-2)' }}>Note: {item.notes}</p> : null}
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2 rounded-full px-2 py-1" style={{ background: 'var(--surface-3)' }}>
-                      <button type="button" onClick={() => updateLineItemQuantity(item.id, item.quantity - 1)} className="h-7 w-7 rounded-full text-sm font-black" style={{ background: 'var(--surface)', color: 'var(--text-1)' }}>-</button>
-                      <span className="w-6 text-center text-sm font-black" style={{ color: 'var(--text-1)' }}>{item.quantity}</span>
-                      <button type="button" onClick={() => updateLineItemQuantity(item.id, item.quantity + 1)} className="h-7 w-7 rounded-full text-sm font-black" style={{ background: 'var(--surface)', color: 'var(--text-1)' }}>+</button>
-                    </div>
-                    <p className="text-sm font-black" style={{ color: 'var(--text-1)' }}>{formatINR(item.lineTotal)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-5 space-y-3 rounded-3xl border px-4 py-4" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-              <div className="flex items-center justify-between text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
-                <span>Subtotal</span>
-                <span>{formatINR(previewSubtotal)}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
-                <span>Tax ({readPrice(menuResponse?.taxRate)}%)</span>
-                <span>{formatINR(previewTax)}</span>
-              </div>
-              <div className="flex items-center justify-between text-base font-black" style={{ color: 'var(--text-1)' }}>
-                <span>Total</span>
-                <span>{formatINR(previewTotal)}</span>
-              </div>
-            </div>
-            {note || seat || (requiresTableSelection && selectedTableId) ? (
-              <div className="mt-4 rounded-3xl border px-4 py-4" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-                <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>Guest context</p>
-                <div className="mt-3 space-y-2 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
-                  {note ? <p><span className="font-black" style={{ color: 'var(--text-1)' }}>Instruction:</span> {note}</p> : null}
-                  {seat ? <p><span className="font-black" style={{ color: 'var(--text-1)' }}>Seat / reference:</span> {seat}</p> : null}
-                  {requiresTableSelection && selectedTableId ? <p><span className="font-black" style={{ color: 'var(--text-1)' }}>Table locked:</span> {allTables.find((table: any) => table.id === selectedTableId)?.name || 'Selected'}</p> : null}
-                </div>
-              </div>
-            ) : null}
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => resetSession()}
-                disabled={lineItems.length === 0}
-                className="rounded-2xl border px-4 py-3 text-xs font-black uppercase tracking-[0.14em] disabled:opacity-60"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-2)' }}
-              >
-                Clear draft
-              </button>
-              <button
-                type="button"
-                onClick={submitAssistedOrder}
-                disabled={!canSubmitOrder || submitMutation.isPending}
-                className="rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-white disabled:opacity-60"
-                style={{ background: 'var(--brand)' }}
-              >
-                {submitMutation.isPending ? 'Submitting...' : submitLabel}
-              </button>
-              {submitMutation.isError ? (
-                <p className="sm:col-span-2 text-sm font-semibold text-red-500">{(submitMutation.error as any)?.response?.data?.error || 'Failed to submit assisted order.'}</p>
-              ) : null}
-            </div>
-          </section>
-
-          <section className="rounded-[2.5rem] border p-8 shadow-2xl transition-all hover:shadow-blue-500/5" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--text-3)' }}>Assisted output</p>
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-            </div>
-            <h3 className="text-xl font-black tracking-tight" style={{ color: 'var(--text-1)' }}>Realtime status & details</h3>
-            <div className="mt-3 space-y-3 rounded-3xl border px-4 py-4" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-              {result ? (
-                <>
-                  <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
-                    <BadgeCheck size={16} />
-                    Assisted order created.
-                  </div>
-                  <p className="text-sm font-semibold" style={{ color: 'var(--text-2)' }}>Session: {result.sessionId || 'Active'}</p>
-                  <p className="text-sm font-semibold" style={{ color: 'var(--text-2)' }}>Payment: {result.paymentStatus || (fulfillmentMode === 'DIRECT_BILL' ? 'UNPAID' : 'Kitchen flow')}</p>
-                  {billUrl ? (
-                    <a href={billUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-2xl border px-4 py-3 text-sm font-black" style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}>
-                      Open bill view
-                      <ArrowRight size={16} />
-                    </a>
-                  ) : null}
-                </>
-              ) : (
-                <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
-                  <Users size={16} />
-                  Create an assisted order to see the bill link and session details.
-                </div>
-              )}
-            </div>
-            <div className="mt-4 rounded-3xl border px-4 py-4" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-              <p className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>Assisted notes</p>
-              <ul className="mt-3 space-y-2 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
-                <li className="flex items-center gap-2"><Sparkles size={14} /> Server-side pricing & taxes stay enforced.</li>
-                <li className="flex items-center gap-2"><ShoppingBag size={14} /> Items flow to kitchen only in kitchen mode.</li>
-                <li className="flex items-center gap-2"><ReceiptText size={14} /> Direct bill mode creates a bill immediately.</li>
-              </ul>
-            </div>
-          </section>
-        </aside>
-      </div>
-
-      {lineItems.length > 0 ? (
-        <div className="fixed inset-x-4 bottom-4 z-30 lg:hidden">
-          <div
-            className="rounded-[28px] border px-4 py-4 shadow-2xl backdrop-blur-sm"
-            style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, var(--surface) 94%, transparent)' }}
-          >
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                  Assisted basket
-                </p>
-                <p className="mt-1 text-sm font-black" style={{ color: 'var(--text-1)' }}>
-                  {lineItems.length} item{lineItems.length === 1 ? '' : 's'} | {formatINR(previewTotal)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={resetSession}
-                className="rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em]"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-2)' }}
-              >
-                Clear
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={submitAssistedOrder}
-              disabled={!canSubmitOrder || submitMutation.isPending}
-              className="w-full rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-white disabled:opacity-60"
-              style={{ background: 'var(--brand)' }}
-            >
-              {submitMutation.isPending ? 'Submitting...' : submitLabel}
-            </button>
+              </section>
+            ))}
           </div>
         </div>
-      ) : null}
+      </div>
 
-      {activeModalItem ? (
-        <AssistedItemModal
-          item={activeModalItem}
-          onClose={() => setActiveModalItem(null)}
-          onAdd={(lineItem) => {
-            setLineItems((current) => [...current, lineItem]);
-            setResult(null);
-          }}
-        />
-      ) : null}
+      {/* --------------------------- */}
+      {/* RIGHT PANE: Smart Cart      */}
+      {/* --------------------------- */}
+      <aside className="w-full lg:w-[380px] shrink-0 flex flex-col bg-slate-900 lg:rounded-3xl border-t lg:border border-slate-800 shadow-2xl relative z-40">
+        
+        {/* Compressed Guest Context Bar */}
+        <div className="p-4 border-b border-slate-800 bg-slate-900/90 backdrop-blur z-20">
+          <div 
+            className="flex items-center justify-between cursor-pointer group"
+            onClick={() => setIsContextExpanded(!isContextExpanded)}
+          >
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Order Context</p>
+              <div className="flex items-center gap-2 mt-1 text-sm font-black text-white">
+                 <span className="truncate max-w-[120px]">{customerName || 'Walk-in'}</span>
+                 <span className="text-slate-600">•</span>
+                 <span className={orderType === 'DINE_IN' ? 'text-cyan-400' : 'text-blue-400'}>{orderType.replace('_', ' ')}</span>
+              </div>
+            </div>
+            <button className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-white group-hover:bg-slate-700 transition-colors">
+              {isContextExpanded ? <ChevronDown size={16} /> : <Edit3 size={14} />}
+            </button>
+          </div>
+
+          {/* Expanded Intake Form */}
+          <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isContextExpanded ? 'max-h-[500px] opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
+             <div className="space-y-4 p-4 bg-slate-950/50 rounded-2xl border border-slate-800/50">
+                <div className="grid grid-cols-2 gap-3">
+                   <select value={orderType} onChange={(e) => setOrderType(e.target.value as any)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:border-blue-500 outline-none">
+                     <option value="TAKEAWAY">Takeaway</option>
+                     <option value="DINE_IN">Dine In</option>
+                     <option value="ROAMING">Delivery/Roam</option>
+                   </select>
+
+                   {orderType === 'DINE_IN' ? (
+                     <select value={selectedTableId} onChange={(e) => setSelectedTableId(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:border-blue-500 outline-none">
+                       <option value="">Table...</option>
+                       {allTables.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                     </select>
+                   ) : (
+                     <input placeholder="Seat / Identifier" value={seat} onChange={(e)=>setSeat(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white placeholder:text-slate-500 outline-none" />
+                   )}
+                </div>
+
+                <div className="space-y-2 relative">
+                  <div className="relative">
+                    <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input value={customerPhone} onChange={(e)=>setCustomerPhone(e.target.value)} placeholder="Customer Phone" className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-2 py-2 text-xs font-bold text-white placeholder:text-slate-500 outline-none" />
+                    {customerPhone.length >= 8 && features.hasAssistedCustomerLookup && (
+                      <button 
+                        onClick={() => lookupMutation.mutate(customerPhone)}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 py-1 px-3 bg-blue-600 rounded-lg text-[10px] font-black uppercase text-white hover:bg-blue-500 disabled:opacity-50"
+                        disabled={lookupMutation.isPending}
+                      >
+                        {lookupMutation.isPending ? '...' : 'Look'}
+                      </button>
+                    )}
+                  </div>
+                  
+                  <input value={customerName} onChange={(e)=>setCustomerName(e.target.value)} placeholder="Customer Name (Optional)" className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white placeholder:text-slate-500 outline-none" />
+                </div>
+                
+                <div className="flex gap-2">
+                   <button 
+                     onClick={() => { setFulfillmentMode('SEND_TO_KITCHEN'); setPaymentPreset('UNPAID'); }} 
+                     className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${fulfillmentMode === 'SEND_TO_KITCHEN' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}
+                   >
+                     Kitchen
+                   </button>
+                   <button 
+                     onClick={() => canUseDirectBill && setFulfillmentMode('DIRECT_BILL')}
+                     className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${fulfillmentMode === 'DIRECT_BILL' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'} ${!canUseDirectBill ? 'opacity-50 cursor-not-allowed' : ''}`}
+                   >
+                     Direct Bill {!canUseDirectBill && <Sparkles size={10} className="inline ml-1" />}
+                   </button>
+                </div>
+             </div>
+          </div>
+        </div>
+
+        {/* Cart Item List */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 relative bg-slate-950/20">
+           {lineItems.length === 0 ? (
+             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 opacity-50 relative top-10">
+               <ShoppingBag size={48} className="mb-4 stroke-[1]" />
+               <p className="text-sm font-black tracking-widest uppercase">Cart is Empty</p>
+               <p className="text-xs font-medium mt-1">Add items from the menu</p>
+             </div>
+           ) : (
+             lineItems.map(item => (
+               <div key={item.id} className="p-3 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col gap-2 shadow-sm animate-in fade-in slide-in-from-left-4 duration-300">
+                  <div className="flex items-start justify-between">
+                     <span className="text-sm font-bold text-white leading-tight pr-4">{item.name}</span>
+                     <span className="text-sm font-black text-white">{formatINR(item.lineTotal)}</span>
+                  </div>
+                  
+                  {item.selectedModifiers.length > 0 && (
+                     <div className="flex flex-wrap gap-1">
+                        {item.selectedModifiers.map(m => (
+                           <span key={m.id} className="text-[9px] font-bold uppercase tracking-wider text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded-md">
+                             {m.name}
+                           </span>
+                        ))}
+                     </div>
+                  )}
+
+                  <div className="flex items-center justify-between mt-1">
+                    {/* Inline Quantity Control */}
+                    <div className="flex items-center gap-3 bg-slate-800/50 rounded-lg p-0.5 border border-slate-700/50">
+                       <button onClick={() => updateQuantity(item.id, -1)} className="w-8 h-8 rounded-md bg-slate-800 flex items-center justify-center text-slate-300 hover:bg-slate-700 hover:text-white transition-colors">
+                          <Minus size={14} />
+                       </button>
+                       <span className="w-4 text-center text-xs font-black text-white">{item.quantity}</span>
+                       <button onClick={() => updateQuantity(item.id, 1)} className="w-8 h-8 rounded-md bg-blue-600/20 flex items-center justify-center text-blue-400 hover:bg-blue-600/40 hover:text-blue-300 transition-colors">
+                          <Plus size={14} />
+                       </button>
+                    </div>
+
+                    {/* Remove Fallback */}
+                    <button onClick={() => updateQuantity(item.id, -item.quantity)} className="text-[10px] uppercase tracking-widest font-black text-red-500/50 hover:text-red-400 transition-colors">
+                      Remove
+                    </button>
+                  </div>
+               </div>
+             ))
+           )}
+        </div>
+
+        {/* Footer Billing Area */}
+        <div className="shrink-0 bg-slate-900 border-t border-slate-800 p-4 z-20 pb-safe">
+           {result?.sessionId ? (
+             <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl animate-in flip-in-x">
+                <div className="flex items-center gap-2 text-emerald-400 mb-2 font-black">
+                  <BadgeCheck size={18} /> Order Submitted
+                </div>
+                {result.billPath && (
+                   <a href={`${getCustomerAppUrl()}${result.billPath}`} target="_blank" rel="noreferrer" className="block w-full py-2.5 bg-emerald-600 text-center text-white text-xs font-black uppercase tracking-widest rounded-xl mt-3">
+                     View Bill Receipt
+                   </a>
+                )}
+                <button onClick={() => setResult(null)} className="w-full mt-2 text-xs font-bold text-slate-400 hover:text-white py-1">Dismiss</button>
+             </div>
+           ) : (
+             <>
+               <div className="space-y-1.5 mb-4 px-2">
+                 <div className="flex justify-between text-xs font-bold text-slate-500">
+                   <span>Subtotal</span>
+                   <span>{formatINR(previewSubtotal)}</span>
+                 </div>
+                 <div className="flex justify-between text-xs font-bold text-slate-500">
+                   <span>Taxes ({taxRate}%)</span>
+                   <span>{formatINR(previewTax)}</span>
+                 </div>
+                 <div className="flex justify-between text-lg font-black text-white pt-2 border-t border-slate-800/50 mt-2">
+                   <span>Total</span>
+                   <span className="text-blue-400">{formatINR(previewTotal)}</span>
+                 </div>
+               </div>
+
+               {submitMutation.isError && (
+                 <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-bold rounded-xl animate-in shake">
+                    {(submitMutation.error as any)?.response?.data?.error || 'Submit failed.'}
+                 </div>
+               )}
+
+               <button
+                  onClick={() => submitMutation.mutate()}
+                  disabled={!canSubmitOrder || submitMutation.isPending}
+                  className={`relative w-full overflow-hidden h-14 rounded-2xl flex items-center justify-center text-sm font-black uppercase tracking-widest transition-all ${
+                    canSubmitOrder 
+                      ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20 hover:bg-blue-500 active:scale-[0.98]' 
+                      : 'bg-slate-800 text-slate-500 cursor-not-allowed hidden'
+                  }`}
+               >
+                 {submitMutation.isPending ? (
+                   <span className="flex items-center gap-2"><RefreshCw size={16} className="animate-spin" /> Processing...</span>
+                 ) : (
+                   submitLabel
+                 )}
+                 {canSubmitOrder && !submitMutation.isPending && (
+                   <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+                 )}
+               </button>
+               
+               {!canSubmitOrder && (
+                  <div className="w-full h-14 rounded-2xl flex items-center justify-center border-2 border-dashed border-slate-800 text-xs font-bold uppercase tracking-widest text-slate-500">
+                    {requiresTableSelection && !selectedTableId ? 'Select Table to Order' : 'Cart Empty'}
+                  </div>
+               )}
+             </>
+           )}
+        </div>
+      </aside>
+
+      {/* Modifier Sheet Portal */}
+      {activeModalItem && (
+         <ModifierSheet item={activeModalItem} onClose={() => setActiveModalItem(null)} onAdd={(li) => {
+           setLineItems(curr => [...curr, li]);
+         }} />
+      )}
     </div>
   );
 }
