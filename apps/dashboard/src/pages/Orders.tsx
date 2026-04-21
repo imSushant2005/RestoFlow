@@ -907,8 +907,9 @@ export function Orders({ role }: { role?: string }) {
       const res = await api.get('/orders');
       return res.data;
     },
-    staleTime: 1000 * 10,
-    refetchInterval: 30000,
+    // C-7: Reduced staleTime for more responsive dashboard updates
+    staleTime: 1000 * 3,
+    refetchInterval: 1000 * 15,
     retry: 2,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
@@ -940,7 +941,10 @@ export function Orders({ role }: { role?: string }) {
         if (!old) return [];
         return old.map((order: any) => {
           if (order.id === newUpdate.id) {
-            return { ...order, status: newUpdate.status, version: (order.version || 0) + 1 };
+            // C-8: Don't increment version optimistically. 
+            // Rely on the server truth (via socket or refetch) to update the version.
+            // This prevents race conditions where local version gets ahead of server truth.
+            return { ...order, status: newUpdate.status };
           }
           return order;
         });

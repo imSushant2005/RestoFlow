@@ -536,9 +536,8 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
         deviceId: req.headers['x-device-id'] as string | undefined,
         reasonCode: cancelReason,
         metadata,
-        statusPatch,
       });
-      
+
       // Secondary update for DiningSession if SERVED
       if (normalizedStatus === 'SERVED' && existingOrder.diningSessionId && req.user?.id) {
         await prisma.diningSession.update({
@@ -549,41 +548,25 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
           },
         });
       }
+
+      res.json(order);
     } catch (err: any) {
       if (err instanceof ConflictError || err.message === 'OCC_COLLISION') {
         const truth = await prisma.order.findFirst({
           where: { id: existingOrder.id, tenantId: req.tenantId },
-          select: orderSelect
+          select: orderSelect,
         });
         return res.status(409).json({
           error: 'OCC_CONFLICT',
           message: 'Order status was modified by another user. Syncing...',
-          recovery: { truth }
+          recovery: { truth },
         });
       }
-      throw err;
+      console.error('updateOrderStatus error:', err);
+      res.status(500).json({ error: 'Failed to update order status' });
     }
-
-    const tenantRoom = getTenantRoom(req.tenantId!);
-    getIO().to(tenantRoom).emit('order:update', order);
-    if (order.diningSessionId) {
-      getIO().to(getSessionRoom(req.tenantId!, order.diningSessionId)).emit('order:update', order);
-    }
-    if (normalizedStatus === 'READY') {
-      getIO().to(getRoleRoom(req.tenantId!, 'WAITER')).emit('waiter:pickup_ready', buildWaiterPickupPayload(order));
-    }
-
-    // Respond immediately — cache invalidation runs async after response is flushed
-    res.json(order);
-
-    setImmediate(() => {
-      invalidateOrderMutationCaches(req.tenantId!, existingOrder.diningSessionId, existingOrder.id).catch((err) =>
-        console.error('[CACHE_INVALIDATION_ERROR]', err)
-      );
-    });
   } catch (error) {
-    console.error('updateOrderStatus error:', error);
-    res.status(500).json({ error: 'Failed to update order status' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 

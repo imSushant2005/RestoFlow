@@ -733,7 +733,7 @@ export const createSession = async (req: Request, res: Response) => {
       openedAt: session.openedAt,
     });
 
-    // Respond immediately — cache cleanup runs after response is flushed
+    // Respond immediately â€” cache cleanup runs after response is flushed
     res.status(201).json(withSessionAccessToken(session));
 
     setImmediate(() => {
@@ -856,7 +856,7 @@ export const addOrderToSession = async (req: Request, res: Response) => {
     const taxAmount = subtotal * (tenant.taxRate / 100);
     const totalAmount = subtotal + taxAmount;
 
-    // Generate order number — unified format using collision-resistant generator
+    // Generate order number â€” unified format using collision-resistant generator
     const orderNumber = generateOrderNumber('DINE_IN');
 
     let order;
@@ -989,7 +989,7 @@ export const addOrderToSession = async (req: Request, res: Response) => {
 
 /**
  * POST /:tenantSlug/sessions/:sessionId/finish
- * Customer or vendor finishes the session → generates bill
+ * Customer or vendor finishes the session â†’ generates bill
  */
 export const finishSession = async (req: Request, res: Response) => {
   try {
@@ -1301,13 +1301,29 @@ export const requestSessionPayment = async (req: Request, res: Response) => {
       `session-payment-request:${tenant.id}:${sessionId}`,
     );
 
+    // C-1: Move cache invalidation BEFORE emission to prevent stale fetch race conditions
+    await Promise.all([
+      deleteCache(cacheKeys.publicSession(tenant.id, session.id)),
+      deleteCache(cacheKeys.dashboardLiveOrders(tenant.id)),
+    ]);
+
     const tenantRoom = getTenantRoom(tenant.id);
+
     const sessionRoom = getSessionRoom(tenant.id, session.id);
-    getIO().to(tenantRoom).emit('session:update', {
+    const payload = {
       sessionId: session.id,
       status: session.sessionStatus,
-      updatedAt: new Date().toISOString(),
-    });
+      paymentMethod: requestedMethod,
+      tableId: session.tableId,
+      tableName: session.table?.name,
+      updatedAt: new Date().toISOString()
+    };
+
+    getIO().to(tenantRoom).emit('session:update', payload);
+    getIO().to(sessionRoom).emit('session:update', payload);
+
+    // C-2: Emit specific payment request event for vendor notifications
+    getIO().to(tenantRoom).emit('session:payment_requested', payload);
 
     const paymentLink =
       requestedMethod === 'online' && tenant.upiId
@@ -1488,6 +1504,12 @@ export const submitSessionPayment = async (req: Request, res: Response) => {
 
     const tenantRoom = getTenantRoom(tenant.id);
     const sessionRoom = getSessionRoom(tenant.id, session.id);
+    // C-3: Move cache invalidation BEFORE emission
+    await Promise.all([
+      deleteCache(cacheKeys.publicSession(tenant.id, session.id)),
+      deleteCache(cacheKeys.dashboardLiveOrders(tenant.id)),
+    ]);
+
     getIO().to(tenantRoom).emit('session:payment_submitted', payload);
     getIO().to(sessionRoom).emit('session:payment_submitted', payload);
 
@@ -1647,7 +1669,7 @@ export const getActiveSession = async (req: Request, res: Response) => {
 
 /**
  * POST /:tenantSlug/sessions/:sessionId/admin-finish
- * Vendor forcibly finishes the session → generates bill bypassing unserved orders/minimum orders count.
+ * Vendor forcibly finishes the session â†’ generates bill bypassing unserved orders/minimum orders count.
  */
 export const adminFinishSession = async (req: Request, res: Response) => {
   try {
