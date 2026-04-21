@@ -26,6 +26,7 @@ const RATE_LIMIT_BURST = 20;
 const RATE_LIMIT_REFILL_PER_SEC = 5;
 const TENANT_SLUG_CACHE_TTL_MS = 5 * 60 * 1000;
 const TENANT_SLUG_CACHE_MAX = 2000;
+const SOCKET_AUTH_DB_COOLDOWN_MS = 5_000;
 function isVerifiedAccessToken(value) {
     if (!value || typeof value !== 'object')
         return false;
@@ -63,6 +64,15 @@ const logger = {
         console.error(JSON.stringify({ level: 'error', message, ...meta, ts: new Date().toISOString() }));
     },
 };
+let socketAuthDatabaseUnavailableUntil = 0;
+function isTransientDatabaseConnectivityError(error) {
+    const message = error instanceof Error ? error.message : String(error || '');
+    return (message.includes('Can\'t reach database server') ||
+        message.includes('P1001') ||
+        message.includes('P1017') ||
+        message.includes('Connection closed') ||
+        message.includes('kind: Closed'));
+}
 class BoundedTTLCache {
     maxEntries;
     ttlMs;
@@ -231,6 +241,9 @@ async function resolveTenantIdFromSlug(slug) {
     const cached = tenantSlugCache.get(slug);
     if (cached)
         return cached;
+    if (Date.now() < socketAuthDatabaseUnavailableUntil) {
+        throw new Error('SOCKET_AUTH_DB_UNAVAILABLE');
+    }
     const tenant = await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.tenant.findUnique({
         where: { slug },
         select: { id: true },
@@ -247,7 +260,10 @@ function rejectAuth(socket, next, reason) {
         reason,
         ip: socket.handshake.address,
     });
-    next(new Error('Authentication error'));
+    const clientMessage = reason === 'database_unavailable' || reason === 'internal_error'
+        ? 'Service temporarily unavailable'
+        : 'Authentication error';
+    next(new Error(clientMessage));
 }
 async function authMiddleware(socket, next) {
     try {
@@ -277,6 +293,9 @@ async function authMiddleware(socket, next) {
             const cacheKey = `auth_user_${verifiedToken.userId}`;
             const isCached = socketUserAuthCache.get(cacheKey);
             if (!isCached) {
+                if (Date.now() < socketAuthDatabaseUnavailableUntil) {
+                    return rejectAuth(socket, next, 'database_unavailable');
+                }
                 const user = await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.user.findUnique({
                     where: { id: verifiedToken.userId },
                     select: { id: true, isActive: true },
@@ -292,6 +311,7 @@ async function authMiddleware(socket, next) {
             if (verifiedToken.role) {
                 socket.join((0, exports.getRoleRoom)(verifiedToken.tenantId, verifiedToken.role));
             }
+            socketAuthDatabaseUnavailableUntil = 0;
             return next();
         }
         const tenantSlug = auth.tenantSlug;
@@ -330,6 +350,9 @@ async function authMiddleware(socket, next) {
         const sessionCacheKey = `auth_session_${verifiedSession.tenantId}_${verifiedSession.sessionId}_${verifiedSession.customerId}`;
         const isCachedSession = socketSessionAuthCache.get(sessionCacheKey);
         if (!isCachedSession) {
+            if (Date.now() < socketAuthDatabaseUnavailableUntil) {
+                return rejectAuth(socket, next, 'database_unavailable');
+            }
             const session = await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.diningSession.findFirst({
                 where: {
                     id: verifiedSession.sessionId,
@@ -347,9 +370,20 @@ async function authMiddleware(socket, next) {
         socket.data.sessionId = verifiedSession.sessionId;
         socket.data.connectedAt = Date.now();
         socket.join((0, exports.getSessionRoom)(verifiedSession.tenantId, verifiedSession.sessionId));
+        socketAuthDatabaseUnavailableUntil = 0;
         return next();
     }
     catch (error) {
+        if ((error instanceof Error && error.message === 'SOCKET_AUTH_DB_UNAVAILABLE') ||
+            isTransientDatabaseConnectivityError(error)) {
+            socketAuthDatabaseUnavailableUntil = Date.now() + SOCKET_AUTH_DB_COOLDOWN_MS;
+            logger.warn('Socket auth temporarily unavailable because the database is unreachable', {
+                socketId: socket.id,
+                cooldownMs: SOCKET_AUTH_DB_COOLDOWN_MS,
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return rejectAuth(socket, next, 'database_unavailable');
+        }
         logger.error('Auth middleware crashed', {
             socketId: socket.id,
             error: error instanceof Error ? error.message : String(error),

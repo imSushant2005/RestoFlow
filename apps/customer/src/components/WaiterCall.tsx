@@ -15,6 +15,18 @@ function resolveServiceAssistMode(plan?: string, businessType?: string) {
   const normalizedPlan = String(plan || '').trim().toUpperCase();
   const normalizedBusinessType = String(businessType || '').trim().toLowerCase();
 
+  if (normalizedPlan === 'MINI') {
+    return 'SELF_SERVICE' as const;
+  }
+
+  if (normalizedPlan === 'CAFE') {
+    return 'ASSISTED_SERVICE' as const;
+  }
+
+  if (normalizedPlan === 'DINEPRO' || normalizedPlan === 'PREMIUM') {
+    return 'FULL_SERVICE' as const;
+  }
+
   if (normalizedBusinessType === 'restaurant' || normalizedBusinessType === 'hotel') {
     return 'FULL_SERVICE' as const;
   }
@@ -25,14 +37,6 @@ function resolveServiceAssistMode(plan?: string, businessType?: string) {
 
   if (normalizedBusinessType === 'street_vendor' || normalizedBusinessType === 'cloud_kitchen') {
     return 'SELF_SERVICE' as const;
-  }
-
-  if (normalizedPlan === 'DINEPRO' || normalizedPlan === 'PREMIUM') {
-    return 'FULL_SERVICE' as const;
-  }
-
-  if (normalizedPlan === 'CAFE') {
-    return 'ASSISTED_SERVICE' as const;
   }
 
   return 'SELF_SERVICE' as const;
@@ -72,13 +76,12 @@ export function WaiterCall({
   sessionId: string;
   sessionAccessToken: string;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const tenantPlan = useCartStore((state) => state.tenantPlan);
-  const tenantBusinessType = useCartStore((state) => state.tenantBusinessType);
+  const [inlineError, setInlineError] = useState('');
+  const { activeSheet, setActiveSheet, tenantPlan, tenantBusinessType } = useCartStore();
+  const isOpen = activeSheet === 'WAITER';
   const [status, setStatus] = useState<'IDLE' | 'SENDING' | 'SENT' | 'ACCEPTED'>('IDLE');
   const [sentType, setSentType] = useState('');
   const [manualTable, setManualTable] = useState('');
-  const [inlineError, setInlineError] = useState('');
 
   const tableId = initialTableId || manualTable.trim();
   const serviceAssistMode = resolveServiceAssistMode(tenantPlan, tenantBusinessType);
@@ -110,25 +113,25 @@ export function WaiterCall({
       if (event.detail?.sessionId !== sessionId) return;
 
       setStatus('ACCEPTED');
-      setIsOpen(true);
+      setActiveSheet('WAITER');
     };
 
     window.addEventListener(WAITER_ACK_EVENT, onAcknowledged);
     return () => window.removeEventListener(WAITER_ACK_EVENT, onAcknowledged);
-  }, [sessionId, tenantSlug]);
+  }, [sessionId, setActiveSheet, tenantSlug]);
 
   useEffect(() => {
     if (status !== 'SENT' && status !== 'ACCEPTED') return undefined;
 
     const timeoutMs = status === 'ACCEPTED' ? 4000 : 30000;
     const timeoutId = window.setTimeout(() => {
-      setIsOpen(false);
+      setActiveSheet('NONE');
       setStatus('IDLE');
       setSentType('');
     }, timeoutMs);
 
     return () => window.clearTimeout(timeoutId);
-  }, [status]);
+  }, [setActiveSheet, status]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -168,23 +171,37 @@ export function WaiterCall({
     return null;
   }
 
+  const showLauncher = activeSheet === 'NONE';
+
   return (
     <>
       <button
-        onClick={() => setIsOpen(true)}
-        className="fixed right-4 z-[50] h-14 w-14 rounded-full border-4 border-white/20 bg-blue-600 text-white shadow-[0_10px_30px_rgba(37,99,235,0.4)] transition-all active:scale-90"
-        style={{ bottom: 'var(--customer-fab-bottom)' }}
+        onClick={() => setActiveSheet('WAITER')}
+        className={`fixed left-1/2 z-[50] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-full border px-4 py-3 text-left text-white shadow-[0_18px_48px_rgba(15,23,42,0.38)] backdrop-blur-sm transition-all active:scale-[0.98] ${
+          showLauncher ? 'pointer-events-auto opacity-100' : 'pointer-events-none translate-y-4 opacity-0'
+        }`}
+        style={{
+          bottom: 'var(--customer-fab-bottom)',
+          background: 'linear-gradient(135deg, rgba(37,99,235,0.96), rgba(59,130,246,0.88))',
+          borderColor: 'rgba(255,255,255,0.18)',
+        }}
         aria-label={primaryAssistLabel}
       >
-        <span className="flex items-center justify-center">
-          <Hand size={24} className="transition-transform group-hover:rotate-12" />
+        <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-white/16">
+          <Hand size={22} />
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-black uppercase tracking-[0.16em]">{primaryAssistLabel}</span>
+          <span className="block truncate text-[11px] font-semibold text-white/80">
+            {serviceAssistMode === 'FULL_SERVICE' ? 'Quick table help' : 'Call the floor team'}
+          </span>
         </span>
       </button>
 
       {isOpen && (
         <div
           className="fixed inset-0 z-[160] flex items-end justify-center p-3 sm:p-4"
-          onClick={() => status === 'IDLE' && setIsOpen(false)}
+          onClick={() => status === 'IDLE' && setActiveSheet('NONE')}
         >
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div
@@ -231,7 +248,7 @@ export function WaiterCall({
                 <div className="mb-8 flex items-center justify-between">
                   <h3 className="text-2xl font-black tracking-tight text-[color:var(--text-1)]">How can we help?</h3>
                   <button
-                    onClick={() => setIsOpen(false)}
+                    onClick={() => setActiveSheet('NONE')}
                     className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--surface-3)] text-[color:var(--text-3)] transition-all hover:brightness-95"
                   >
                     <X size={20} />

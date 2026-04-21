@@ -19,6 +19,8 @@ router.post(
 );
 
 router.post('/:tenantSlug/sessions/:sessionId/finish', SessionController.finishSession);
+router.post('/:tenantSlug/sessions/:sessionId/payment-request', SessionController.requestSessionPayment);
+router.post('/:tenantSlug/sessions/:sessionId/payment-submitted', SessionController.submitSessionPayment);
 router.post(
   '/:tenantSlug/sessions/:sessionId/admin-finish',
   requireAuth,
@@ -30,6 +32,18 @@ router.post(
   requireAuth,
   requireRoles(BILLING_VIEW_ROLES),
   SessionController.completeSession,
+);
+router.post(
+  '/:tenantSlug/sessions/:sessionId/payment-link',
+  requireAuth,
+  requireRoles(BILLING_VIEW_ROLES),
+  SessionController.sendSessionPaymentLink,
+);
+router.post(
+  '/:tenantSlug/sessions/:sessionId/payment-reject',
+  requireAuth,
+  requireRoles(BILLING_VIEW_ROLES),
+  SessionController.rejectSessionPayment,
 );
 router.get('/:tenantSlug/sessions/:sessionId/bill', SessionController.getBill);
 

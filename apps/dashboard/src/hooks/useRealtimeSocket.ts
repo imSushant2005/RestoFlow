@@ -71,7 +71,7 @@ export function useRealtimeSocket({
 
     const socket = io(getSocketUrl(), {
       auth: { token: accessToken, client: 'dashboard' },
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
       rememberUpgrade: false,
       reconnection: true,
       reconnectionAttempts: 12,
@@ -136,7 +136,9 @@ export function useRealtimeSocket({
       'session:update',
       'session:finished',
       'session:settled',
-      'session:completed'
+      'session:completed',
+      'session:payment_submitted',
+      'session:payment_rejected',
     ];
 
     events.forEach(eventName => {

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AlertCircle, ArrowRight, Users } from 'lucide-react';
 import { publicApi } from '../lib/api';
-import { getTenantStorageItem, setActiveSessionForTenant } from '../lib/tenantStorage';
+import { getActiveSessionForTenant, getTenantStorageItem, setActiveSessionForTenant } from '../lib/tenantStorage';
 
 const PARTY_OPTIONS = [1, 2, 3, 4, 5, 6];
 
@@ -18,6 +18,12 @@ export function PartySizePage() {
   const customerName = getTenantStorageItem(tenantSlug, 'customer_name') || '';
   const customerPhone = getTenantStorageItem(tenantSlug, 'customer_phone') || '';
   const customerId = getTenantStorageItem(tenantSlug, 'customer_id');
+  const activeSessionId = getActiveSessionForTenant(tenantSlug);
+
+  useEffect(() => {
+    if (!tenantSlug || !activeSessionId) return;
+    navigate(`/order/${tenantSlug}/session/${activeSessionId}`, { replace: true });
+  }, [activeSessionId, navigate, tenantSlug]);
 
   const handleContinue = async () => {
     if (!customerId) {

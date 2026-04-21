@@ -33,6 +33,8 @@ export type OpsNotification = {
     tableName?: string;
     sessionId?: string;
     type?: string;
+    kind?: string;
+    totalAmount?: number;
   };
 };
 

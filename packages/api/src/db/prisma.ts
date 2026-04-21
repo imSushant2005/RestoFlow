@@ -1,4 +1,5 @@
 import { PrismaClient } from '@dineflow/prisma';
+import { env } from '../config/env';
 import {
   recordPrismaQuery,
   recordPrismaRetry,
@@ -13,6 +14,10 @@ const globalForPrisma = globalThis as typeof globalThis & {
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
+    datasourceUrl:
+      env.NODE_ENV !== 'production' && env.DIRECT_DATABASE_URL
+        ? env.DIRECT_DATABASE_URL
+        : env.DATABASE_URL,
     log: [
       { level: 'warn', emit: 'stdout' },
       { level: 'error', emit: 'stdout' },

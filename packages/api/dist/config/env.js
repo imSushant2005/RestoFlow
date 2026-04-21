@@ -78,6 +78,8 @@ const envSchema = zod_1.z
     .superRefine((value, ctx) => {
     const redisUrl = emptyToUndefined(value.REDIS_URL);
     const cloudinaryUrl = emptyToUndefined(value.CLOUDINARY_URL);
+    const databaseUrl = emptyToUndefined(value.DATABASE_URL);
+    const directDatabaseUrl = emptyToUndefined(value.DIRECT_DATABASE_URL);
     if (value.NODE_ENV === 'production' && !emptyToUndefined(value.ADMIN_SECRET_KEY)) {
         ctx.addIssue({
             code: zod_1.z.ZodIssueCode.custom,
@@ -108,6 +110,13 @@ const envSchema = zod_1.z
                 path: ['CLOUDINARY_URL'],
             });
         }
+    }
+    if (databaseUrl?.includes('-pooler.') && !directDatabaseUrl) {
+        ctx.addIssue({
+            code: zod_1.z.ZodIssueCode.custom,
+            message: 'DIRECT_DATABASE_URL is required when DATABASE_URL points to a pooled Postgres host.',
+            path: ['DIRECT_DATABASE_URL'],
+        });
     }
 });
 const parsed = envSchema.safeParse(process.env);

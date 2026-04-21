@@ -1,9 +1,12 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { publicApi } from '../lib/api';
-import { ShoppingBag, UtensilsCrossed, Star, ChevronRight, Moon, Sun } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
+import { UtensilsCrossed, Moon, Sun, ChevronRight, ShoppingBag, Star } from 'lucide-react';
+import { publicApi } from '../lib/api';
+import { buildCustomerThemeVars } from '../lib/customerTheme';
 import { useTheme } from '../context/ThemeContext';
+import { getDirectImageUrl } from '../lib/images';
+import { BrandLogo } from '../components/BrandLogo';
 
 export function RestaurantHome() {
   const { theme, toggleTheme } = useTheme();
@@ -23,10 +26,10 @@ export function RestaurantHome() {
 
   const menuUrl = seatParam ? `/order/${tenantSlug}/${tableId}/menu?seat=${seatParam}` : `/order/${tenantSlug}/${tableId}/menu`;
   const statusUrl = `/order/${tenantSlug}/status`;
-  const restaurantName = menuData?.name || 'Welcome';
-  const logoUrl = menuData?.logoUrl || '';
-  const coverImageUrl = menuData?.coverImageUrl || '';
-  const brandColor = menuData?.primaryColor || '#f97316';
+  const restaurantName = menuData?.businessName || menuData?.name || 'Welcome';
+  const logoUrl = menuData?.logoUrl || menuData?.logo || menuData?.businessLogo || menuData?.restaurantLogo || '';
+  const coverImageUrl = menuData?.coverImageUrl || menuData?.cover || '';
+  const customerThemeVars = buildCustomerThemeVars(menuData);
 
   if (isLoading) {
     return (
@@ -43,8 +46,7 @@ export function RestaurantHome() {
       className="min-h-[100dvh] bg-white flex flex-col fade-in"
       style={
         {
-          '--brand': brandColor,
-          '--brand-soft': `${brandColor}22`,
+          ...customerThemeVars,
         } as React.CSSProperties
       }
     >
@@ -63,11 +65,11 @@ export function RestaurantHome() {
       <div className="relative text-white px-6 pt-16 pb-20 flex flex-col items-center text-center overflow-hidden">
         {coverImageUrl ? (
           <>
-            <img src={coverImageUrl} alt={`${restaurantName} cover`} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+            <img src={getDirectImageUrl(coverImageUrl)} alt={`${restaurantName} cover`} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
             <div className="absolute inset-0 bg-black/45" />
           </>
         ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-[color:var(--brand)] via-[color:var(--brand)] to-red-600" />
+          <div className="absolute inset-0" style={{ backgroundImage: 'var(--brand-gradient)' }} />
         )}
 
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 pointer-events-none" />
@@ -83,7 +85,15 @@ export function RestaurantHome() {
 
         <div className="relative z-10 w-20 h-20 bg-white/20 backdrop-blur-sm rounded-3xl flex items-center justify-center mb-5 shadow-xl border border-white/30 overflow-hidden">
           {logoUrl ? (
-            <img src={logoUrl} alt={`${restaurantName} logo`} className="w-full h-full object-cover" loading="lazy" />
+            <BrandLogo
+              src={logoUrl}
+              name={restaurantName}
+              alt={`${restaurantName} logo`}
+              className="h-full w-full rounded-3xl"
+              imageClassName="h-full w-full bg-white/80 p-2 object-contain"
+              fallbackClassName="rounded-3xl bg-white/20 text-white"
+              iconSize={36}
+            />
           ) : (
             <UtensilsCrossed size={36} className="text-white" />
           )}
@@ -96,14 +106,14 @@ export function RestaurantHome() {
           <div className="relative z-10 mt-5 inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-bold border border-white/30">
             <span className="w-2 h-2 rounded-full bg-green-400 shadow-sm shadow-green-400"></span>
             Table {tableId}
-            {seatParam ? ` · Seat ${seatParam}` : ''}
+            {seatParam ? ` | Seat ${seatParam}` : ''}
           </div>
         )}
 
         <div className="relative z-10 mt-5 flex items-center gap-1.5 text-sm font-semibold text-white/90">
           <Star size={14} className="fill-yellow-300 text-yellow-300" />
           <span>4.5</span>
-          <span className="text-white/50">·</span>
+          <span className="text-white/50">|</span>
           <span className="text-white/70">200+ orders today</span>
         </div>
       </div>
@@ -113,7 +123,8 @@ export function RestaurantHome() {
 
         <button
           onClick={() => navigate(menuUrl)}
-          className="w-full flex items-center justify-between bg-brand hover:bg-brand-dark active:scale-[0.98] text-white px-6 py-5 rounded-2xl shadow-lg transition-all font-bold text-base"
+          className="w-full flex items-center justify-between active:scale-[0.98] text-white px-6 py-5 rounded-2xl shadow-lg transition-all font-bold text-base"
+          style={{ backgroundImage: 'var(--brand-gradient)' }}
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">

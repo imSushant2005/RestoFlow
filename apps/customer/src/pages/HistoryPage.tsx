@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { api, publicApi } from '../lib/api';
+import { buildCustomerThemeVars } from '../lib/customerTheme';
 import { getCustomerTokenForTenant, getActiveSessionForTenant, getSessionAccessTokenForTenant } from '../lib/tenantStorage';
 import { getSocketUrl } from '../lib/network';
 
@@ -60,6 +61,7 @@ export function HistoryPage() {
   const token = getCustomerTokenForTenant(tenantSlug);
   const activeSessionId = getActiveSessionForTenant(tenantSlug);
   const sessionAccessToken = getSessionAccessTokenForTenant(tenantSlug);
+  const customerThemeVars = useMemo(() => buildCustomerThemeVars(sessions[0]?.tenant), [sessions]);
   const hasOpenSessions = useMemo(
     () => sessions.some((session) => session?.sessionStatus !== 'CLOSED'),
     [sessions],
@@ -156,7 +158,7 @@ export function HistoryPage() {
     );
 
   return (
-    <div className="min-h-[100dvh] pb-24" style={{ background: 'var(--bg)' }}>
+    <div className="min-h-[100dvh] pb-24" style={{ background: 'var(--bg)', ...customerThemeVars } as any}>
       <div className="sticky top-0 z-40 px-6 pt-12 pb-6 backdrop-blur-md" style={{ background: 'var(--surface-60)', borderBottom: '1px solid var(--border)' }}>
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90" style={{ background: 'var(--surface-3)', color: 'var(--text-1)' }}>
@@ -164,7 +166,7 @@ export function HistoryPage() {
           </button>
           <div>
             <h1 className="text-2xl font-black tracking-tight" style={{ color: 'var(--text-1)' }}>My Orders</h1>
-            <p className="text-xs font-bold" style={{ color: 'var(--text-3)' }}>{liveVisits.length} active • {pastVisits.length} past</p>
+            <p className="text-xs font-bold" style={{ color: 'var(--text-3)' }}>{liveVisits.length} active | {pastVisits.length} past</p>
           </div>
         </div>
       </div>
@@ -195,7 +197,7 @@ export function HistoryPage() {
                   <div className="flex justify-between items-start mb-8">
                     <div>
                       <h3 className="text-xl font-black" style={{ color: 'var(--text-1)' }}>{s.tenant?.businessName || 'Restaurant'}</h3>
-                      <p className="text-xs font-bold mt-1" style={{ color: 'var(--text-3)' }}>{s.table?.name || 'Takeaway'} • {s.orders?.length || 0} orders</p>
+                      <p className="text-xs font-bold mt-1" style={{ color: 'var(--text-3)' }}>{s.table?.name || 'Takeaway'} | {s.orders?.length || 0} orders</p>
                     </div>
                     <div className="text-right">
                        <p className="text-2xl font-black" style={{ color: 'var(--brand)' }}>{formatINR(totalAmount)}</p>

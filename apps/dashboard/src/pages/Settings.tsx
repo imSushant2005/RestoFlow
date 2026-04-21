@@ -43,6 +43,37 @@ const QR_PRESETS = [
   { label: 'Midnight Card', fgColor: '#f8fafc', bgColor: '#0f172a' },
 ];
 
+const CUSTOMER_SITE_PRESETS = [
+  {
+    id: 'warm-bistro',
+    label: 'Warm Bistro',
+    description: 'Bright, energetic, and good for fast-moving restaurants.',
+    primaryColor: '#FF6B35',
+    accentColor: '#1E293B',
+  },
+  {
+    id: 'cafe-blue',
+    label: 'Cafe Blue',
+    description: 'Clean and calm with a stronger premium cafe tone.',
+    primaryColor: '#2563EB',
+    accentColor: '#0F172A',
+  },
+  {
+    id: 'lounge-emerald',
+    label: 'Emerald Lounge',
+    description: 'Richer hospitality look for dine-in and hotel-style menus.',
+    primaryColor: '#059669',
+    accentColor: '#111827',
+  },
+  {
+    id: 'royal-plum',
+    label: 'Royal Plum',
+    description: 'A darker premium contrast for upscale dining brands.',
+    primaryColor: '#B45309',
+    accentColor: '#312E81',
+  },
+];
+
 function readQrConfig() {
   if (typeof window === 'undefined') return DEFAULT_QR_CONFIG;
   try {
@@ -114,6 +145,10 @@ export function Settings() {
   
   // QR Studio State
   const [qrConfig, setQrConfig] = useState(() => readQrConfig());
+  const [customerSitePalette, setCustomerSitePalette] = useState({
+    primaryColor: '#FF6B35',
+    accentColor: '#1E293B',
+  });
 
   useEffect(() => {
     if (business?.businessHours) {
@@ -128,6 +163,13 @@ export function Settings() {
   useEffect(() => {
     localStorage.setItem('rf_qr_style', JSON.stringify(qrConfig));
   }, [qrConfig]);
+
+  useEffect(() => {
+    setCustomerSitePalette({
+      primaryColor: typeof business?.primaryColor === 'string' && business.primaryColor.trim() ? business.primaryColor : '#FF6B35',
+      accentColor: typeof business?.accentColor === 'string' && business.accentColor.trim() ? business.accentColor : '#1E293B',
+    });
+  }, [business?.accentColor, business?.primaryColor]);
 
   useEffect(() => {
     const slug = business?.slug || 'restaurant';
@@ -145,20 +187,30 @@ export function Settings() {
   const handleBusinessSave = (e: any) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    businessMutation.mutate({
-      businessName: formData.get('businessName'),
-      slug: formData.get('slug'),
-      email: formData.get('email'),
-      phone: formData.get('phone'),
-      gstin: formData.get('gstin'),
-      description: formData.get('description'),
-      logoUrl: formData.get('logoUrl'),
-      coverImageUrl: formData.get('coverImageUrl'),
-      primaryColor: formData.get('primaryColor'),
-      accentColor: formData.get('accentColor'),
-      currencySymbol: formData.get('currencySymbol'),
-      taxRate: parseFloat(formData.get('taxRate') as string) || 0,
+    const payload: any = {};
+    
+    // Define all possible fields
+    const fields = [
+      'businessName', 'slug', 'email', 'phone', 'gstin', 'description', 
+      'logoUrl', 'coverImageUrl', 'primaryColor', 'accentColor', 'currencySymbol', 'upiId'
+    ];
+    
+    fields.forEach(field => {
+      const val = formData.get(field);
+      if (val !== null) payload[field] = val;
     });
+
+    payload.primaryColor = customerSitePalette.primaryColor;
+    payload.accentColor = customerSitePalette.accentColor;
+
+    const taxRateVal = formData.get('taxRate');
+    if (taxRateVal !== null) {
+      payload.taxRate = parseFloat(taxRateVal as string) || 0;
+    }
+
+    payload.hasWaiterService = formData.get('hasWaiterService') === 'on';
+
+    businessMutation.mutate(payload);
   };
 
   const handleHoursSave = () => {
@@ -230,6 +282,12 @@ export function Settings() {
     { id: 'staff', label: 'Team', icon: ShieldCheck, locked: plan === 'MINI' },
     { id: 'qr', label: 'QR Studio', icon: QrCode },
   ];
+  const activeCustomerPreset =
+    CUSTOMER_SITE_PRESETS.find(
+      (preset) =>
+        preset.primaryColor.toLowerCase() === customerSitePalette.primaryColor.toLowerCase() &&
+        preset.accentColor.toLowerCase() === customerSitePalette.accentColor.toLowerCase(),
+    ) || null;
 
   return (
     <div
@@ -343,6 +401,157 @@ export function Settings() {
                       <input name="coverImageUrl" type="url" defaultValue={business?.coverImageUrl || ''} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-semibold text-slate-900 focus:bg-white" placeholder="https://..." />
                     </div>
 
+                    <div className="md:col-span-2 rounded-[2rem] border border-slate-200 bg-slate-50 p-5">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-widest text-slate-400">Customer Site Look</p>
+                          <h4 className="mt-1 text-lg font-black text-slate-900">Control how guests experience your menu</h4>
+                          <p className="mt-1 max-w-2xl text-sm font-medium leading-relaxed text-slate-500">
+                            These colors carry through the customer menu, cart, tracker, and bill view. Pick a preset or fine-tune the palette.
+                          </p>
+                        </div>
+                        <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                          {activeCustomerPreset ? activeCustomerPreset.label : 'Custom palette'}
+                        </span>
+                      </div>
+
+                      <div className="mt-5 grid gap-3 md:grid-cols-2">
+                        {CUSTOMER_SITE_PRESETS.map((preset) => {
+                          const isActive =
+                            preset.primaryColor.toLowerCase() === customerSitePalette.primaryColor.toLowerCase() &&
+                            preset.accentColor.toLowerCase() === customerSitePalette.accentColor.toLowerCase();
+                          return (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() =>
+                                setCustomerSitePalette({
+                                  primaryColor: preset.primaryColor,
+                                  accentColor: preset.accentColor,
+                                })
+                              }
+                              className={`rounded-[1.5rem] border p-4 text-left transition-all ${
+                                isActive ? 'scale-[1.01] shadow-lg shadow-slate-900/5' : 'hover:-translate-y-0.5'
+                              }`}
+                              style={{
+                                borderColor: isActive ? preset.primaryColor : '#e2e8f0',
+                                background: isActive ? `${preset.primaryColor}10` : '#ffffff',
+                              }}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-black text-slate-900">{preset.label}</p>
+                                  <p className="mt-1 text-[12px] font-medium leading-relaxed text-slate-500">
+                                    {preset.description}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="h-4 w-4 rounded-full border border-black/10" style={{ background: preset.primaryColor }} />
+                                  <span className="h-4 w-4 rounded-full border border-black/10" style={{ background: preset.accentColor }} />
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="mt-5 grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="text-xs font-black uppercase tracking-widest text-slate-400">Primary Brand Color</label>
+                          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3">
+                            <input
+                              type="color"
+                              name="primaryColor"
+                              value={customerSitePalette.primaryColor}
+                              onChange={(event) =>
+                                setCustomerSitePalette((previous) => ({
+                                  ...previous,
+                                  primaryColor: event.target.value.toUpperCase(),
+                                }))
+                              }
+                              className="h-12 w-12 cursor-pointer rounded-xl border-0 p-0"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-black text-slate-900">{customerSitePalette.primaryColor.toUpperCase()}</p>
+                              <p className="text-[11px] font-medium text-slate-500">Main CTA, highlights, and menu emphasis</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-black uppercase tracking-widest text-slate-400">Accent / Contrast Color</label>
+                          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3">
+                            <input
+                              type="color"
+                              name="accentColor"
+                              value={customerSitePalette.accentColor}
+                              onChange={(event) =>
+                                setCustomerSitePalette((previous) => ({
+                                  ...previous,
+                                  accentColor: event.target.value.toUpperCase(),
+                                }))
+                              }
+                              className="h-12 w-12 cursor-pointer rounded-xl border-0 p-0"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-black text-slate-900">{customerSitePalette.accentColor.toUpperCase()}</p>
+                              <p className="text-[11px] font-medium text-slate-500">Depth, overlays, and premium contrast in the guest UI</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+                        <div
+                          className="px-5 py-5 text-white"
+                          style={{
+                            backgroundImage: `linear-gradient(135deg, ${customerSitePalette.primaryColor}, ${customerSitePalette.accentColor})`,
+                          }}
+                        >
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Guest Preview</p>
+                          <h5 className="mt-2 text-2xl font-black tracking-tight">{business?.businessName || 'Your venue'}</h5>
+                          <p className="mt-1 max-w-md text-sm font-medium text-white/80">
+                            Guests should feel the brand instantly, but ordering should still stay fast and readable.
+                          </p>
+                        </div>
+                        <div className="space-y-4 p-5">
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">
+                            Search dishes, combos, ingredients...
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <span
+                              className="rounded-full px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white"
+                              style={{ background: customerSitePalette.primaryColor }}
+                            >
+                              All
+                            </span>
+                            <span className="rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">
+                              Veg
+                            </span>
+                            <span className="rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">
+                              Non-Veg
+                            </span>
+                          </div>
+                          <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-black text-slate-900">Fast Cart CTA</p>
+                                <p className="mt-1 text-[12px] font-medium text-slate-500">This is the action guests see right before placing the order.</p>
+                              </div>
+                              <button
+                                type="button"
+                                className="rounded-full px-4 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-white"
+                                style={{
+                                  backgroundImage: `linear-gradient(135deg, ${customerSitePalette.primaryColor}, ${customerSitePalette.accentColor})`,
+                                }}
+                              >
+                                Review order
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 mt-2 border-t border-slate-100">
                       <div className="space-y-1.5">
                         <label className="text-xs font-black uppercase tracking-widest text-slate-400">Public Support Email</label>
@@ -351,6 +560,39 @@ export function Settings() {
                       <div className="space-y-1.5">
                         <label className="text-xs font-black uppercase tracking-widest text-slate-400">Business Phone</label>
                         <input name="phone" defaultValue={business?.phone || ''} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold text-slate-900 focus:bg-white" />
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400">Restaurant UPI ID</label>
+                        <input
+                          name="upiId"
+                          defaultValue={business?.upiId || ''}
+                          placeholder="restoflow@upi"
+                          className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold text-slate-900 focus:bg-white"
+                        />
+                        <p className="text-[10px] font-bold text-slate-400">
+                          Used for exact-amount online checkout links on the customer bill page.
+                        </p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400">Bill Delivery Style</label>
+                        <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <input
+                            type="checkbox"
+                            name="hasWaiterService"
+                            defaultChecked={Boolean(business?.hasWaiterService)}
+                            className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div>
+                            <p className="text-sm font-black text-slate-900">Waiter brings the bill</p>
+                            <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                              Turn this on if staff carry the bill to the table. Turn it off for counter-only payment.
+                            </p>
+                          </div>
+                        </label>
                       </div>
                     </div>
 

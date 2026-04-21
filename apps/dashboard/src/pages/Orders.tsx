@@ -3,7 +3,7 @@ import { api } from '../lib/api';
 import { useCallback, useEffect, useMemo, useState, memo } from 'react';
 import { format } from 'date-fns';
 import { formatINR } from '../lib/currency';
-import { CreditCard, ReceiptText, RefreshCw, Signal, XCircle, Zap, ShoppingBag, UtensilsCrossed, Clock, ChevronDown, ChevronUp, GripVertical, CheckCircle, FileText, Trash2 } from 'lucide-react';
+import { CreditCard, ReceiptText, RefreshCw, Signal, XCircle, Zap, ShoppingBag, UtensilsCrossed, Clock, ChevronDown, ChevronUp, GripVertical, CheckCircle, FileText, Trash2, ChevronRight } from 'lucide-react';
 import { InvoiceModal } from './InvoicesPage';
 import { 
   DndContext, 
@@ -29,6 +29,22 @@ type SessionActionOptions = {
   ensureBillFirst?: boolean;
   force?: boolean;
 };
+type PaymentDeskModalState =
+  | {
+      kind: 'SETTLE';
+      sessionId: string;
+      tableLabel: string;
+      totalAmount: number;
+      sessionStatus: string;
+      paymentMethod: SessionPaymentMethod;
+    }
+  | {
+      kind: 'CONFIRM_RECEIPT';
+      sessionId: string;
+      tableLabel: string;
+      totalAmount: number;
+    };
+const DASHBOARD_PAYMENT_SUBMITTED_EVENT = 'rf:session-payment-submitted';
 
 // Removed TERMINAL_STATUSES
 // --- ISOLATED TIME TICKER (Avoids global order re-renders) ---
@@ -154,6 +170,7 @@ function getStatusChipClass(status: string) {
 
 const TicketCard = memo(({
   ticket,
+  plan,
   canCloseSession,
   selectedBillAction,
   onSelectBillAction,
@@ -161,9 +178,11 @@ const TicketCard = memo(({
   paymentPending,
   onFinishSession,
   onCompleteSession,
-  onViewInvoice
+  onViewInvoice,
+  onOpenSettlementModal,
 }: {
   ticket: any;
+  plan?: string;
   canCloseSession: boolean;
   selectedBillAction: string;
   onSelectBillAction: (sessionId: string, action: string) => void;
@@ -172,12 +191,20 @@ const TicketCard = memo(({
   onFinishSession: (sessionId: string, force?: boolean) => void;
   onCompleteSession: (sessionId: string, paymentMethod: SessionPaymentMethod, options?: SessionActionOptions) => void;
   onViewInvoice: (ticket: any) => void;
+  onOpenSettlementModal?: (payload: {
+    sessionId: string;
+    tableLabel: string;
+    totalAmount: number;
+    sessionStatus: string;
+    paymentMethod: SessionPaymentMethod;
+  }) => void;
 }) => {
   const ticketOrders = Array.isArray(ticket?.orders) ? ticket.orders : [];
   const resolvedTicketTotal = resolveTicketTotal(ticketOrders, ticket?.session);
   const sessionStatus = String(ticket?.session?.sessionStatus || '').toUpperCase();
   const sessionPaymentMethod = String(ticket?.session?.bill?.paymentMethod || '').toUpperCase();
   const sessionPaymentStatus = String(ticket?.session?.bill?.paymentStatus || '').toUpperCase();
+  const normalizedSessionPaymentMethod = normalizeSessionPaymentMethod(ticket?.session?.bill?.paymentMethod);
   const isCancelled = ticketOrders.length > 0 && ticketOrders.every((o: any) => o?.status === 'CANCELLED');
   const isClosedSession = ticket.isSession && sessionStatus === 'CLOSED';
   const createdAtMs = toValidTimestamp(ticket?.createdAt);
@@ -187,6 +214,19 @@ const TicketCard = memo(({
     (order: any) => !['SERVED', 'RECEIVED'].includes(String(order?.status || '').toUpperCase()),
   );
   const canCapturePayment = ticket.isSession && canCloseSession && ticket.sessionId && sessionStatus === 'AWAITING_BILL';
+  const canMoveSessionToBilling =
+    ticket.isSession &&
+    canCloseSession &&
+    ticket.sessionId &&
+    sessionStatus !== 'AWAITING_BILL' &&
+    sessionStatus !== 'CLOSED' &&
+    sessionStatus !== 'CANCELLED';
+  const canArchiveSession =
+    ticket.isSession &&
+    canCloseSession &&
+    ticket.sessionId &&
+    (sessionStatus === 'AWAITING_BILL' || sessionPaymentStatus === 'PAID');
+  const canManageSettlementDesk = plan !== 'MINI' && Boolean(onOpenSettlementModal) && (canMoveSessionToBilling || canArchiveSession);
   const isUrgent = elapsedMin >= 15 && activeBatches.some((o: any) => ['NEW', 'ACCEPTED', 'PREPARING'].includes(String(o.status).toUpperCase()));
 
   return (
@@ -324,7 +364,35 @@ const TicketCard = memo(({
                    </p>
                 </div>
               )}
-              {canCloseSession && ticket.sessionId && (
+              {canManageSettlementDesk && ticket.sessionId && outstandingBatches.length === 0 && (
+                <button
+                  onClick={() => {
+                    onOpenSettlementModal?.({
+                      sessionId: ticket.sessionId!,
+                      tableLabel: getTableLabel(ticket),
+                      totalAmount: resolvedTicketTotal,
+                      sessionStatus,
+                      paymentMethod: normalizedSessionPaymentMethod,
+                    });
+                  }}
+                  disabled={finishPending || paymentPending}
+                  className="w-full flex items-center justify-between rounded-xl bg-amber-500 px-5 py-3 text-xs font-black text-white transition-all hover:bg-amber-400 disabled:opacity-50"
+                >
+                  <span className="flex items-center gap-2">
+                    <ReceiptText size={14} />
+                    {sessionStatus === 'AWAITING_BILL' ? 'Payment Desk' : 'Billing & Payment'}
+                  </span>
+                  <ChevronRight size={14} className="opacity-70" />
+                </button>
+              )}
+              {plan !== 'MINI' && outstandingBatches.length > 0 && (
+                <div className="bg-amber-500/5 rounded-xl p-3 text-center border border-amber-500/10">
+                  <p className="text-[11px] font-bold text-amber-500 uppercase tracking-wider">
+                    Serve all active batches before billing
+                  </p>
+                </div>
+              )}
+              {plan === 'MINI' && canCloseSession && ticket.sessionId && (
                 <div className="flex gap-2">
                   <select
                     value={selectedBillAction}
@@ -371,7 +439,7 @@ const TicketCard = memo(({
                   </button>
                 </div>
               )}
-              {sessionStatus === 'AWAITING_BILL' && (
+              {plan === 'MINI' && sessionStatus === 'AWAITING_BILL' && (
                 <button
                   onClick={() => {
                     if (!ticket.sessionId) return;
@@ -436,7 +504,8 @@ const PipelineCard = memo(({
   onFinishSession,
   onCompleteSession,
   isCompletePending,
-  plan
+  plan,
+  onOpenSettlementModal,
 }: {
   order: any;
   hasKDS: boolean;
@@ -449,6 +518,13 @@ const PipelineCard = memo(({
   onCompleteSession?: (sessionId: string, paymentMethod: SessionPaymentMethod, options?: SessionActionOptions) => void;
   isCompletePending?: boolean;
   plan?: string;
+  onOpenSettlementModal?: (payload: {
+    sessionId: string;
+    tableLabel: string;
+    totalAmount: number;
+    sessionStatus: string;
+    paymentMethod: SessionPaymentMethod;
+  }) => void;
 }) => {
   const [isExpanded, setIsExpanded] = useState(order?.status === 'NEW');
   const currentStatus = String(order?.status || '').toUpperCase();
@@ -469,6 +545,8 @@ const PipelineCard = memo(({
     canCloseSession &&
     isSessionOrder &&
     (sessionStatus === 'AWAITING_BILL' || sessionPaymentStatus === 'PAID');
+  const canManageSettlementDesk = canCloseSession && isSessionOrder && (canMoveSessionToBilling || canArchiveSession);
+  const settlementTableLabel = getTableLabel(order);
   
   const {
     attributes,
@@ -674,7 +752,27 @@ const PipelineCard = memo(({
                   Complete Pickup
                 </button>
               )}
-              {currentStatus === 'SERVED' && isSessionOrder && canMoveSessionToBilling && onFinishSession && (
+              {currentStatus === 'SERVED' && isSessionOrder && canManageSettlementDesk && onOpenSettlementModal && plan !== 'MINI' && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!order.diningSessionId) return;
+                    onOpenSettlementModal({
+                      sessionId: order.diningSessionId,
+                      tableLabel: settlementTableLabel,
+                      totalAmount: resolveTicketTotal([order], order?.diningSession),
+                      sessionStatus,
+                      paymentMethod: sessionPaymentMethod,
+                    });
+                  }}
+                  disabled={isStatusPending || isCompletePending}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 py-3 text-xs font-black text-white shadow-lg shadow-amber-500/20 transition-all active:scale-[0.97]"
+                >
+                  <ReceiptText size={14} />
+                  {sessionStatus === 'AWAITING_BILL' ? 'Payment Desk' : 'Billing & Payment'}
+                </button>
+              )}
+              {currentStatus === 'SERVED' && isSessionOrder && canMoveSessionToBilling && onFinishSession && plan === 'MINI' && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -692,7 +790,7 @@ const PipelineCard = memo(({
                   Move to Billing
                 </button>
               )}
-              {currentStatus === 'SERVED' && isSessionOrder && canArchiveSession && onCompleteSession && (
+              {currentStatus === 'SERVED' && isSessionOrder && canArchiveSession && onCompleteSession && plan === 'MINI' && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -738,6 +836,7 @@ export function Orders({ role }: { role?: string }) {
   const canCloseSession = effectiveRole === 'OWNER' || effectiveRole === 'MANAGER' || effectiveRole === 'CASHIER';
   const { features, plan } = usePlanFeatures();
   const [localToast, setLocalToast] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
+  const [paymentDeskModal, setPaymentDeskModal] = useState<PaymentDeskModalState | null>(null);
 
   useEffect(() => {
     if (localToast) {
@@ -923,8 +1022,79 @@ export function Orders({ role }: { role?: string }) {
     onSuccess: refreshOperationalData,
   });
 
+  const sendPaymentLinkMutation = useMutation({
+    mutationFn: async ({ sessionId }: { sessionId: string }) => {
+      const slug = await resolveTenantSlug();
+      if (!slug) {
+        throw new Error('Tenant slug missing. Complete Business Profile setup first.');
+      }
+      return api.post(`/public/${slug}/sessions/${sessionId}/payment-link`, {});
+    },
+    onSuccess: refreshOperationalData,
+  });
+
+  const rejectSessionPaymentMutation = useMutation({
+    mutationFn: async ({ sessionId, message }: { sessionId: string; message: string }) => {
+      const slug = await resolveTenantSlug();
+      if (!slug) {
+        throw new Error('Tenant slug missing. Complete Business Profile setup first.');
+      }
+      return api.post(`/public/${slug}/sessions/${sessionId}/payment-reject`, { message });
+    },
+  });
+
   const [activeDragOrder, setActiveDragOrder] = useState<any>(null);
   const [billSelections, setBillSelections] = useState<Record<string, BillWorkflowAction>>({});
+
+  const openSessionSettlementDesk = useCallback(
+    ({
+      sessionId,
+      tableLabel,
+      totalAmount,
+      sessionStatus,
+      paymentMethod,
+    }: {
+      sessionId: string;
+      tableLabel: string;
+      totalAmount: number;
+      sessionStatus: string;
+      paymentMethod: SessionPaymentMethod;
+    }) => {
+      setPaymentDeskModal({
+        kind: 'SETTLE',
+        sessionId,
+        tableLabel,
+        totalAmount,
+        sessionStatus,
+        paymentMethod,
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!canCloseSession) return undefined;
+
+    const handlePaymentSubmitted = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const payload = event.detail || {};
+      const sessionId = typeof payload?.sessionId === 'string' ? payload.sessionId : '';
+      if (!sessionId) return;
+
+      setPaymentDeskModal({
+        kind: 'CONFIRM_RECEIPT',
+        sessionId,
+        tableLabel: payload?.tableName ? `Table ${payload.tableName}` : 'Live session',
+        totalAmount: Number(payload?.totalAmount || 0),
+      });
+    };
+
+    window.addEventListener(DASHBOARD_PAYMENT_SUBMITTED_EVENT, handlePaymentSubmitted);
+
+    return () => {
+      window.removeEventListener(DASHBOARD_PAYMENT_SUBMITTED_EVENT, handlePaymentSubmitted);
+    };
+  }, [canCloseSession]);
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1231,6 +1401,175 @@ export function Orders({ role }: { role?: string }) {
   return (
     <>
       <div className="flex h-full min-h-0 flex-col p-3 sm:p-5 lg:p-8 relative">
+      {paymentDeskModal && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={() => setPaymentDeskModal(null)} />
+          <div className="relative w-full max-w-md overflow-hidden rounded-[2rem] border border-white/10 bg-[#0F1115] p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-400">
+                  {paymentDeskModal.kind === 'SETTLE'
+                    ? 'Billing Desk'
+                    : 'Payment Verification'}
+                </p>
+                <h2 className="mt-2 text-2xl font-black tracking-tight text-white">
+                  {paymentDeskModal.tableLabel}
+                </h2>
+                <p className="mt-2 text-sm font-bold text-slate-400">
+                  Total {formatINR(paymentDeskModal.totalAmount || 0)}
+                </p>
+              </div>
+              <button
+                onClick={() => setPaymentDeskModal(null)}
+                className="rounded-full bg-white/5 p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            {paymentDeskModal.kind === 'SETTLE' && (
+              <div className="mt-6 space-y-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs font-bold text-slate-300">
+                    {paymentDeskModal.sessionStatus === 'AWAITING_BILL'
+                      ? 'The final bill is already prepared. Choose how the restaurant received the payment.'
+                      : 'Service is done. Move this table into billing first so the guest can see the final bill and choose cash or online checkout.'}
+                  </p>
+                </div>
+
+                {paymentDeskModal.sessionStatus !== 'AWAITING_BILL' && (
+                  <button
+                    onClick={() => {
+                      handleFinishSession(paymentDeskModal.sessionId);
+                      setPaymentDeskModal(null);
+                    }}
+                    className="flex h-14 w-full items-center justify-between rounded-2xl bg-amber-500 px-5 text-sm font-black text-white transition-all hover:bg-amber-400"
+                  >
+                    <span className="flex items-center gap-3">
+                      <ReceiptText size={18} />
+                      Move to Billing
+                    </span>
+                    <ChevronRight size={16} className="opacity-70" />
+                  </button>
+                )}
+
+                {paymentDeskModal.sessionStatus === 'AWAITING_BILL' && (
+                  <>
+                    <button
+                      onClick={() => {
+                        void handleCompleteSession(paymentDeskModal.sessionId, 'cash', {
+                          shouldClose: true,
+                          ensureBillFirst: false,
+                        });
+                        setPaymentDeskModal(null);
+                      }}
+                      className="flex h-14 w-full items-center justify-between rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white transition-all hover:bg-emerald-500"
+                    >
+                      <span className="flex items-center gap-3">
+                        <ReceiptText size={18} />
+                        Cash Received & Checkout
+                      </span>
+                      <ChevronRight size={16} className="opacity-70" />
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (!businessSettings?.upiId) {
+                          setLocalToast({
+                            message: 'Save the restaurant UPI ID in Settings before sending online checkout links.',
+                            type: 'error',
+                          });
+                          return;
+                        }
+                        void sendPaymentLinkMutation.mutateAsync({
+                          sessionId: paymentDeskModal.sessionId,
+                        }).then(() => {
+                          setLocalToast({
+                            message: 'Exact-amount UPI checkout link sent to the customer.',
+                            type: 'success',
+                          });
+                          setPaymentDeskModal(null);
+                        }).catch((error: any) => {
+                          setLocalToast({
+                            message: error?.response?.data?.error || error?.message || 'Could not send the online checkout link.',
+                            type: 'error',
+                          });
+                        });
+                      }}
+                      disabled={sendPaymentLinkMutation.isPending}
+                      className="flex h-14 w-full items-center justify-between rounded-2xl bg-blue-600 px-5 text-sm font-black text-white transition-all hover:bg-blue-500 disabled:opacity-60"
+                    >
+                      <span className="flex items-center gap-3">
+                        <CreditCard size={18} />
+                        Send Online Checkout Link
+                      </span>
+                      <ChevronRight size={16} className="opacity-70" />
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {paymentDeskModal.kind === 'CONFIRM_RECEIPT' && (
+              <div className="mt-6 space-y-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-sm font-bold text-slate-200">
+                    Did you receive {formatINR(paymentDeskModal.totalAmount || 0)} in the restaurant account?
+                  </p>
+                  <p className="mt-2 text-xs font-semibold text-slate-400">
+                    Confirm only after checking the UPI or bank app.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    void handleCompleteSession(paymentDeskModal.sessionId, 'online', {
+                      shouldClose: true,
+                      ensureBillFirst: true,
+                    });
+                    setPaymentDeskModal(null);
+                  }}
+                  className="flex h-14 w-full items-center justify-between rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white transition-all hover:bg-emerald-500"
+                >
+                  <span className="flex items-center gap-3">
+                    <CheckCircle size={18} />
+                    Yes, Payment Received
+                  </span>
+                  <ChevronRight size={16} className="opacity-70" />
+                </button>
+
+                <button
+                  onClick={() => {
+                    void rejectSessionPaymentMutation.mutateAsync({
+                      sessionId: paymentDeskModal.sessionId,
+                      message: 'Payment is not visible yet. Please show it to the desk manager.',
+                    }).then(() => {
+                      setLocalToast({
+                        message: 'Guest asked to show the payment to the desk manager.',
+                        type: 'info',
+                      });
+                      setPaymentDeskModal(null);
+                    }).catch((error: any) => {
+                      setLocalToast({
+                        message: error?.response?.data?.error || error?.message || 'Could not send the payment check response.',
+                        type: 'error',
+                      });
+                    });
+                  }}
+                  disabled={rejectSessionPaymentMutation.isPending}
+                  className="flex h-14 w-full items-center justify-between rounded-2xl bg-white/5 px-5 text-sm font-black text-white transition-all hover:bg-white/10 disabled:opacity-60"
+                >
+                  <span className="flex items-center gap-3">
+                    <RefreshCw size={18} />
+                    Not Yet
+                  </span>
+                  <ChevronRight size={16} className="opacity-70" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {pendingMiniSettle && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setPendingMiniSettle(null)} />
@@ -1416,6 +1755,34 @@ export function Orders({ role }: { role?: string }) {
           >
             {pipelineColumns.map(({ id, label, color, bg, badge, filter, pulse }) => {
               const colOrders = sortedLiveOrders.filter(filter);
+              let colOrdersRender = colOrders;
+
+              if (id === 'col-served') {
+                const uniqueSessions = new Set<string>();
+                const grouped = [] as any[];
+                
+                colOrders.forEach((o: any) => {
+                  if (o.diningSessionId) {
+                    if (!uniqueSessions.has(o.diningSessionId)) {
+                      const sessionOrders = colOrders.filter((co: any) => co.diningSessionId === o.diningSessionId);
+                      const composite = { ...o };
+                      composite.isGrouped = sessionOrders.length > 1;
+                      if (composite.isGrouped) {
+                        composite.id = o.diningSessionId;
+                        composite.items = sessionOrders.flatMap((so: any) => so.items || []);
+                        const uniqueOrderNumbers = [...new Set(sessionOrders.map((so: any) => so.orderNumber || `T-${asOrderCode(so.id)}`))];
+                        composite.orderNumber = uniqueOrderNumbers.join(', ');
+                      }
+                      uniqueSessions.add(o.diningSessionId);
+                      grouped.push(composite);
+                    }
+                  } else {
+                    grouped.push(o);
+                  }
+                });
+                colOrdersRender = grouped;
+              }
+
               return (
                 <KanbanColumn 
                   key={id} 
@@ -1427,7 +1794,7 @@ export function Orders({ role }: { role?: string }) {
                   pulse={pulse}
                   isActive={activeTab === 'PIPELINE'}
                 >
-                  {colOrders.map((order: any) => (
+                  {colOrdersRender.map((order: any) => (
                     <PipelineCard
                       key={order.id}
                       order={order}
@@ -1439,11 +1806,12 @@ export function Orders({ role }: { role?: string }) {
                       onUpdateStatus={handleUpdateStatus}
                       onFinishSession={handleFinishSession}
                       onCompleteSession={handleCompleteSession}
+                      onOpenSettlementModal={openSessionSettlementDesk}
                       isCompletePending={completeSessionMutation.isPending && completeSessionMutation.variables?.sessionId === order.diningSessionId}
                       plan={plan}
                     />
                   ))}
-                  {colOrders.length === 0 && (
+                  {colOrdersRender.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-10 text-center px-4 opacity-40">
                       <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">No orders</p>
                     </div>
@@ -1487,6 +1855,7 @@ export function Orders({ role }: { role?: string }) {
               <TicketCard 
                 key={ticket.id} 
                 ticket={ticket}
+                plan={plan}
                 canCloseSession={canCloseSession}
                 selectedBillAction={ticket.sessionId ? billSelections[ticket.sessionId] || 'AWAITING_BILL' : 'AWAITING_BILL'}
                 onSelectBillAction={handleSelectBillAction}
@@ -1494,6 +1863,7 @@ export function Orders({ role }: { role?: string }) {
                 paymentPending={completeSessionMutation.isPending && completeSessionMutation.variables?.sessionId === ticket.sessionId}
                 onFinishSession={handleFinishSession}
                 onCompleteSession={handleCompleteSession}
+                onOpenSettlementModal={openSessionSettlementDesk}
                 onViewInvoice={(t) => {
                   const sessionBill = t.session?.bill || t.diningSession?.bill;
                   setSelectedInvoice({
@@ -1531,6 +1901,7 @@ export function Orders({ role }: { role?: string }) {
               <TicketCard 
                 key={`history_${ticket.id}`} 
                 ticket={ticket}
+                plan={plan}
                 canCloseSession={canCloseSession}
                 selectedBillAction={ticket.sessionId ? billSelections[ticket.sessionId] || 'AWAITING_BILL' : 'AWAITING_BILL'}
                 onSelectBillAction={handleSelectBillAction}
@@ -1538,6 +1909,7 @@ export function Orders({ role }: { role?: string }) {
                 paymentPending={false}
                 onFinishSession={handleFinishSession}
                 onCompleteSession={handleCompleteSession}
+                onOpenSettlementModal={openSessionSettlementDesk}
                 onViewInvoice={(t) => {
                   const sessionBill = t.session?.bill || t.diningSession?.bill;
                   setSelectedInvoice({

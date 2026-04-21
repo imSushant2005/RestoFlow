@@ -8,7 +8,7 @@ import { generateOrderNumber } from '../services/order-number.service';
 import { buildServerPricedOrderPayload } from '../services/order-payload.service';
 import { cacheKeys } from '../utils/cache-keys';
 import { authorizeSessionAccess, generateSessionAccessToken } from '../utils/public-access';
-import { normalizePlan } from '../config/plans';
+import { getPlanLimits, normalizePlan } from '../config/plans';
 
 const WAITER_CALL_TYPES = new Set(['WAITER', 'BILL', 'WATER', 'EXTRA', 'HELP']);
 const ORDERABLE_SESSION_STATUSES = ['OPEN', 'PARTIALLY_SENT', 'ACTIVE'] as const;
@@ -262,6 +262,7 @@ export const getPublicMenu = async (req: Request, res: Response) => {
         taxRate: tenant.taxRate,
         businessHours: tenant.businessHours,
         plan: normalizePlan(tenant.plan),
+        planLimits: getPlanLimits(tenant.plan),
       };
     }, `public-menu:${tenantSlug}`), 1800); // 30-minute cache
 
@@ -296,9 +297,10 @@ export const resolveCustomDomain = async (req: Request, res: Response) => {
 export const createOrder = async (req: Request, res: Response) => {
   try {
     const { tenantSlug } = req.params;
-    const { sessionId, sessionToken, items, tableId, customerName, customerPhone } = req.body;
+    const { sessionId, sessionToken, items, tableId, customerName, customerPhone, orderType } = req.body;
     const incomingSessionToken = readOptionalString(sessionId || sessionToken || null);
     const requestedTableInput = readOptionalString(tableId);
+    const requestedOrderType = readOptionalString(orderType)?.toUpperCase() || null;
     const requestIdempotencyKey =
       readOptionalString(req.header('x-idempotency-key')) ||
       readOptionalString(req.body?.idempotencyKey);
@@ -307,6 +309,10 @@ export const createOrder = async (req: Request, res: Response) => {
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Order must include at least one item' });
+    }
+
+    if (requestedOrderType && !['DINE_IN', 'TAKEAWAY'].includes(requestedOrderType)) {
+      return res.status(400).json({ error: 'Invalid order type' });
     }
 
     if (requestIdempotencyKey) {
@@ -425,8 +431,8 @@ export const createOrder = async (req: Request, res: Response) => {
 
     const taxAmount = subtotal * (tenant.taxRate / 100);
     const totalAmount = subtotal + taxAmount;
-    const orderType = safeTableId ? 'DINE_IN' : 'TAKEAWAY';
-    const orderNumber = generateOrderNumber(orderType); // Collision-resistant — replaces COUNT+1 race
+    const resolvedOrderType = safeTableId ? 'DINE_IN' : requestedOrderType || 'TAKEAWAY';
+    const orderNumber = generateOrderNumber(resolvedOrderType); // Collision-resistant order key
 
     let order;
     let lockedSession:
@@ -516,7 +522,7 @@ export const createOrder = async (req: Request, res: Response) => {
           customerName,
           customerPhone,
           orderNumber,
-          orderType: orderType as any,
+          orderType: resolvedOrderType as any,
           subtotal,
           taxAmount,
           discountAmount: 0,
@@ -954,11 +960,21 @@ export const waiterCall = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Session access token is required.' });
     }
 
-    const tenantId = await resolveTenantIdBySlug(tenantSlug);
-    const session = await prisma.diningSession.findFirst({
-      where: { id: sessionId, tenantId },
-      select: { id: true, customerId: true, tableId: true },
-    });
+    const tenant = await resolveTenantBySlug(tenantSlug);
+    const tenantId = tenant.id;
+
+    if (!getPlanLimits(tenant.plan).hasWaiterApp) {
+      return res.status(403).json({ error: 'Waiter assistance is not available on this plan.' });
+    }
+
+    const session = await withPrismaRetry(
+      () =>
+        prisma.diningSession.findFirst({
+          where: { id: sessionId, tenantId },
+          select: { id: true, customerId: true, tableId: true },
+        }),
+      `public-waiter-call-session:${tenantId}:${sessionId}`,
+    );
 
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });

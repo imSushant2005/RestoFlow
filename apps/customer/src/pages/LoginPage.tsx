@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, ArrowRight, ChefHat, Phone, User } from 'lucide-react';
 import { publicApi } from '../lib/api';
-import { setCustomerAuthForTenant } from '../lib/tenantStorage';
+import { BrandLogo } from '../components/BrandLogo';
+import { getActiveSessionForTenant, getTenantStorageItem, setCustomerAuthForTenant } from '../lib/tenantStorage';
 
 export function LoginPage() {
   const { tenantSlug, tableId } = useParams();
@@ -14,6 +15,8 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const rememberKey = `rf_login_pref_${tenantSlug || 'default'}`;
+  const activeSessionId = getActiveSessionForTenant(tenantSlug);
+  const rememberedCustomerId = getTenantStorageItem(tenantSlug, 'customer_id');
 
   const { data: tenantMenu } = useQuery({
     queryKey: ['tenant-login-brand', tenantSlug],
@@ -33,11 +36,24 @@ export function LoginPage() {
       const data = JSON.parse(raw);
       if (typeof data?.phone === 'string') setPhone(data.phone);
       if (typeof data?.name === 'string') setName(data.name);
-      if (typeof data?.rememberMe === 'boolean') setRememberMe(data.rememberMe);
     } catch {
       // Ignore invalid local storage payloads.
     }
   }, [rememberKey]);
+
+  useEffect(() => {
+    if (!tenantSlug || !tableId) return;
+    if (activeSessionId) {
+      navigate(`/order/${tenantSlug}/session/${activeSessionId}`, { replace: true });
+      return;
+    }
+    if (rememberedCustomerId) {
+      navigate(`/order/${tenantSlug}/${tableId}/party`, { replace: true });
+    }
+  }, [activeSessionId, navigate, rememberedCustomerId, tableId, tenantSlug]);
+
+  const restaurantName = tenantMenu?.businessName || tenantMenu?.name || 'Restaurant';
+  const logoUrl = tenantMenu?.logoUrl || tenantMenu?.logo || tenantMenu?.businessLogo || tenantMenu?.restaurantLogo || '';
 
   const handleLogin = async () => {
     if (phone.length < 10) {
@@ -91,18 +107,22 @@ export function LoginPage() {
     <div className="flex min-h-[100dvh] flex-col overflow-hidden bg-gradient-to-b from-orange-500 via-orange-400 to-amber-300">
       <div className="relative px-6 pb-24 pt-16 text-center text-white">
         <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl border border-white/30 bg-white/15 shadow-xl backdrop-blur-sm">
-          {tenantMenu?.logoUrl ? (
-            <img
-              src={tenantMenu.logoUrl}
-              alt={`${tenantMenu?.businessName || 'Restaurant'} logo`}
-              className="h-full w-full rounded-3xl object-cover"
+          {logoUrl ? (
+            <BrandLogo
+              src={logoUrl}
+              name={restaurantName}
+              alt={`${restaurantName} logo`}
+              className="h-full w-full rounded-3xl"
+              imageClassName="h-full w-full rounded-3xl bg-white/70 p-2 object-contain"
+              fallbackClassName="rounded-3xl bg-white/15 text-white"
+              iconSize={36}
             />
           ) : (
             <ChefHat size={36} className="text-white" />
           )}
         </div>
         <h1 className="mb-2 text-3xl font-black tracking-tight">
-          {tenantMenu?.businessName || tenantMenu?.name || 'Welcome!'}
+          {restaurantName}
         </h1>
         <p className="text-base font-medium text-orange-100">Enter your details to start dining</p>
 

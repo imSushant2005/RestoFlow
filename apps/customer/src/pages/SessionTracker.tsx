@@ -12,7 +12,9 @@ import {
 } from 'lucide-react';
 import { publicApi } from '../lib/api';
 import { formatINR } from '../lib/currency';
+import { buildCustomerThemeVars } from '../lib/customerTheme';
 import { getSocketUrl } from '../lib/network';
+import { getCustomerSessionLabel } from '../lib/serviceMode';
 import {
   CUSTOMER_PROGRESS_STEPS,
   getCustomerProcessSummary,
@@ -47,6 +49,95 @@ function withSessionMetrics(next: any) {
     runningTotal,
     itemCount,
   };
+}
+
+function TimerDisplay({ order }: { order: any }) {
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [isOverdue, setIsOverdue] = useState(false);
+  const [finalTime, setFinalTime] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!order) return;
+
+    if (['SERVED', 'RECEIVED'].includes(order.status)) {
+      const start = new Date(order.createdAt).getTime();
+      const end = new Date(order.completedAt || order.servedAt || Date.now()).getTime();
+      const diffMins = Math.round((end - start) / (60 * 1000));
+      setFinalTime(`${diffMins} min`);
+      return;
+    }
+
+    if (!['ACCEPTED', 'PREPARING', 'READY'].includes(order.status)) {
+      setTimeLeft(null);
+      return;
+    }
+
+    const startTime = new Date(order.acceptedAt || order.createdAt).getTime();
+    const durationMins = order.estimatedPrepMins || 18;
+    const targetTime = startTime + durationMins * 60 * 1000;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const diff = targetTime - now;
+
+      if (diff <= 0) {
+        setTimeLeft(0);
+        setIsOverdue(true);
+      } else {
+        setTimeLeft(Math.floor(diff / 1000));
+        setIsOverdue(false);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [order]);
+
+  if (finalTime) {
+    return (
+      <div className="rounded-3xl border border-dashed p-6 text-center shadow-sm" style={{ background: 'var(--surface-3)', borderColor: 'var(--brand)' }}>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 mb-2">Order Status</p>
+        <p className="text-xl font-black" style={{ color: 'var(--text-1)' }}>
+          Order arrived in <span style={{ color: 'var(--brand)' }}>{finalTime}</span>
+        </p>
+      </div>
+    );
+  }
+
+  if (timeLeft === null) return null;
+
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+
+  return (
+    <div className="rounded-3xl border border-dashed p-6 text-center shadow-sm transition-all" style={{ background: isOverdue ? 'rgba(239, 68, 68, 0.05)' : 'var(--surface-3)', borderColor: isOverdue ? 'rgba(239, 68, 68, 0.4)' : 'var(--brand)' }}>
+      <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 mb-2">
+        {isOverdue ? 'Slightly Delayed' : 'Estimated Arrival'}
+      </p>
+      
+      {isOverdue ? (
+        <div className="space-y-2">
+          <p className="line-clamp-2 px-4 text-sm font-bold leading-relaxed" style={{ color: 'var(--text-1)' }}>
+             We are sorry for this delay, we are enhancing our capability to serve you faster.
+          </p>
+          <p className="text-[11px] font-black uppercase tracking-widest text-red-500">Items coming soon</p>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-1">
+          <div className="flex items-baseline gap-1">
+            <span className="text-4xl font-black tabular-nums tracking-tighter" style={{ color: 'var(--text-1)' }}>
+              {minutes}
+            </span>
+            <span className="text-lg font-black" style={{ color: 'var(--text-3)' }}>m</span>
+            <span className="text-4xl font-black tabular-nums tracking-tighter" style={{ color: 'var(--text-1)' }}>
+              {seconds < 10 ? `0${seconds}` : seconds}
+            </span>
+            <span className="text-lg font-black" style={{ color: 'var(--text-3)' }}>s</span>
+          </div>
+          <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Freshly preparing</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function SessionTracker() {
@@ -316,7 +407,7 @@ export function SessionTracker() {
 
   const isAwaitingBill = session.sessionStatus === 'AWAITING_BILL';
   const isClosed = ['CLOSED', 'CANCELLED'].includes(session.sessionStatus);
-  const brandColor = session.tenant?.primaryColor || '#f97316';
+  const customerThemeVars = buildCustomerThemeVars(session?.tenant);
   const maxOrderRank = (session?.orders || []).reduce(
     (max: number, order: any) => Math.max(max, getOrderRank(order?.status)),
     0,
@@ -326,6 +417,7 @@ export function SessionTracker() {
     CUSTOMER_PROGRESS_STEPS.find((step) => processRank < step.rank)?.rank ||
     CUSTOMER_PROGRESS_STEPS[CUSTOMER_PROGRESS_STEPS.length - 1].rank;
   const orderType = session.orders?.[0]?.orderType;
+  const serviceLabel = getCustomerSessionLabel({ tableName: session.table?.name, orderType });
   const processSummary = getCustomerProcessSummary({
     orderType,
     stageRank: processRank,
@@ -344,7 +436,7 @@ export function SessionTracker() {
       className="min-h-[100dvh] flex flex-col"
       style={{
         background: 'var(--bg)',
-        '--brand': brandColor,
+        ...customerThemeVars,
         paddingBottom: 'calc(var(--customer-nav-space) + var(--customer-page-action-height) + 2rem)',
       } as any}
     >
@@ -389,19 +481,23 @@ export function SessionTracker() {
           <div className="mb-8 flex items-center gap-2">
             <LayoutDashboard size={14} style={{ color: 'var(--brand)' }} />
             <span className="text-sm font-bold" style={{ color: 'var(--text-3)' }}>
-              {session.table?.name || 'Takeaway'} | {session.partySize} guests
+              {serviceLabel} | {session.partySize} guests
             </span>
             <div className="h-1 w-1 rounded-full bg-gray-300" />
             <span className="text-xs font-black uppercase tracking-widest text-emerald-500">Live</span>
           </div>
 
-          <div className="space-y-3">
-            <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-              Order Progress
-            </p>
-            <p className="text-sm font-black" style={{ color: 'var(--text-1)' }}>
-              {processSummary}
-            </p>
+          <div className="space-y-5">
+            <TimerDisplay order={(session?.orders || []).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]} />
+            
+            <div className="space-y-2">
+              <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                Order Progress
+              </p>
+              <p className="text-sm font-black" style={{ color: 'var(--text-1)' }}>
+                {processSummary}
+              </p>
+            </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {CUSTOMER_PROGRESS_STEPS.map((step) => {
                 const completed = processRank >= step.rank;
@@ -465,7 +561,9 @@ export function SessionTracker() {
             </div>
             <p className="text-[11px] font-bold leading-relaxed" style={{ color: 'var(--text-2)' }}>
               {isAwaitingBill
-                ? 'Your final bill is ready. The restaurant will confirm payment, then this session will move into history.'
+                ? session?.tenant?.hasWaiterService
+                  ? 'Your final bill is ready. A waiter will bring the bill and confirm payment before this session moves into history.'
+                  : 'Your final bill is ready. Please go to the billing counter or open the bill page to complete payment.'
                 : 'This is a live session. You can keep adding items until you tap Bill to request the final settlement.'}
             </p>
           </div>

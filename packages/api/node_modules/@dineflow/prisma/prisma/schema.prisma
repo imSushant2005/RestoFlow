@@ -32,6 +32,8 @@ model Tenant {
   currency        String   @default("INR")
   currencySymbol  String   @default("₹")
   taxRate         Float    @default(5.0) // GST percentage
+  upiId           String?
+  hasWaiterService Boolean  @default(false)
   timezone        String   @default("Asia/Kolkata")
   isActive        Boolean  @default(true)
   plan            Plan     @default(MINI)

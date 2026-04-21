@@ -224,6 +224,7 @@ const getPublicMenu = async (req, res) => {
                 taxRate: tenant.taxRate,
                 businessHours: tenant.businessHours,
                 plan: (0, plans_1.normalizePlan)(tenant.plan),
+                planLimits: (0, plans_1.getPlanLimits)(tenant.plan),
             };
         }, `public-menu:${tenantSlug}`), 1800); // 30-minute cache
         res.json(publicData);
@@ -259,14 +260,18 @@ exports.resolveCustomDomain = resolveCustomDomain;
 const createOrder = async (req, res) => {
     try {
         const { tenantSlug } = req.params;
-        const { sessionId, sessionToken, items, tableId, customerName, customerPhone } = req.body;
+        const { sessionId, sessionToken, items, tableId, customerName, customerPhone, orderType } = req.body;
         const incomingSessionToken = readOptionalString(sessionId || sessionToken || null);
         const requestedTableInput = readOptionalString(tableId);
+        const requestedOrderType = readOptionalString(orderType)?.toUpperCase() || null;
         const requestIdempotencyKey = readOptionalString(req.header('x-idempotency-key')) ||
             readOptionalString(req.body?.idempotencyKey);
         const tenant = await resolveTenantBySlug(tenantSlug);
         if (!Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ error: 'Order must include at least one item' });
+        }
+        if (requestedOrderType && !['DINE_IN', 'TAKEAWAY'].includes(requestedOrderType)) {
+            return res.status(400).json({ error: 'Invalid order type' });
         }
         if (requestIdempotencyKey) {
             const cachedResponse = await (0, cache_service_1.getCache)(cache_keys_1.cacheKeys.publicOrderIdempotency(tenant.id, requestIdempotencyKey));
@@ -360,8 +365,8 @@ const createOrder = async (req, res) => {
         const { subtotal, orderItems: orderItemsCreate } = await (0, order_payload_service_1.buildServerPricedOrderPayload)(prisma_1.prisma, tenant.id, items);
         const taxAmount = subtotal * (tenant.taxRate / 100);
         const totalAmount = subtotal + taxAmount;
-        const orderType = safeTableId ? 'DINE_IN' : 'TAKEAWAY';
-        const orderNumber = (0, order_number_service_1.generateOrderNumber)(orderType); // Collision-resistant — replaces COUNT+1 race
+        const resolvedOrderType = safeTableId ? 'DINE_IN' : requestedOrderType || 'TAKEAWAY';
+        const orderNumber = (0, order_number_service_1.generateOrderNumber)(resolvedOrderType); // Collision-resistant order key
         let order;
         let lockedSession = resolvedSession;
         try {
@@ -433,7 +438,7 @@ const createOrder = async (req, res) => {
                         customerName,
                         customerPhone,
                         orderNumber,
-                        orderType: orderType,
+                        orderType: resolvedOrderType,
                         subtotal,
                         taxAmount,
                         discountAmount: 0,
@@ -821,11 +826,15 @@ const waiterCall = async (req, res) => {
         if (!sessionId) {
             return res.status(401).json({ error: 'Session access token is required.' });
         }
-        const tenantId = await resolveTenantIdBySlug(tenantSlug);
-        const session = await prisma_1.prisma.diningSession.findFirst({
+        const tenant = await resolveTenantBySlug(tenantSlug);
+        const tenantId = tenant.id;
+        if (!(0, plans_1.getPlanLimits)(tenant.plan).hasWaiterApp) {
+            return res.status(403).json({ error: 'Waiter assistance is not available on this plan.' });
+        }
+        const session = await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.diningSession.findFirst({
             where: { id: sessionId, tenantId },
             select: { id: true, customerId: true, tableId: true },
-        });
+        }), `public-waiter-call-session:${tenantId}:${sessionId}`);
         if (!session) {
             return res.status(404).json({ error: 'Session not found' });
         }

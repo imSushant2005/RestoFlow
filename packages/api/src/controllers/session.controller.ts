@@ -37,6 +37,8 @@ async function resolveTenantBySlugOrThrow(tenantSlug: string) {
           currencySymbol: true,
           address: true,
           phone: true,
+          upiId: true,
+          hasWaiterService: true,
           gstin: true,
           fssai: true,
           plan: true,
@@ -148,6 +150,34 @@ function reconcileSessionBill<
     discountAmount: totals.discountAmount,
     totalAmount: totals.totalAmount,
   };
+}
+
+function readOptionalString(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function buildUpiUri({
+  upiId,
+  payeeName,
+  amount,
+  note,
+}: {
+  upiId: string;
+  payeeName: string;
+  amount: number;
+  note: string;
+}) {
+  const params = new URLSearchParams({
+    pa: upiId,
+    pn: payeeName,
+    am: amount.toFixed(2),
+    cu: 'INR',
+    tn: note,
+  });
+
+  return `upi://pay?${params.toString()}`;
 }
 
 const sessionSnapshotOrderItemSelect = {
@@ -757,6 +787,8 @@ export const getSession = async (req: Request, res: Response) => {
           logoUrl: tenant.logoUrl,
           taxRate: tenant.taxRate,
           currencySymbol: tenant.currencySymbol,
+          hasWaiterService: tenant.hasWaiterService,
+          upiConfigured: Boolean(tenant.upiId),
         },
         runningTotal,
         itemCount,
@@ -1204,6 +1236,313 @@ export const completeSession = async (req: Request, res: Response) => {
   }
 };
 
+export const requestSessionPayment = async (req: Request, res: Response) => {
+  try {
+    const { tenantSlug, sessionId } = req.params;
+    const requestedMethod = readOptionalString(req.body?.method)?.toLowerCase();
+
+    if (!requestedMethod || !['cash', 'online'].includes(requestedMethod)) {
+      return res.status(400).json({ error: 'Choose cash or online payment.' });
+    }
+
+    const tenant = await resolveTenantBySlugOrThrow(tenantSlug);
+    const session = await fetchSessionSnapshot(tenant.id, sessionId);
+
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    authorizeSessionAccess(req, {
+      tenantId: tenant.id,
+      sessionId: session.id,
+      customerId: session.customerId,
+      tenantSlug,
+    });
+
+    if (!session.bill || session.sessionStatus !== 'AWAITING_BILL') {
+      return res.status(409).json({ error: 'The restaurant must finish service and prepare the final bill before checkout.' });
+    }
+
+    if (String(session.bill.paymentStatus || '').toUpperCase() === 'PAID') {
+      return res.json(
+        withSessionAccessToken({
+          ...session,
+          tenant: {
+            businessName: tenant.businessName,
+            slug: tenant.slug,
+            currencySymbol: tenant.currencySymbol,
+            taxRate: tenant.taxRate,
+            address: tenant.address,
+            phone: tenant.phone,
+            hasWaiterService: tenant.hasWaiterService,
+            upiConfigured: Boolean(tenant.upiId),
+          },
+          bill: reconcileSessionBill(session.bill, calculateSessionOrderTotals(session.orders)),
+        }),
+      );
+    }
+
+    const totals = calculateSessionOrderTotals(session.orders);
+    const reconciledBill = reconcileSessionBill(session.bill, totals);
+    const totalAmount = Number(reconciledBill?.totalAmount || totals.totalAmount || 0);
+
+    if (requestedMethod === 'online' && !tenant.upiId) {
+      return res.status(409).json({
+        error: 'Online payment is not available yet. Please ask the restaurant to configure a UPI ID first.',
+      });
+    }
+
+    await withPrismaRetry(
+      () =>
+        prisma.bill.update({
+          where: { sessionId },
+          data: {
+            paymentMethod: requestedMethod,
+          },
+        }),
+      `session-payment-request:${tenant.id}:${sessionId}`,
+    );
+
+    const tenantRoom = getTenantRoom(tenant.id);
+    const sessionRoom = getSessionRoom(tenant.id, session.id);
+    getIO().to(tenantRoom).emit('session:update', {
+      sessionId: session.id,
+      status: session.sessionStatus,
+      updatedAt: new Date().toISOString(),
+    });
+
+    const paymentLink =
+      requestedMethod === 'online' && tenant.upiId
+        ? {
+            sessionId: session.id,
+            method: 'online' as const,
+            amount: totalAmount,
+            upiId: tenant.upiId,
+            upiUri: buildUpiUri({
+              upiId: tenant.upiId,
+              payeeName: tenant.businessName || 'Restaurant',
+              amount: totalAmount,
+              note: reconciledBill?.invoiceNumber
+                ? `Bill ${reconciledBill.invoiceNumber}`
+                : `Session ${session.id.slice(-6).toUpperCase()}`,
+            }),
+          }
+        : null;
+
+    if (paymentLink) {
+      getIO().to(sessionRoom).emit('session:payment_link', {
+        ...paymentLink,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    await invalidateSessionCaches(
+      tenant.id,
+      session.id,
+      Array.isArray(session.orders) ? session.orders.map((order: { id: string }) => order.id) : [],
+    );
+
+    res.json(
+      withSessionAccessToken({
+        ...session,
+        tenant: {
+          businessName: tenant.businessName,
+          slug: tenant.slug,
+          currencySymbol: tenant.currencySymbol,
+          taxRate: tenant.taxRate,
+          address: tenant.address,
+          phone: tenant.phone,
+          hasWaiterService: tenant.hasWaiterService,
+          upiConfigured: Boolean(tenant.upiId),
+        },
+        bill: {
+          ...reconciledBill,
+          paymentMethod: requestedMethod,
+        },
+        paymentLink,
+      }),
+    );
+  } catch (error) {
+    console.error('requestSessionPayment error:', error);
+    if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
+      return res.status(404).json({ error: 'Restaurant not found' });
+    }
+    if (
+      error instanceof Error &&
+      ['SESSION_ACCESS_REQUIRED', 'SESSION_ACCESS_MISMATCH', 'INVALID_SESSION_ACCESS_TOKEN'].includes(error.message)
+    ) {
+      return res.status(401).json({ error: 'Session access token is required for checkout.' });
+    }
+    res.status(500).json({ error: 'Failed to request payment' });
+  }
+};
+
+export const sendSessionPaymentLink = async (req: Request, res: Response) => {
+  try {
+    const { tenantSlug, sessionId } = req.params;
+    const tenant = await resolveTenantBySlugOrThrow(tenantSlug);
+    const upiId = readOptionalString(req.body?.upiId) || tenant.upiId;
+
+    if (!upiId || !/^[a-z0-9.\-_]{2,}@[a-z][a-z0-9.-]{1,}$/i.test(upiId)) {
+      return res.status(400).json({ error: 'Save a valid UPI ID in business settings before sending payment links.' });
+    }
+
+    const session = await fetchSessionSnapshot(tenant.id, sessionId);
+
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (!session.bill || session.sessionStatus !== 'AWAITING_BILL') {
+      return res.status(409).json({ error: 'Generate the final bill before sending a payment link.' });
+    }
+
+    const totals = calculateSessionOrderTotals(session.orders);
+    const reconciledBill = reconcileSessionBill(session.bill, totals);
+    const amount = Number(reconciledBill?.totalAmount || totals.totalAmount || 0);
+
+    if (amount <= 0) {
+      return res.status(400).json({ error: 'Bill total must be greater than zero before requesting payment.' });
+    }
+
+    await withPrismaRetry(
+      () =>
+        prisma.bill.update({
+          where: { sessionId },
+          data: {
+            paymentMethod: 'online',
+          },
+        }),
+      `session-payment-link:${tenant.id}:${sessionId}`,
+    );
+
+    const upiUri = buildUpiUri({
+      upiId,
+      payeeName: tenant.businessName || 'Restaurant',
+      amount,
+      note: reconciledBill?.invoiceNumber ? `Bill ${reconciledBill.invoiceNumber}` : `Session ${session.id.slice(-6).toUpperCase()}`,
+    });
+
+    const payload = {
+      sessionId: session.id,
+      method: 'online' as const,
+      amount,
+      upiId,
+      upiUri,
+      createdAt: new Date().toISOString(),
+    };
+
+    const tenantRoom = getTenantRoom(tenant.id);
+    const sessionRoom = getSessionRoom(tenant.id, session.id);
+    getIO().to(sessionRoom).emit('session:payment_link', payload);
+    getIO().to(tenantRoom).emit('session:update', {
+      sessionId: session.id,
+      status: session.sessionStatus,
+      updatedAt: new Date().toISOString(),
+    });
+
+    await invalidateSessionCaches(
+      tenant.id,
+      session.id,
+      Array.isArray(session.orders) ? session.orders.map((order: { id: string }) => order.id) : [],
+    );
+
+    res.json({ success: true, ...payload });
+  } catch (error) {
+    console.error('sendSessionPaymentLink error:', error);
+    if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
+      return res.status(404).json({ error: 'Restaurant not found' });
+    }
+    res.status(500).json({ error: 'Failed to send payment link' });
+  }
+};
+
+export const submitSessionPayment = async (req: Request, res: Response) => {
+  try {
+    const { tenantSlug, sessionId } = req.params;
+    const tenant = await resolveTenantBySlugOrThrow(tenantSlug);
+    const session = await fetchSessionSnapshot(tenant.id, sessionId);
+
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    authorizeSessionAccess(req, {
+      tenantId: tenant.id,
+      sessionId: session.id,
+      customerId: session.customerId,
+      tenantSlug,
+    });
+
+    if (!session.bill || session.sessionStatus !== 'AWAITING_BILL') {
+      return res.status(409).json({ error: 'This session is not ready for payment confirmation yet.' });
+    }
+
+    if (String(session.bill.paymentStatus || '').toUpperCase() === 'PAID') {
+      return res.json({ success: true, sessionId: session.id, alreadySettled: true });
+    }
+
+    const totals = calculateSessionOrderTotals(session.orders);
+    const reconciledBill = reconcileSessionBill(session.bill, totals);
+    const payload = {
+      sessionId: session.id,
+      tableId: session.tableId || null,
+      tableName: session.table?.name || undefined,
+      method: String(reconciledBill?.paymentMethod || 'online'),
+      totalAmount: Number(reconciledBill?.totalAmount || totals.totalAmount || 0),
+      submittedAt: new Date().toISOString(),
+    };
+
+    const tenantRoom = getTenantRoom(tenant.id);
+    const sessionRoom = getSessionRoom(tenant.id, session.id);
+    getIO().to(tenantRoom).emit('session:payment_submitted', payload);
+    getIO().to(sessionRoom).emit('session:payment_submitted', payload);
+
+    res.json({ success: true, ...payload });
+  } catch (error) {
+    console.error('submitSessionPayment error:', error);
+    if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
+      return res.status(404).json({ error: 'Restaurant not found' });
+    }
+    if (
+      error instanceof Error &&
+      ['SESSION_ACCESS_REQUIRED', 'SESSION_ACCESS_MISMATCH', 'INVALID_SESSION_ACCESS_TOKEN'].includes(error.message)
+    ) {
+      return res.status(401).json({ error: 'Session access token is required for this payment step.' });
+    }
+    res.status(500).json({ error: 'Failed to notify the restaurant about your payment.' });
+  }
+};
+
+export const rejectSessionPayment = async (req: Request, res: Response) => {
+  try {
+    const { tenantSlug, sessionId } = req.params;
+    const message =
+      readOptionalString(req.body?.message) ||
+      'Payment is not visible yet. Please show it to the desk manager.';
+
+    const tenant = await resolveTenantBySlugOrThrow(tenantSlug);
+    const session = await fetchSessionSnapshot(tenant.id, sessionId);
+
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (!session.bill) {
+      return res.status(404).json({ error: 'Bill not generated yet' });
+    }
+
+    const totals = calculateSessionOrderTotals(session.orders);
+    const reconciledBill = reconcileSessionBill(session.bill, totals);
+    const payload = {
+      sessionId: session.id,
+      method: String(reconciledBill?.paymentMethod || 'online'),
+      totalAmount: Number(reconciledBill?.totalAmount || totals.totalAmount || 0),
+      message,
+      rejectedAt: new Date().toISOString(),
+    };
+
+    getIO().to(getSessionRoom(tenant.id, session.id)).emit('session:payment_rejected', payload);
+    res.json({ success: true, ...payload });
+  } catch (error) {
+    console.error('rejectSessionPayment error:', error);
+    if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
+      return res.status(404).json({ error: 'Restaurant not found' });
+    }
+    res.status(500).json({ error: 'Failed to notify the guest about payment verification.' });
+  }
+};
+
 /**
  * GET /:tenantSlug/sessions/:sessionId/bill
  * Get the generated bill for a session
@@ -1233,6 +1572,8 @@ export const getBill = async (req: Request, res: Response) => {
           taxRate: tenant.taxRate,
           address: tenant.address,
           phone: tenant.phone,
+          hasWaiterService: tenant.hasWaiterService,
+          upiConfigured: Boolean(tenant.upiId),
         },
         bill: reconcileSessionBill(session.bill, calculateSessionOrderTotals(session.orders)),
       }),

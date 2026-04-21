@@ -1,12 +1,14 @@
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Utensils, LayoutDashboard, History } from 'lucide-react';
 import { getActiveSessionForTenant } from '../lib/tenantStorage';
+import { useCartStore } from '../store/cartStore';
 
 export function CustomerNav() {
   const { tenantSlug } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const activeSessionId = getActiveSessionForTenant(tenantSlug);
+  const isAnyModalOpen = useCartStore((state) => state.isAnyModalOpen);
 
   const navItems = [
     {
@@ -31,7 +33,9 @@ export function CustomerNav() {
 
   return (
     <nav
-      className="customer-bottom-nav fixed bottom-0 left-0 right-0 z-[100] flex items-center justify-around px-6 pt-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-3xl border-t shadow-[0_-20px_50px_rgba(0,0,0,0.4)] transition-all animate-in slide-in-from-bottom duration-500"
+      className={`customer-bottom-nav fixed bottom-0 left-0 right-0 z-[100] flex items-center justify-around px-6 pt-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-3xl border-t shadow-[0_-20px_50px_rgba(0,0,0,0.4)] transition-all duration-300 ${
+        isAnyModalOpen ? 'pointer-events-none translate-y-full opacity-0' : 'opacity-100'
+      }`}
       style={{
         background: 'rgba(13, 15, 20, 0.94)',
         borderColor: 'rgba(255, 255, 255, 0.06)',

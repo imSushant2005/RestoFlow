@@ -238,6 +238,7 @@ export function AssistedOrderingPage() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [note, setNote] = useState('');
+  const [modeNotice, setModeNotice] = useState('');
   const [seat, setSeat] = useState('');
   const [guestCount, setGuestCount] = useState(1);
   const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'ROAMING'>('TAKEAWAY');
@@ -361,6 +362,14 @@ export function AssistedOrderingPage() {
   const previewTotal = previewSubtotal + previewTax;
   const billUrl = result?.billPath ? `${getCustomerAppUrl()}${result.billPath}` : '';
   const canUseDirectBill = features.hasAssistedDirectBill && orderType !== 'DINE_IN';
+  const requiresTableSelection = orderType === 'DINE_IN';
+  const canSubmitOrder = lineItems.length > 0 && (!requiresTableSelection || Boolean(selectedTableId));
+  const submitLabel =
+    fulfillmentMode === 'DIRECT_BILL'
+      ? paymentPreset === 'UNPAID'
+        ? 'Create direct bill'
+        : `Create ${String(paymentPreset).toUpperCase()} bill`
+      : 'Send order to kitchen';
 
   useEffect(() => {
     if (orderType === 'DINE_IN' && fulfillmentMode === 'DIRECT_BILL') {
@@ -414,14 +423,30 @@ export function AssistedOrderingPage() {
     setResult(null);
     setLineItems([]);
     setNote('');
+    setModeNotice('');
     setSeat('');
     setGuestCount(1);
     setSelectedTableId('');
     setPaymentPreset('UNPAID');
   };
 
+  const submitAssistedOrder = () => {
+    if (lineItems.length === 0) {
+      setModeNotice('Add at least one menu item before sending the assisted order.');
+      return;
+    }
+
+    if (requiresTableSelection && !selectedTableId) {
+      setModeNotice('Select the guest table before sending a dine-in assisted order.');
+      return;
+    }
+
+    setModeNotice('');
+    submitMutation.mutate();
+  };
+
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-6 pb-28 lg:pb-10">
       <section
         className="rounded-[32px] border p-5 lg:p-8"
         style={{ borderColor: 'var(--border)', background: 'linear-gradient(135deg, rgba(15,23,42,0.96), rgba(30,41,59,0.9))' }}
@@ -501,12 +526,14 @@ export function AssistedOrderingPage() {
                       type="button"
                       onClick={() => {
                         if (orderType === 'DINE_IN') {
-                          window.alert('Dine-in assisted orders need kitchen/service flow first. Send the order to kitchen, then bill the session when service is complete.');
+                          setModeNotice('Dine-in assisted orders must go to kitchen first. Bill the session after service is complete.');
+                          return;
                         } else if (features.hasAssistedDirectBill) {
+                          setModeNotice('');
                           setFulfillmentMode('DIRECT_BILL');
                           return;
-                          window.alert(`Direct billing is a ${features.name === 'Mini' ? 'Café' : 'Pro'} feature. Please upgrade your plan.`);
                         }
+                        setModeNotice(`Direct billing is available from the ${features.name === 'Mini' ? 'Cafe' : 'Dine Pro'} plan onwards.`);
                       }}
                       className={`rounded-full px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 relative overflow-hidden group ${fulfillmentMode === 'DIRECT_BILL' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 ring-2 ring-blue-500/10' : 'bg-transparent border'}`}
                       style={fulfillmentMode === 'DIRECT_BILL' ? {} : { borderColor: 'var(--border)', color: 'var(--text-3)', opacity: canUseDirectBill ? 1 : 0.6 }}
@@ -515,6 +542,11 @@ export function AssistedOrderingPage() {
                       Direct bill {!canUseDirectBill && <Sparkles size={10} className="inline ml-1 text-blue-500 animate-pulse" />}
                     </button>
                   </div>
+                  {modeNotice ? (
+                    <div className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
+                      <p className="text-sm font-bold text-amber-500">{modeNotice}</p>
+                    </div>
+                  ) : null}
 
                   <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr,0.9fr]">
                     <div className="space-y-4">
@@ -635,7 +667,7 @@ export function AssistedOrderingPage() {
                           <option value="">Select table</option>
                           {allTables.map((table: any) => (
                             <option key={table.id} value={table.id}>
-                              {table.floorName ? `${table.floorName} • ` : ''}{table.name}
+                              {table.floorName ? `${table.floorName} | ` : ''}{table.name}
                             </option>
                           ))}
                         </select>
@@ -851,21 +883,37 @@ export function AssistedOrderingPage() {
                 <span>{formatINR(previewTotal)}</span>
               </div>
             </div>
-            <div className="mt-4 flex flex-col gap-2">
+            {note || seat || (requiresTableSelection && selectedTableId) ? (
+              <div className="mt-4 rounded-3xl border px-4 py-4" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>Guest context</p>
+                <div className="mt-3 space-y-2 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
+                  {note ? <p><span className="font-black" style={{ color: 'var(--text-1)' }}>Instruction:</span> {note}</p> : null}
+                  {seat ? <p><span className="font-black" style={{ color: 'var(--text-1)' }}>Seat / reference:</span> {seat}</p> : null}
+                  {requiresTableSelection && selectedTableId ? <p><span className="font-black" style={{ color: 'var(--text-1)' }}>Table locked:</span> {allTables.find((table: any) => table.id === selectedTableId)?.name || 'Selected'}</p> : null}
+                </div>
+              </div>
+            ) : null}
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <button
                 type="button"
-                onClick={() => {
-                  submitMutation.mutate();
-                  resetSession();
-                }}
+                onClick={() => resetSession()}
                 disabled={lineItems.length === 0}
                 className="rounded-2xl border px-4 py-3 text-xs font-black uppercase tracking-[0.14em] disabled:opacity-60"
                 style={{ borderColor: 'var(--border)', color: 'var(--text-2)' }}
               >
-                Clear order
+                Clear draft
+              </button>
+              <button
+                type="button"
+                onClick={submitAssistedOrder}
+                disabled={!canSubmitOrder || submitMutation.isPending}
+                className="rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-white disabled:opacity-60"
+                style={{ background: 'var(--brand)' }}
+              >
+                {submitMutation.isPending ? 'Submitting...' : submitLabel}
               </button>
               {submitMutation.isError ? (
-                <p className="text-sm font-semibold text-red-500">{(submitMutation.error as any)?.response?.data?.error || 'Failed to submit assisted order.'}</p>
+                <p className="sm:col-span-2 text-sm font-semibold text-red-500">{(submitMutation.error as any)?.response?.data?.error || 'Failed to submit assisted order.'}</p>
               ) : null}
             </div>
           </section>
@@ -910,6 +958,43 @@ export function AssistedOrderingPage() {
           </section>
         </aside>
       </div>
+
+      {lineItems.length > 0 ? (
+        <div className="fixed inset-x-4 bottom-4 z-30 lg:hidden">
+          <div
+            className="rounded-[28px] border px-4 py-4 shadow-2xl backdrop-blur-sm"
+            style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, var(--surface) 94%, transparent)' }}
+          >
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                  Assisted basket
+                </p>
+                <p className="mt-1 text-sm font-black" style={{ color: 'var(--text-1)' }}>
+                  {lineItems.length} item{lineItems.length === 1 ? '' : 's'} | {formatINR(previewTotal)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={resetSession}
+                className="rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em]"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-2)' }}
+              >
+                Clear
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={submitAssistedOrder}
+              disabled={!canSubmitOrder || submitMutation.isPending}
+              className="w-full rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-white disabled:opacity-60"
+              style={{ background: 'var(--brand)' }}
+            >
+              {submitMutation.isPending ? 'Submitting...' : submitLabel}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {activeModalItem ? (
         <AssistedItemModal

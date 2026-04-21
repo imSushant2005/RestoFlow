@@ -57,6 +57,7 @@ export function Onboarding({ nextPath }: OnboardingProps) {
   // Questionnaire state
   const [businessType, setBusinessType] = useState<'kiosk' | 'cafe' | 'resto' | 'chain'>('cafe');
   const [tableCount, setTableCount] = useState(5);
+  const [hasWaiterService, setHasWaiterService] = useState(false);
   
   const recommendedPlan = useMemo(() => {
     if (businessType === 'chain' || tableCount > 18) return 'PREMIUM';
@@ -114,6 +115,7 @@ export function Onboarding({ nextPath }: OnboardingProps) {
       gstin: business?.gstin || '',
       phone: business?.phone || '',
     });
+    setHasWaiterService(Boolean(business?.hasWaiterService));
   }, [business, draftKey]);
 
   useEffect(() => {
@@ -168,8 +170,16 @@ export function Onboarding({ nextPath }: OnboardingProps) {
   });
 
   const planMutation = useMutation({
-    mutationFn: async ({ plan, trialEndsAt }: { plan: string; trialEndsAt: string }) => {
-      return api.patch('/settings/business', { plan, trialEndsAt });
+    mutationFn: async ({
+      plan,
+      trialEndsAt,
+      hasWaiterService,
+    }: {
+      plan: string;
+      trialEndsAt: string;
+      hasWaiterService: boolean;
+    }) => {
+      return api.patch('/settings/business', { plan, trialEndsAt, hasWaiterService });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['settings-business'] });
@@ -398,6 +408,43 @@ export function Onboarding({ nextPath }: OnboardingProps) {
                     </div>
                   </div>
 
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                    <p className="text-sm font-bold text-white">Bill delivery style</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Choose how guests usually receive the final bill in your outlet.
+                    </p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => setHasWaiterService(false)}
+                        className={`rounded-2xl border p-4 text-left transition-all ${
+                          !hasWaiterService
+                            ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-900/40'
+                            : 'border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20'
+                        }`}
+                      >
+                        <p className="text-sm font-black">Counter payment</p>
+                        <p className={`mt-1 text-[11px] ${!hasWaiterService ? 'text-blue-100' : 'text-slate-500'}`}>
+                          Guests go to the billing counter for cash settlement.
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setHasWaiterService(true)}
+                        className={`rounded-2xl border p-4 text-left transition-all ${
+                          hasWaiterService
+                            ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-900/40'
+                            : 'border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20'
+                        }`}
+                      >
+                        <p className="text-sm font-black">Waiter brings bill</p>
+                        <p className={`mt-1 text-[11px] ${hasWaiterService ? 'text-blue-100' : 'text-slate-500'}`}>
+                          Guests stay seated and see a waiter-coming message during checkout.
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="p-6 rounded-3xl bg-gradient-to-br from-blue-600/10 to-indigo-600/10 border border-blue-500/20 shadow-2xl">
                     <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-2">Our Recommendation</p>
                     <div className="flex items-center justify-between">
@@ -416,6 +463,7 @@ export function Onboarding({ nextPath }: OnboardingProps) {
                           planMutation.mutate({
                             plan: recommendedPlan,
                             trialEndsAt: trialEndsAt.toISOString(),
+                            hasWaiterService,
                           });
                         }}
                         className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-full font-black text-sm shadow-xl shadow-blue-900/40 transition-all disabled:opacity-50"

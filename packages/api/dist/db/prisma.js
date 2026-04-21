@@ -4,10 +4,14 @@ exports.prisma = void 0;
 exports.withPrismaRetry = withPrismaRetry;
 exports.checkPrismaReadiness = checkPrismaReadiness;
 const prisma_1 = require("@dineflow/prisma");
+const env_1 = require("../config/env");
 const runtime_metrics_service_1 = require("../services/runtime-metrics.service");
 const globalForPrisma = globalThis;
 exports.prisma = globalForPrisma.prisma ||
     new prisma_1.PrismaClient({
+        datasourceUrl: env_1.env.NODE_ENV !== 'production' && env_1.env.DIRECT_DATABASE_URL
+            ? env_1.env.DIRECT_DATABASE_URL
+            : env_1.env.DATABASE_URL,
         log: [
             { level: 'warn', emit: 'stdout' },
             { level: 'error', emit: 'stdout' },

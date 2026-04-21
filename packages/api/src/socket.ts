@@ -22,6 +22,7 @@ const RATE_LIMIT_REFILL_PER_SEC = 5;
 
 const TENANT_SLUG_CACHE_TTL_MS = 5 * 60 * 1000;
 const TENANT_SLUG_CACHE_MAX = 2000;
+const SOCKET_AUTH_DB_COOLDOWN_MS = 5_000;
 
 type VerifiedAccessToken = {
   userId: string;
@@ -113,6 +114,32 @@ type ServerToClientEvents = {
     paymentMethod: string;
     status?: string;
     totalAmount?: number;
+  }) => void;
+
+  'session:payment_link': (payload: {
+    sessionId: string;
+    method: 'online';
+    amount: number;
+    upiId: string;
+    upiUri: string;
+    createdAt: string;
+  }) => void;
+
+  'session:payment_submitted': (payload: {
+    sessionId: string;
+    tableId?: string | null;
+    tableName?: string;
+    method: string;
+    totalAmount?: number;
+    submittedAt: string;
+  }) => void;
+
+  'session:payment_rejected': (payload: {
+    sessionId: string;
+    method?: string;
+    totalAmount?: number;
+    message: string;
+    rejectedAt: string;
   }) => void;
 
   'session:completed': (payload: {
@@ -216,6 +243,19 @@ const logger = {
     console.error(JSON.stringify({ level: 'error', message, ...meta, ts: new Date().toISOString() }));
   },
 };
+
+let socketAuthDatabaseUnavailableUntil = 0;
+
+function isTransientDatabaseConnectivityError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return (
+    message.includes('Can\'t reach database server') ||
+    message.includes('P1001') ||
+    message.includes('P1017') ||
+    message.includes('Connection closed') ||
+    message.includes('kind: Closed')
+  );
+}
 
 class BoundedTTLCache<V> {
   private readonly store = new Map<string, { value: V; expiresAt: number }>();
@@ -426,6 +466,9 @@ async function setupRedisAdapter(): Promise<void> {
 async function resolveTenantIdFromSlug(slug: string): Promise<string | null> {
   const cached = tenantSlugCache.get(slug);
   if (cached) return cached;
+  if (Date.now() < socketAuthDatabaseUnavailableUntil) {
+    throw new Error('SOCKET_AUTH_DB_UNAVAILABLE');
+  }
 
   const tenant = await withPrismaRetry(
     () =>
@@ -449,7 +492,11 @@ function rejectAuth(socket: TypedSocket, next: (err?: Error) => void, reason: st
     reason,
     ip: socket.handshake.address,
   });
-  next(new Error('Authentication error'));
+  const clientMessage =
+    reason === 'database_unavailable' || reason === 'internal_error'
+      ? 'Service temporarily unavailable'
+      : 'Authentication error';
+  next(new Error(clientMessage));
 }
 
 async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void): Promise<void> {
@@ -484,6 +531,9 @@ async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void):
       const isCached = socketUserAuthCache.get(cacheKey);
 
       if (!isCached) {
+        if (Date.now() < socketAuthDatabaseUnavailableUntil) {
+          return rejectAuth(socket, next, 'database_unavailable');
+        }
         const user = await withPrismaRetry(
           () =>
             prisma.user.findUnique({
@@ -506,6 +556,7 @@ async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void):
       if (verifiedToken.role) {
         socket.join(getRoleRoom(verifiedToken.tenantId, verifiedToken.role));
       }
+      socketAuthDatabaseUnavailableUntil = 0;
       return next();
     }
 
@@ -552,6 +603,9 @@ async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void):
     const isCachedSession = socketSessionAuthCache.get(sessionCacheKey);
 
     if (!isCachedSession) {
+      if (Date.now() < socketAuthDatabaseUnavailableUntil) {
+        return rejectAuth(socket, next, 'database_unavailable');
+      }
       const session = await withPrismaRetry(
         () =>
           prisma.diningSession.findFirst({
@@ -576,8 +630,22 @@ async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void):
     socket.data.sessionId = verifiedSession.sessionId;
     socket.data.connectedAt = Date.now();
     socket.join(getSessionRoom(verifiedSession.tenantId, verifiedSession.sessionId));
+    socketAuthDatabaseUnavailableUntil = 0;
     return next();
   } catch (error) {
+    if (
+      (error instanceof Error && error.message === 'SOCKET_AUTH_DB_UNAVAILABLE') ||
+      isTransientDatabaseConnectivityError(error)
+    ) {
+      socketAuthDatabaseUnavailableUntil = Date.now() + SOCKET_AUTH_DB_COOLDOWN_MS;
+      logger.warn('Socket auth temporarily unavailable because the database is unreachable', {
+        socketId: socket.id,
+        cooldownMs: SOCKET_AUTH_DB_COOLDOWN_MS,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return rejectAuth(socket, next, 'database_unavailable');
+    }
+
     logger.error('Auth middleware crashed', {
       socketId: socket.id,
       error: error instanceof Error ? error.message : String(error),

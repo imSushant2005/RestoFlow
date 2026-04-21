@@ -51,11 +51,21 @@ const updateBusinessSettingsSchema = zod_1.z.object({
     description: zod_1.z.string().trim().max(500).optional().nullable(),
     primaryColor: zod_1.z.string().trim().max(30).optional(),
     accentColor: zod_1.z.string().trim().max(30).optional(),
+    currencySymbol: zod_1.z.string().trim().min(1).max(8).optional(),
+    taxRate: zod_1.z.number().min(0).max(100).optional(),
     logoUrl: zod_1.z.string().trim().max(500).optional().nullable(),
     coverImageUrl: zod_1.z.string().trim().max(500).optional().nullable(),
     email: zod_1.z.string().trim().email().optional(),
     phone: zod_1.z.string().trim().min(7).max(20).optional(),
+    upiId: zod_1.z
+        .string()
+        .trim()
+        .regex(/^[a-z0-9.\-_]{2,}@[a-z][a-z0-9.-]{1,}$/i, 'Enter a valid UPI ID')
+        .optional()
+        .nullable(),
+    hasWaiterService: zod_1.z.boolean().optional(),
     gstin: zod_1.z.string().trim().min(8).max(20).optional(),
+    businessHours: zod_1.z.unknown().optional(),
     isActive: zod_1.z.boolean().optional(),
     plan: zod_1.z.nativeEnum(prisma_2.Plan).optional(),
     trialEndsAt: zod_1.z.string().pipe(zod_1.z.coerce.date()).optional().nullable(),
@@ -114,13 +124,17 @@ const getBusinessSettings = async (req, res) => {
                 slug: true,
                 email: true,
                 phone: true,
+                upiId: true,
+                hasWaiterService: true,
                 gstin: true,
+                currencySymbol: true,
                 taxRate: true,
                 description: true,
                 logoUrl: true,
                 coverImageUrl: true,
                 primaryColor: true,
                 accentColor: true,
+                businessHours: true,
                 isActive: true,
                 plan: true,
                 trialEndsAt: true,
@@ -143,7 +157,7 @@ exports.getBusinessSettings = getBusinessSettings;
 const updateBusinessSettings = async (req, res) => {
     try {
         const payload = updateBusinessSettingsSchema.parse(req.body);
-        const { businessName, slug, description, primaryColor, accentColor, logoUrl, coverImageUrl, email, phone, gstin, isActive, plan, trialEndsAt, } = payload;
+        const { businessName, slug, description, primaryColor, accentColor, currencySymbol, taxRate, logoUrl, coverImageUrl, email, phone, upiId, hasWaiterService, gstin, businessHours, isActive, plan, trialEndsAt, } = payload;
         const normalizedSlug = slug?.trim().toLowerCase();
         const normalizedGstin = normalizeGstin(gstin);
         const normalizedPlan = plan ? (0, plans_1.normalizePlan)(plan) : undefined;
@@ -181,11 +195,16 @@ const updateBusinessSettings = async (req, res) => {
                 description,
                 primaryColor,
                 accentColor,
+                currencySymbol,
+                taxRate,
                 logoUrl,
                 coverImageUrl,
                 email,
                 phone,
+                upiId: upiId === undefined ? undefined : upiId?.trim() || null,
+                hasWaiterService,
                 gstin: gstin === undefined ? undefined : normalizedGstin || null,
+                businessHours: businessHours === undefined ? undefined : businessHours,
                 isActive,
                 plan: normalizedPlan,
                 trialEndsAt: normalizedPlan ? null : trialEndsAt, // Remove trial on manual plan change/upgrade
@@ -197,13 +216,17 @@ const updateBusinessSettings = async (req, res) => {
                 slug: true,
                 email: true,
                 phone: true,
+                upiId: true,
+                hasWaiterService: true,
                 gstin: true,
+                currencySymbol: true,
                 taxRate: true,
                 description: true,
                 logoUrl: true,
                 coverImageUrl: true,
                 primaryColor: true,
                 accentColor: true,
+                businessHours: true,
                 isActive: true,
                 plan: true,
                 trialEndsAt: true,

@@ -22,6 +22,7 @@ import { VendorTopNav, type OpsNotification } from './components/VendorTopNav';
 import { useRealtimeSocket } from './hooks/useRealtimeSocket';
 import { usePlanFeatures } from './hooks/usePlanFeatures';
 import { api } from './lib/api';
+import { formatINR } from './lib/currency';
 import { clearDashboardAuthStorage, markManualLogout } from './lib/authSession';
 import 'driver.js/dist/driver.css';
 
@@ -94,6 +95,7 @@ const BILLING_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIE
 const ASSISTED_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'WAITER']);
 const BUSINESS_READ_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'WAITER', 'KITCHEN']);
 const notificationStorageKey = 'rf_ops_notifications_v1';
+const DASHBOARD_PAYMENT_SUBMITTED_EVENT = 'rf:session-payment-submitted';
 
 function getDefaultRouteForRole(role: DashboardRole) {
   if (role === 'WAITER') return '/app/waiter';
@@ -265,6 +267,11 @@ function DashboardShell() {
   const [liveOrderCount, setLiveOrderCount] = useState(0);
   const [showFirstTimeDemo, setShowFirstTimeDemo] = useState(false);
   const [activeWaiterCall, setActiveWaiterCall] = useState<OpsNotification | null>(null);
+  const [pendingPaymentVerification, setPendingPaymentVerification] = useState<{
+    sessionId: string;
+    tableName?: string;
+    totalAmount?: number;
+  } | null>(null);
   const [notificationsHydrated, setNotificationsHydrated] = useState(false);
   const [notifications, setNotifications] = useState<OpsNotification[]>([]);
   const [toasts, setToasts] = useState<any[]>([]);
@@ -492,13 +499,66 @@ function DashboardShell() {
         queryClient.invalidateQueries({ queryKey: ['zones-overview'] });
       },
       'session:new': () => queryClient.invalidateQueries({ queryKey: ['live-orders'] }),
-      'session:update': () => queryClient.invalidateQueries({ queryKey: ['live-orders'] }),
-      'session:finished': () => {
+      'session:update': (payload: any) => {
+        if (payload?.sessionId) {
+          queryClient.setQueryData(['live-orders'], (old: any[]) => {
+            if (!Array.isArray(old)) return old;
+            return old.map(order => {
+              if (order.diningSessionId === payload.sessionId && order.diningSession) {
+                return {
+                  ...order,
+                  diningSession: {
+                    ...order.diningSession,
+                    sessionStatus: payload.status || order.diningSession.sessionStatus,
+                    bill: payload.bill ? { ...order.diningSession.bill, ...payload.bill } : order.diningSession.bill
+                  }
+                };
+              }
+              return order;
+            });
+          });
+        }
+        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+      },
+      'session:finished': (payload: any) => {
+        if (payload?.sessionId) {
+          queryClient.setQueryData(['live-orders'], (old: any[]) => {
+            if (!Array.isArray(old)) return old;
+            return old.map(order => 
+              order.diningSessionId === payload.sessionId && order.diningSession 
+                ? { ...order, diningSession: { ...order.diningSession, sessionStatus: 'AWAITING_BILL' } } 
+                : order
+            );
+          });
+        }
         queryClient.invalidateQueries({ queryKey: ['live-orders'] });
         queryClient.invalidateQueries({ queryKey: ['order-history'] });
       },
       'session:settled': () => {
         queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+        queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
+      },
+      'session:payment_submitted': (payload: any) => {
+        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+        queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
+        const amount = Number(payload?.totalAmount || 0);
+        const tableName = payload?.tableName ? `Table ${payload.tableName}` : 'A session';
+        pushNotification({
+          title: 'Check Account',
+          message: `${tableName} marked ${amount > 0 ? formatINR(amount) : 'the payment'} as completed. Please verify it now.`,
+          level: 'warning',
+          sound: 'https://assets.mixkit.co/active_storage/sfx/495/495-preview.mp3',
+          metadata: {
+            sessionId: payload?.sessionId,
+            tableId: payload?.tableId,
+            tableName: payload?.tableName,
+            totalAmount: amount,
+            kind: 'PAYMENT_VERIFICATION',
+          },
+        });
+        window.dispatchEvent(new CustomEvent(DASHBOARD_PAYMENT_SUBMITTED_EVENT, { detail: payload }));
+      },
+      'session:payment_rejected': () => {
         queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
       },
       'session:completed': () => {
@@ -520,6 +580,26 @@ function DashboardShell() {
       void refreshLiveOrderCount();
     },
   });
+
+  useEffect(() => {
+    if (!pendingPaymentVerification) return;
+    if (location.pathname !== '/app/orders') return;
+
+    const timeoutId = window.setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent(DASHBOARD_PAYMENT_SUBMITTED_EVENT, {
+          detail: {
+            sessionId: pendingPaymentVerification.sessionId,
+            tableName: pendingPaymentVerification.tableName,
+            totalAmount: pendingPaymentVerification.totalAmount,
+          },
+        }),
+      );
+      setPendingPaymentVerification(null);
+    }, 120);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [location.pathname, pendingPaymentVerification]);
 
   useEffect(() => {
     refreshLiveOrderCount(); // Synchronous — safe on mount
@@ -774,6 +854,18 @@ function DashboardShell() {
             onMarkNotificationsRead={markNotificationsRead}
             onClearNotifications={clearNotifications}
             onNotificationClick={(n) => {
+              if (n.metadata?.kind === 'PAYMENT_VERIFICATION' && n.metadata?.sessionId) {
+                setPendingPaymentVerification({
+                  sessionId: n.metadata.sessionId,
+                  tableName: n.metadata.tableName,
+                  totalAmount: n.metadata.totalAmount,
+                });
+                if (location.pathname !== '/app/orders') {
+                  navigate('/app/orders');
+                }
+                return;
+              }
+
               if (n.metadata?.sessionId) {
                 setActiveWaiterCall(n);
               }

@@ -16,6 +16,7 @@
     "db:migrate": "pnpm --filter @dineflow/prisma db:migrate",
     "db:seed": "pnpm --filter @dineflow/prisma db:seed",
     "db:setup": "pnpm db:push && pnpm db:generate && pnpm db:seed",
+    "db:check": "node scripts/check-db-connection.cjs",
     "load:burst": "node scripts/load/burst-orders.mjs",
     "load:redis": "node scripts/load/redis-failure-watch.mjs",
     "load:reconnect": "node scripts/load/socket-reconnect-storm.mjs",

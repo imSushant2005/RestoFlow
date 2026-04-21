@@ -18,6 +18,13 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function percentile(values, ratio) {
+  if (!Array.isArray(values) || values.length === 0) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * ratio) - 1));
+  return sorted[index];
+}
+
 function pickOrderableItem(menuResponse) {
   const categories = Array.isArray(menuResponse?.categories) ? menuResponse.categories : [];
   const items = categories.flatMap((category) =>
@@ -98,7 +105,7 @@ async function runVendorLoop(vendor, deadlineAt) {
     ORDERS_PER_VENDOR_MIN +
     Math.floor(Math.random() * Math.max(1, ORDERS_PER_VENDOR_MAX - ORDERS_PER_VENDOR_MIN + 1));
   const intervalMs = Math.max(250, Math.floor(60_000 / Math.max(1, targetRatePerMin)));
-  const stats = { slug: vendor.slug, sent: 0, succeeded: 0, failed: 0, maxMs: 0, totalMs: 0 };
+  const stats = { slug: vendor.slug, sent: 0, succeeded: 0, failed: 0, maxMs: 0, totalMs: 0, latencies: [] };
 
   while (Date.now() < deadlineAt) {
     const result = await postTakeawayOrder(vendor).catch((error) => ({
@@ -111,6 +118,7 @@ async function runVendorLoop(vendor, deadlineAt) {
     stats.sent += 1;
     stats.totalMs += result.latencyMs;
     stats.maxMs = Math.max(stats.maxMs, result.latencyMs);
+    stats.latencies.push(result.latencyMs);
     if (result.ok) {
       stats.succeeded += 1;
     } else {
@@ -152,6 +160,7 @@ async function main() {
       succeeded: result.succeeded,
       failed: result.failed,
       avgMs: result.sent > 0 ? Math.round(result.totalMs / result.sent) : 0,
+      p95Ms: percentile(result.latencies, 0.95),
       maxMs: result.maxMs,
     })),
   );
@@ -164,6 +173,7 @@ async function main() {
           succeeded: totals.succeeded,
           failed: totals.failed,
           avgMs: totals.sent > 0 ? Math.round(totals.totalMs / totals.sent) : 0,
+          p95Ms: percentile(results.flatMap((result) => result.latencies), 0.95),
           maxMs: totals.maxMs,
         },
       },

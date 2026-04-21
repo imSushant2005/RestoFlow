@@ -68,6 +68,29 @@ type ServerToClientEvents = {
         status?: string;
         totalAmount?: number;
     }) => void;
+    'session:payment_link': (payload: {
+        sessionId: string;
+        method: 'online';
+        amount: number;
+        upiId: string;
+        upiUri: string;
+        createdAt: string;
+    }) => void;
+    'session:payment_submitted': (payload: {
+        sessionId: string;
+        tableId?: string | null;
+        tableName?: string;
+        method: string;
+        totalAmount?: number;
+        submittedAt: string;
+    }) => void;
+    'session:payment_rejected': (payload: {
+        sessionId: string;
+        method?: string;
+        totalAmount?: number;
+        message: string;
+        rejectedAt: string;
+    }) => void;
     'session:completed': (payload: {
         sessionId: string;
         paymentMethod: string;

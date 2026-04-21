@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { getTenantPublicAuthHeaders, publicApi } from '../lib/api';
 import { formatINR } from '../lib/currency';
+import { buildCustomerThemeVars } from '../lib/customerTheme';
 import { getSocketUrl } from '../lib/network';
 import { getActiveSessionForTenant, getSessionAccessTokenForTenant, setLastTableIdForTenant } from '../lib/tenantStorage';
 import { useNotifications } from '../components/Notifications';
@@ -272,7 +273,7 @@ export function OrderStatus() {
               : 'Waiting for kitchen acceptance';
   const firstTableId = activeOrders[0]?.tableId || orders[0]?.tableId;
   const addMoreUrl = firstTableId ? `/order/${tenantSlug}/${firstTableId}/menu` : `/order/${tenantSlug}`;
-  const brandColor = orders[0]?.tenant?.primaryColor || '#f97316';
+  const customerThemeVars = buildCustomerThemeVars(orders[0]?.tenant);
 
   useEffect(() => {
     if (tenantSlug && firstTableId) {
@@ -300,7 +301,7 @@ export function OrderStatus() {
       className="min-h-screen transition-colors duration-400"
       style={{
         background: 'var(--bg)',
-        '--brand': brandColor,
+        ...customerThemeVars,
         paddingBottom: 'calc(var(--customer-nav-space) + var(--customer-page-action-height) + 2rem)',
       } as any}
     >

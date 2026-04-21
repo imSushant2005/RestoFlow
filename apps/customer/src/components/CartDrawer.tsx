@@ -2,23 +2,22 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
-  CheckCircle2,
   ChevronRight,
   Clock3,
   Minus,
   Plus,
   ShoppingBag,
   Sparkles,
-  Trash2,
   UserRound,
   UtensilsCrossed,
-  WifiOff,
   X,
 } from 'lucide-react';
 import { get, set } from 'idb-keyval';
 import { useNavigate } from 'react-router-dom';
 import { api, publicApi } from '../lib/api';
 import { formatINR } from '../lib/currency';
+import { getDirectImageUrl } from '../lib/images';
+import { getCustomerServiceCopy, normalizeCustomerServiceMode, type CustomerServiceMode } from '../lib/serviceMode';
 import { getActiveSessionForTenant, setActiveSessionForTenant } from '../lib/tenantStorage';
 import { useCartStore } from '../store/cartStore';
 
@@ -49,7 +48,7 @@ function decrementCustomerOverlayLock() {
   root.dataset.rfCustomerOverlay = 'open';
 }
 
-export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
+export function CartDrawer({ onClose, tenantSlug, tableId }: any) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const {
@@ -63,14 +62,16 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
     customerName,
     customerPhone,
     orderType,
+    setOrderType,
+    activeSheet,
+    setActiveSheet,
   } = useCartStore();
+  const isOpen = activeSheet === 'CART';
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+  const [isBillExpanded, setIsBillExpanded] = useState(false);
 
   const safeItems = useMemo(() => (Array.isArray(items) ? items : []), [items]);
-  const activeSessionId = getActiveSessionForTenant(tenantSlug);
 
   const { data: recommendations = [] } = useQuery({
     queryKey: ['upsell', tenantSlug, safeItems.map((item: any) => item?.menuItem?.id).filter(Boolean).sort().join(',')],
@@ -97,20 +98,20 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
     staleTime: 1000 * 60 * 5,
   });
 
+  const handleClose = () => {
+    setActiveSheet('NONE');
+    if (onClose) onClose();
+  };
+
   useEffect(() => {
-    if (!isOpen) return undefined;
+    if (!isOpen) {
+      document.body.style.overflow = 'auto';
+      return undefined;
+    }
     document.body.style.overflow = 'hidden';
-
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
 
     return () => {
       document.body.style.overflow = 'auto';
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
     };
   }, [isOpen]);
 
@@ -133,20 +134,14 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
   const taxAmount = subtotal * (taxRate / 100);
   const totalAmount = subtotal + taxAmount;
   const totalItems = safeItems.reduce((sum, item) => sum + Number(item?.quantity || 0), 0);
+  const restaurantName = tenantMenuMeta?.name;
 
-  const estimatedPrepMinutes = useMemo(() => {
-    if (safeItems.length === 0) return 0;
-    const weightedPrep = safeItems.reduce((sum, item) => {
-      const prep = Number(item?.menuItem?.prepTimeMinutes || 12);
-      return sum + prep * Math.max(1, Number(item?.quantity || 1));
-    }, 0);
-
-    return Math.max(12, Math.min(40, Math.ceil(weightedPrep / Math.max(totalItems, 1)) + 6));
-  }, [safeItems, totalItems]);
+  const resolvedOrderType = tableId ? 'DINE_IN' : orderType ? normalizeCustomerServiceMode(orderType) : undefined;
+  const orderServiceCopy = resolvedOrderType ? getCustomerServiceCopy(resolvedOrderType) : null;
 
   if (!isOpen) return null;
 
-  const handleCheckout = async () => {
+  const submitCheckout = async (selectedOrderType: CustomerServiceMode) => {
     if (!tenantSlug || safeItems.length === 0) return;
 
     setIsSubmitting(true);
@@ -182,6 +177,7 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
     const payload = {
       sessionId: sessionToken,
       tableId,
+      orderType: tableId ? 'DINE_IN' : selectedOrderType,
       customerName,
       customerPhone,
       items: itemsPayload,
@@ -207,12 +203,13 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
         setActiveSessionForTenant(tenantSlug, createdSessionId);
       }
 
+      if (!tableId) {
+        setOrderType(selectedOrderType);
+      }
       clearCart();
-      setShowSuccess(true);
 
       window.setTimeout(() => {
-        onClose();
-        setShowSuccess(false);
+        handleClose();
         const finalSessionId = getActiveSessionForTenant(tenantSlug) || createdSessionId || sessionToken;
         if (finalSessionId) {
           navigate(`/order/${tenantSlug}/session/${finalSessionId}`);
@@ -225,9 +222,12 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
         const queue: any[] = (await get('offline_orders')) || [];
         queue.push({ tenantSlug, payload });
         await set('offline_orders', queue);
+        if (!tableId) {
+          setOrderType(selectedOrderType);
+        }
         clearCart();
         setErrorText('You are offline. The order has been safely queued and will send when connection returns.');
-        window.setTimeout(() => onClose(), 2200);
+        window.setTimeout(() => handleClose(), 2200);
       } else {
         const serverMessage =
           error?.response?.data?.error ||
@@ -240,128 +240,54 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
     }
   };
 
+  const handleCheckout = () => {
+    if (!tenantSlug || safeItems.length === 0 || isSubmitting) return;
+    submitCheckout(resolvedOrderType || 'DINE_IN');
+  };
+
   return (
-    <div className="fixed inset-0 z-[130] flex items-end justify-end lg:items-stretch">
+    <div className="fixed inset-0 z-[130] flex items-end justify-end lg:items-stretch lg:p-4">
       <div
-        className="absolute inset-0 bg-black/65 backdrop-blur-sm transition-opacity"
-        onClick={!isSubmitting ? onClose : undefined}
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-500"
+        onClick={handleClose}
       />
 
       <div
-        className="relative flex w-full max-w-xl flex-col overflow-hidden rounded-t-[34px] shadow-2xl lg:h-full lg:rounded-none lg:rounded-l-[32px]"
-        style={{
-          background: 'var(--bg)',
-          height: 'min(92dvh, calc(100dvh - 0.75rem))',
-        }}
+        className="relative flex h-[92dvh] w-full flex-col overflow-hidden rounded-t-[32px] shadow-2xl transition-all duration-500 lg:h-full lg:max-w-4xl lg:rounded-[32px] slide-up"
+        style={{ background: 'var(--bg)' }}
       >
-        <div
-          className="border-b px-5 pb-4 pt-5 lg:px-6"
-          style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
-        >
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className="flex h-11 w-11 items-center justify-center rounded-2xl"
-                style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}
-              >
-                <ShoppingBag size={20} />
-              </div>
-              <div>
-                <h2 className="text-xl font-black" style={{ color: 'var(--text-1)' }}>
-                  Order Summary
-                </h2>
-                <p className="text-xs font-bold" style={{ color: 'var(--text-3)' }}>
-                  {totalItems} items ready for checkout
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={onClose}
-              className="flex h-10 w-10 items-center justify-center rounded-full transition-all active:scale-90"
-              style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-3">
-            <div
-              className="rounded-2xl border px-3 py-3"
-              style={{ background: 'var(--surface-3)', borderColor: 'var(--border)' }}
-            >
-              <p className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
-                Order Type
-              </p>
-              <p className="mt-1 text-sm font-black" style={{ color: 'var(--text-1)' }}>
-                {tableId ? 'Dine in' : orderType === 'TAKEAWAY' ? 'Takeaway' : 'Pickup'}
-              </p>
-              <p className="mt-1 text-[11px] font-medium" style={{ color: 'var(--text-3)' }}>
-                {tableId ? `Table ${tableId}${tableSeat ? ` | Seat ${tableSeat}` : ''}` : 'Collect from counter'}
-              </p>
-            </div>
-
-            <div
-              className="rounded-2xl border px-3 py-3"
-              style={{ background: 'var(--surface-3)', borderColor: 'var(--border)' }}
-            >
-              <p className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
-                ETA
-              </p>
-              <p className="mt-1 text-sm font-black" style={{ color: 'var(--text-1)' }}>
-                ~{estimatedPrepMinutes} min
-              </p>
-              <p className="mt-1 text-[11px] font-medium" style={{ color: 'var(--text-3)' }}>
-                Based on kitchen prep and queue
-              </p>
-            </div>
-
-            <div
-              className="rounded-2xl border px-3 py-3"
-              style={{ background: 'var(--surface-3)', borderColor: 'var(--border)' }}
-            >
-              <p className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
-                Guest
-              </p>
-              <p className="mt-1 truncate text-sm font-black" style={{ color: 'var(--text-1)' }}>
-                {customerName || 'Guest checkout'}
-              </p>
-              <p className="mt-1 truncate text-[11px] font-medium" style={{ color: 'var(--text-3)' }}>
-                {customerPhone || 'Phone added at checkout'}
-              </p>
-            </div>
-          </div>
-
-          {isOffline && (
-            <div
-              className="mt-3 flex items-start gap-2 rounded-2xl border px-3 py-3"
-              style={{ background: 'rgba(245, 158, 11, 0.08)', borderColor: 'rgba(245, 158, 11, 0.18)' }}
-            >
-              <WifiOff size={16} className="mt-0.5 text-amber-500" />
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.12em] text-amber-500">Offline-safe</p>
-                <p className="mt-1 text-[12px] font-medium" style={{ color: 'var(--text-2)' }}>
-                  If checkout fails because the network drops, this order will queue locally and retry automatically.
-                </p>
-              </div>
-            </div>
-          )}
+        <div className="absolute left-0 right-0 top-0 z-[70] p-6 lg:hidden">
+          <div className="mx-auto h-1.5 w-12 rounded-full bg-slate-200 dark:bg-slate-800" />
         </div>
 
-        {showSuccess && (
-          <div
-            className="absolute inset-0 z-[95] flex flex-col items-center justify-center gap-3 px-8 text-center"
-            style={{ background: 'rgba(10, 11, 15, 0.92)' }}
-          >
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/20">
-              <CheckCircle2 size={38} className="text-white" />
+        <div
+          className="relative z-[60] flex items-center justify-between border-b px-6 py-5 lg:px-8"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+        >
+          <div className="flex items-center gap-4">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-2xl"
+              style={{ background: 'var(--surface-3)', color: 'var(--brand)' }}
+            >
+              <ShoppingBag size={24} />
             </div>
-            <h3 className="text-2xl font-black text-white">Order sent</h3>
-            <p className="max-w-sm text-sm font-medium text-white/75">
-              The restaurant has your order. Opening the live tracker now.
-            </p>
+            <div>
+              <h2 className="text-xl font-black tracking-tight" style={{ color: 'var(--text-1)' }}>
+                Your order
+              </h2>
+              <p className="text-xs font-black uppercase tracking-[0.16em] opacity-60" style={{ color: 'var(--text-3)' }}>
+                {restaurantName || 'Restaurant'}
+              </p>
+            </div>
           </div>
-        )}
+          <button
+            onClick={handleClose}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl transition-all active:scale-90"
+            style={{ background: 'var(--surface-3)', color: 'var(--text-1)' }}
+          >
+            <X size={20} />
+          </button>
+        </div>
 
         <div className="custom-scrollbar flex-1 overflow-y-auto px-5 py-5 pb-6 lg:px-6">
           {errorText && (
@@ -390,243 +316,410 @@ export function CartDrawer({ isOpen, onClose, tenantSlug, tableId }: any) {
               </p>
               <div className="mt-6 flex w-full max-w-sm flex-col gap-3">
                 <button
-                  onClick={onClose}
+                  onClick={handleClose}
                   className="rounded-2xl px-5 py-3.5 text-sm font-black text-white"
                   style={{ background: 'var(--brand)' }}
                 >
                   Browse menu
                 </button>
-                {activeSessionId ? (
-                  <button
-                    onClick={() => navigate(`/order/${tenantSlug}/session/${activeSessionId}`)}
-                    className="rounded-2xl px-5 py-3.5 text-sm font-black"
-                    style={{ background: 'var(--surface)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
-                  >
-                    Open live tracker
-                  </button>
-                ) : null}
               </div>
             </div>
           ) : (
-            <div className="space-y-5">
-              <div className="space-y-4">
-                {safeItems.map((item) => {
-                  const lineTotal = Number(item?.totalPrice || 0) * Math.max(1, Number(item?.quantity || 1));
-                  const modifierNames = (Array.isArray(item?.modifiers) ? item.modifiers : [])
-                    .map((modifier: any) => modifier?.name)
-                    .filter(Boolean);
+            <div className="space-y-5 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-6 lg:space-y-0">
+              <div className="space-y-5">
+                <div
+                  className="rounded-2xl border px-4 py-4 lg:hidden"
+                  style={{ background: 'var(--bg)', borderColor: 'var(--border)' }}
+                >
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
+                    Checkout mode
+                  </p>
+                  
+                  {tableId ? (
+                    <>
+                      <p className="mt-1 text-sm font-black" style={{ color: 'var(--text-1)' }}>
+                        Dine In
+                      </p>
+                      <p className="mt-1 text-[12px] font-medium leading-relaxed" style={{ color: 'var(--text-3)' }}>
+                        This order will stay attached to your current table session.
+                      </p>
+                    </>
+                  ) : (
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => setOrderType('DINE_IN')}
+                        className={`flex-1 rounded-xl py-2.5 text-xs font-black transition-all ${
+                          orderType === 'DINE_IN' || (!orderType && resolvedOrderType === 'DINE_IN')
+                            ? 'text-white shadow-md'
+                            : 'opacity-70 hover:opacity-100'
+                        }`}
+                        style={
+                          orderType === 'DINE_IN' || (!orderType && resolvedOrderType === 'DINE_IN')
+                            ? { background: 'var(--brand)' }
+                            : { background: 'var(--surface-raised)', color: 'var(--text-2)', border: '1px solid var(--border)' }
+                        }
+                      >
+                        Dine In
+                      </button>
+                      <button
+                        onClick={() => setOrderType('TAKEAWAY')}
+                        className={`flex-1 rounded-xl py-2.5 text-xs font-black transition-all ${
+                          orderType === 'TAKEAWAY' || (!orderType && resolvedOrderType === 'TAKEAWAY')
+                            ? 'text-white shadow-md'
+                            : 'opacity-70 hover:opacity-100'
+                        }`}
+                        style={
+                          orderType === 'TAKEAWAY' || (!orderType && resolvedOrderType === 'TAKEAWAY')
+                            ? { background: 'var(--brand)' }
+                            : { background: 'var(--surface-raised)', color: 'var(--text-2)', border: '1px solid var(--border)' }
+                        }
+                      >
+                        Packing
+                      </button>
+                    </div>
+                  )}
+                </div>
 
-                  return (
-                    <div
-                      key={item.id}
-                      className="rounded-[28px] border p-4 shadow-sm"
-                      style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-                    >
-                      <div className="flex gap-4">
-                        <div
-                          className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl border"
-                          style={{ borderColor: 'var(--border)' }}
-                        >
-                          <img
-                            src={
-                              item?.menuItem?.imageUrl ||
-                              item?.menuItem?.images?.[0] ||
-                              'https://images.unsplash.com/photo-1546069901-ba9599a7e63c'
-                            }
-                            alt={item?.menuItem?.name || 'Cart item'}
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--brand)' }}>
+                      Your basket
+                    </p>
+                    <h3 className="mt-1 text-lg font-black" style={{ color: 'var(--text-1)' }}>
+                      Review the order before checkout
+                    </h3>
+                  </div>
+                  <span
+                    className="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]"
+                    style={{ background: 'var(--surface)', color: 'var(--text-3)', border: '1px solid var(--border)' }}
+                  >
+                    {totalItems} item{totalItems === 1 ? '' : 's'}
+                  </span>
+                </div>
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
+                <div className="space-y-4">
+                  {safeItems.map((item) => {
+                    const modifierNames = (Array.isArray(item?.modifiers) ? item.modifiers : [])
+                      .map((modifier: any) => modifier?.name)
+                      .filter(Boolean);
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="border-b border-dashed pb-5 last:border-0"
+                        style={{ borderColor: 'var(--border)' }}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              {item?.menuItem?.isVeg ? (
+                                <div className="flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-sm border border-green-600 bg-white p-[1.5px]">
+                                  <div className="h-1 w-1 rounded-full bg-green-600" />
+                                </div>
+                              ) : (
+                                <div className="flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-sm border border-red-600 bg-white p-[1.5px]">
+                                  <div className="h-1 w-1 rounded-full bg-red-600" />
+                                </div>
+                              )}
                               <h3 className="truncate text-base font-black" style={{ color: 'var(--text-1)' }}>
                                 {item?.menuItem?.name || 'Menu item'}
                               </h3>
-                              <p className="mt-1 text-xs font-bold" style={{ color: 'var(--text-3)' }}>
-                                {formatINR(Number(item?.totalPrice || 0))} each
-                              </p>
                             </div>
-                            <button
-                              onClick={() => removeItem(item.id)}
-                              className="flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-red-500/10"
-                              style={{ color: '#ef4444' }}
-                            >
-                              <Trash2 size={16} />
-                            </button>
+
+                            <p className="mt-1 text-sm font-bold" style={{ color: 'var(--text-1)' }}>
+                              {formatINR(Number(item?.totalPrice || 0))}
+                            </p>
+
+                            {modifierNames.length > 0 ? (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {modifierNames.map((modifierName) => (
+                                  <span
+                                    key={`${item.id}-${modifierName}`}
+                                    className="text-[11px] font-medium italic"
+                                    style={{ color: 'var(--text-3)' }}
+                                  >
+                                    + {modifierName}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+
+                            {item?.notes ? (
+                              <p
+                                className="mt-2 text-[11px] font-medium leading-relaxed opacity-70"
+                                style={{ color: 'var(--text-3)' }}
+                              >
+                                Note: {item.notes}
+                              </p>
+                            ) : null}
                           </div>
 
-                          {modifierNames.length > 0 && (
-                            <p
-                              className="mt-2 text-[11px] font-bold uppercase tracking-[0.12em]"
-                              style={{ color: 'var(--text-3)' }}
-                            >
-                              {modifierNames.join(' / ')}
-                            </p>
-                          )}
-
-                          {item?.notes ? (
+                          <div className="flex flex-col items-end gap-3">
                             <div
-                              className="mt-2 rounded-xl px-3 py-2 text-[12px] font-medium"
-                              style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}
-                            >
-                              Note: {item.notes}
-                            </div>
-                          ) : null}
-
-                          <div className="mt-4 flex items-center justify-between">
-                            <div
-                              className="flex items-center gap-3 rounded-2xl px-2 py-1.5"
-                              style={{ background: 'var(--surface-3)' }}
+                              className="flex items-center gap-2 rounded-xl border p-1"
+                              style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
                             >
                               <button
                                 onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                className="flex h-8 w-8 items-center justify-center rounded-xl border"
-                                style={{ color: 'var(--text-2)', borderColor: 'var(--border)', background: 'var(--surface)' }}
+                                className="flex h-7 w-7 items-center justify-center rounded-lg transition-all active:scale-90"
+                                style={{ background: 'var(--surface-3)', color: 'var(--text-1)' }}
                               >
-                                <Minus size={14} />
+                                <Minus size={12} />
                               </button>
                               <span className="w-5 text-center text-sm font-black" style={{ color: 'var(--text-1)' }}>
                                 {item.quantity}
                               </span>
                               <button
                                 onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                className="flex h-8 w-8 items-center justify-center rounded-xl border"
-                                style={{ color: 'var(--text-2)', borderColor: 'var(--border)', background: 'var(--surface)' }}
+                                className="flex h-7 w-7 items-center justify-center rounded-lg transition-all active:scale-90"
+                                style={{ background: 'var(--brand)', color: 'white' }}
                               >
-                                <Plus size={14} />
+                                <Plus size={12} />
                               </button>
                             </div>
 
-                            <div className="text-right">
-                              <p className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
-                                Line Total
-                              </p>
-                              <p className="text-base font-black" style={{ color: 'var(--text-1)' }}>
-                                {formatINR(lineTotal)}
-                              </p>
-                            </div>
+                            <button
+                              onClick={() => removeItem(item.id)}
+                              className="text-[10px] font-black uppercase tracking-widest text-red-500 hover:underline"
+                            >
+                              Remove
+                            </button>
                           </div>
                         </div>
                       </div>
+                    );
+                  })}
+                </div>
+
+                {recommendations.length > 0 && (
+                  <div className="mt-8">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles size={16} className="text-amber-500" />
+                        <h3 className="text-sm font-black tracking-tight" style={{ color: 'var(--text-1)' }}>
+                          Complement your meal
+                        </h3>
+                      </div>
+                      <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-3)' }}>
+                        Recommended for you
+                      </p>
                     </div>
-                  );
-                })}
+                    
+                    <div className="custom-scrollbar -mx-5 flex gap-4 overflow-x-auto px-5 pb-4">
+                      {recommendations.map((item: any) => (
+                        <div
+                          key={item.id}
+                          className="relative w-40 flex-shrink-0 flex flex-col overflow-hidden rounded-2xl border"
+                          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+                        >
+                          <div className="h-28 w-full overflow-hidden">
+                            <img
+                              src={getDirectImageUrl(
+                                item?.images?.[0] ||
+                                  item?.imageUrl ||
+                                  'https://images.unsplash.com/photo-1546069901-ba9599a7e63c',
+                              )}
+                              alt={item?.name}
+                              className="h-full w-full object-cover transition-transform hover:scale-105"
+                            />
+                          </div>
+                          
+                          <div className="flex flex-1 flex-col p-3">
+                            <h4 className="line-clamp-1 text-xs font-black" style={{ color: 'var(--text-1)' }}>
+                              {item?.name}
+                            </h4>
+                            <div className="mt-2 flex items-center justify-between">
+                              <span className="text-xs font-black" style={{ color: 'var(--brand)' }}>
+                                {formatINR(Number(item?.price || 0))}
+                              </span>
+                              
+                              <button
+                                onClick={() =>
+                                  addItem({
+                                    id: `upsell-${item.id}-${Date.now()}`,
+                                    menuItem: item,
+                                    quantity: 1,
+                                    modifiers: [],
+                                    totalPrice: Number(item?.price || 0),
+                                  })
+                                }
+                                className="flex h-7 items-center gap-1 rounded-lg px-2 text-[10px] font-black uppercase tracking-widest text-white shadow-sm transition-all active:scale-90"
+                                style={{ background: 'var(--brand)' }}
+                              >
+                                <span>Add</span>
+                                <Plus size={10} strokeWidth={4} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {recommendations.length > 0 && (
-                <section
-                  className="rounded-[28px] border p-4"
-                  style={{ background: 'rgba(79, 70, 229, 0.06)', borderColor: 'rgba(99, 102, 241, 0.12)' }}
-                >
-                  <div className="mb-4 flex items-center gap-2">
-                    <Sparkles size={14} className="text-indigo-500" />
-                    <h3 className="text-xs font-black uppercase tracking-[0.16em] text-indigo-500">
-                      Smart add-ons
-                    </h3>
-                  </div>
-                  <div className="custom-scrollbar flex gap-3 overflow-x-auto pb-2">
-                    {recommendations.map((item: any) => (
-                      <button
-                        key={item.id}
-                        onClick={() =>
-                          addItem({
-                            id: `upsell-${item.id}-${Date.now()}`,
-                            menuItem: item,
-                            quantity: 1,
-                            modifiers: [],
-                            totalPrice: Number(item?.price || 0),
-                          })
-                        }
-                        className="min-w-[170px] rounded-2xl border p-3 text-left transition-all active:scale-[0.98]"
-                        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-                      >
-                        <div className="mb-3 h-20 overflow-hidden rounded-xl">
-                          <img
-                            src={item?.images?.[0] || item?.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c'}
-                            alt={item?.name || 'Recommendation'}
-                            className="h-full w-full object-cover"
-                          />
+              <div className="hidden lg:block">
+                <div className="sticky top-0 space-y-4">
+                  <div
+                    className="rounded-[28px] border p-5 shadow-sm"
+                    style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+                  >
+                    <div className="mb-4 flex items-center gap-2">
+                      <Clock3 size={14} style={{ color: 'var(--brand)' }} />
+                      <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                        Checkout summary
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-sm font-medium" style={{ color: 'var(--text-2)' }}>
+                        <span>Items subtotal</span>
+                        <span>{formatINR(subtotal)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm font-medium" style={{ color: 'var(--text-2)' }}>
+                        <span>GST ({taxRate}%)</span>
+                        <span>{formatINR(taxAmount)}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-t pt-3" style={{ borderColor: 'var(--border)' }}>
+                        <span className="text-base font-black" style={{ color: 'var(--text-1)' }}>
+                          Total payable
+                        </span>
+                        <span className="text-2xl font-black" style={{ color: 'var(--brand)' }}>
+                          {formatINR(totalAmount)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div
+                      className="mt-4 rounded-2xl border px-3 py-3"
+                      style={{ background: 'var(--bg)', borderColor: 'var(--border)' }}
+                    >
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
+                        Checkout mode
+                      </p>
+                      
+                      {tableId ? (
+                        <>
+                          <p className="mt-1 text-sm font-black" style={{ color: 'var(--text-1)' }}>
+                            Dine In
+                          </p>
+                          <p className="mt-1 text-[12px] font-medium leading-relaxed" style={{ color: 'var(--text-3)' }}>
+                            This order will stay attached to your current table session.
+                          </p>
+                        </>
+                      ) : (
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            onClick={() => setOrderType('DINE_IN')}
+                            className={`flex-1 rounded-xl py-2.5 text-xs font-black transition-all ${
+                              orderType === 'DINE_IN' || (!orderType && resolvedOrderType === 'DINE_IN')
+                                ? 'text-white shadow-md'
+                                : 'opacity-70 hover:opacity-100'
+                            }`}
+                            style={
+                              orderType === 'DINE_IN' || (!orderType && resolvedOrderType === 'DINE_IN')
+                                ? { background: 'var(--brand)' }
+                                : { background: 'var(--surface-raised)', color: 'var(--text-2)', border: '1px solid var(--border)' }
+                            }
+                          >
+                            Dine In
+                          </button>
+                          <button
+                            onClick={() => setOrderType('TAKEAWAY')}
+                            className={`flex-1 rounded-xl py-2.5 text-xs font-black transition-all ${
+                              orderType === 'TAKEAWAY' || (!orderType && resolvedOrderType === 'TAKEAWAY')
+                                ? 'text-white shadow-md'
+                                : 'opacity-70 hover:opacity-100'
+                            }`}
+                            style={
+                              orderType === 'TAKEAWAY' || (!orderType && resolvedOrderType === 'TAKEAWAY')
+                                ? { background: 'var(--brand)' }
+                                : { background: 'var(--surface-raised)', color: 'var(--text-2)', border: '1px solid var(--border)' }
+                            }
+                          >
+                            Packing
+                          </button>
                         </div>
-                        <p className="line-clamp-1 text-sm font-black" style={{ color: 'var(--text-1)' }}>
-                          {item?.name || 'Recommended dish'}
-                        </p>
-                        <div className="mt-2 flex items-center justify-between">
-                          <span className="text-xs font-black" style={{ color: 'var(--brand)' }}>
-                            {formatINR(Number(item?.price || 0))}
-                          </span>
-                          <span className="text-[10px] font-black uppercase tracking-[0.12em] text-indigo-500">
-                            Add
-                          </span>
-                        </div>
-                      </button>
-                    ))}
+                      )}
+                    </div>
+
+                    <div
+                      className="mt-4 flex items-start gap-2 rounded-2xl px-3 py-3"
+                      style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}
+                    >
+                      <UserRound size={15} className="mt-0.5 flex-shrink-0" />
+                      <p className="text-[12px] font-medium leading-relaxed">
+                        Taxes are visible before checkout, and the final tracker stays linked to this restaurant session only.
+                      </p>
+                    </div>
                   </div>
-                </section>
-              )}
+
+                  <button
+                    onClick={handleCheckout}
+                    disabled={isSubmitting}
+                    className="flex w-full items-center justify-center gap-3 rounded-[24px] py-4 text-base font-black text-white shadow-xl transition-all active:scale-[0.99] disabled:opacity-70"
+                    style={{ background: 'var(--brand)' }}
+                  >
+                    {isSubmitting ? 'Placing order...' : 'Place order'}
+                    {!isSubmitting ? <ChevronRight size={18} /> : null}
+                  </button>
+
+                  <p className="text-center text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                    Secure restaurant checkout
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </div>
 
         {safeItems.length > 0 && (
           <div
-            className="border-t px-5 pt-4 lg:px-6"
+            className="border-t px-5 pt-4 lg:hidden"
             style={{
               borderColor: 'var(--border)',
               background: 'var(--surface)',
+              boxShadow: '0 -18px 32px rgba(15, 23, 42, 0.08)',
               paddingBottom: 'max(1rem, calc(var(--customer-safe-bottom) + 0.75rem))',
             }}
           >
-            <div className="mb-4 rounded-[28px] border p-4" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
-              <div className="mb-3 flex items-center gap-2">
-                <Clock3 size={14} style={{ color: 'var(--brand)' }} />
-                <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                  Pricing breakdown
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm font-medium" style={{ color: 'var(--text-2)' }}>
-                  <span>Items subtotal</span>
-                  <span>{formatINR(subtotal)}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm font-medium" style={{ color: 'var(--text-2)' }}>
-                  <span>GST ({taxRate}%)</span>
-                  <span>{formatINR(taxAmount)}</span>
-                </div>
-                <div className="flex items-center justify-between border-t pt-3" style={{ borderColor: 'var(--border)' }}>
-                  <span className="text-base font-black" style={{ color: 'var(--text-1)' }}>
-                    Total payable
-                  </span>
-                  <span className="text-xl font-black" style={{ color: 'var(--brand)' }}>
-                    {formatINR(totalAmount)}
-                  </span>
-                </div>
-              </div>
-
-              <div
-                className="mt-3 flex items-start gap-2 rounded-2xl px-3 py-3"
-                style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}
-              >
-                <UserRound size={15} className="mt-0.5 flex-shrink-0" />
-                <p className="text-[12px] font-medium leading-relaxed">
-                  No hidden charges. Taxes are shown before you place the order, and the final tracker will stay linked
-                  to this restaurant session only.
-                </p>
-              </div>
-            </div>
-
-            {activeSessionId ? (
+            <div
+              className={`mb-4 overflow-hidden rounded-[24px] border transition-all duration-300 ${isBillExpanded ? 'pb-2' : ''}`}
+              style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}
+            >
               <button
-                onClick={() => navigate(`/order/${tenantSlug}/session/${activeSessionId}`)}
-                className="mb-3 flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-sm font-black"
-                style={{ background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
+                onClick={() => setIsBillExpanded(!isBillExpanded)}
+                className="flex w-full items-center justify-between px-4 py-3 text-left transition-all active:scale-[0.98]"
               >
-                <span>Open current live tracker</span>
-                <ChevronRight size={18} />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
+                    Ready to place {isBillExpanded ? '▲' : '▼'}
+                  </p>
+                  <p className="mt-1 truncate text-lg font-black" style={{ color: 'var(--text-1)' }}>
+                    {formatINR(totalAmount)}
+                  </p>
+                  <p className="mt-1 truncate text-[11px] font-medium" style={{ color: 'var(--text-3)' }}>
+                    {tableId ? 'Dine In' : orderServiceCopy?.label || 'Choose at checkout'} | {totalItems} item{totalItems === 1 ? '' : 's'}
+                  </p>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                  <Clock3 size={16} className={isBillExpanded ? 'text-brand' : 'text-slate-400'} />
+                </div>
               </button>
-            ) : null}
+
+              {isBillExpanded && (
+                <div className="mx-4 space-y-2 border-t border-dashed pt-3 animate-in fade-in slide-in-from-bottom-2 duration-300" style={{ borderColor: 'var(--border)' }}>
+                  <div className="flex items-center justify-between text-[13px] font-bold" style={{ color: 'var(--text-2)' }}>
+                    <span className="opacity-60">Items subtotal</span>
+                    <span>{formatINR(subtotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[13px] font-bold" style={{ color: 'var(--text-2)' }}>
+                    <span className="opacity-60">GST ({taxRate}%)</span>
+                    <span>{formatINR(taxAmount)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <button
               onClick={handleCheckout}

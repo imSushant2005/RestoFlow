@@ -31,9 +31,14 @@ interface CartState {
   updateQuantity: (id: string, qty: number) => void;
   clearCart: () => void;
   getCartTotal: () => number;
-  setCustomerInfo: (info: { name: string; phone: string; type: 'DINE_IN' | 'TAKEAWAY', seat?: string }) => void;
+  setCustomerInfo: (info: { name: string; phone: string; type?: 'DINE_IN' | 'TAKEAWAY'; seat?: string }) => void;
+  setOrderType: (orderType?: 'DINE_IN' | 'TAKEAWAY') => void;
   setTenantPlan: (plan: string) => void;
   setTenantBusinessType: (businessType: string) => void;
+  isAnyModalOpen: boolean;
+  setIsAnyModalOpen: (isOpen: boolean) => void;
+  activeSheet: 'NONE' | 'MODIFIER' | 'MENU' | 'CART' | 'WAITER';
+  setActiveSheet: (sheet: 'NONE' | 'MODIFIER' | 'MENU' | 'CART' | 'WAITER') => void;
 }
 
 const newStorageKey = 'restoflow-cart';
@@ -72,6 +77,7 @@ export const useCartStore = create<CartState>()(
           return {
             tenantSlug: nextTenant,
             items: [],
+            orderType: undefined,
             tableSeat: undefined,
             tenantPlan: undefined,
             tenantBusinessType: undefined,
@@ -122,12 +128,31 @@ export const useCartStore = create<CartState>()(
         const safeItems = Array.isArray(items) ? items : [];
         return safeItems.reduce((total, item) => total + ((Number(item.totalPrice) || 0) * (Number(item.quantity) || 1)), 0);
       },
-      setCustomerInfo: (info) => set({ customerName: info.name, customerPhone: info.phone, orderType: info.type, tableSeat: info.seat }),
+      setCustomerInfo: (info) =>
+        set((state) => ({
+          customerName: info.name,
+          customerPhone: info.phone,
+          orderType: info.type === undefined ? state.orderType : info.type,
+          tableSeat: info.seat,
+        })),
+      setOrderType: (orderType) => set({ orderType }),
       setTenantPlan: (plan) => set({ tenantPlan: plan }),
       setTenantBusinessType: (businessType) => set({ tenantBusinessType: businessType }),
+      isAnyModalOpen: false,
+      setIsAnyModalOpen: (isOpen) => set({ isAnyModalOpen: isOpen }),
+      activeSheet: 'NONE',
+      setActiveSheet: (sheet) => set({ activeSheet: sheet, isAnyModalOpen: sheet !== 'NONE' }),
     }),
     {
       name: newStorageKey,
+      partialize: (state) => ({
+        items: state.items,
+        tenantSlug: state.tenantSlug,
+        customerName: state.customerName,
+        customerPhone: state.customerPhone,
+        orderType: state.orderType,
+        tableSeat: state.tableSeat,
+      }),
     }
   )
 );

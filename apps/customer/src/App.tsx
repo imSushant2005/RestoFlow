@@ -7,6 +7,7 @@ import { CustomerShell } from './components/CustomerShell';
 import { LoginPage } from './pages/LoginPage';
 import { PartySizePage } from './pages/PartySizePage';
 import { Storefront } from './pages/Storefront';
+import { CustomerLegalPage } from './pages/CustomerLegalPage';
 import { OrderStatus } from './pages/OrderStatus';
 import { SessionTracker } from './pages/SessionTracker';
 import { BillPage } from './pages/BillPage';
@@ -66,6 +67,8 @@ function App() {
               <Route path="status" element={<OrderStatus />} />
               <Route path="history" element={<HistoryPage />} />
               <Route path="profile" element={<ProfilePage />} />
+              <Route path="privacy" element={<CustomerLegalPage type="privacy" />} />
+              <Route path="terms" element={<CustomerLegalPage type="terms" />} />
               <Route path="session/:sessionId" element={<SessionTracker />} />
               <Route path="session/:sessionId/bill" element={<BillPage />} />
               <Route path=":tableId" element={<LoginPage />} />

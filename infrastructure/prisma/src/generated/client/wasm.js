@@ -142,6 +142,8 @@ exports.Prisma.TenantScalarFieldEnum = {
   currency: 'currency',
   currencySymbol: 'currencySymbol',
   taxRate: 'taxRate',
+  upiId: 'upiId',
+  hasWaiterService: 'hasWaiterService',
   timezone: 'timezone',
   isActive: 'isActive',
   plan: 'plan',

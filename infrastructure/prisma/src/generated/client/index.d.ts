@@ -3129,6 +3129,8 @@ export namespace Prisma {
     currency: string | null
     currencySymbol: string | null
     taxRate: number | null
+    upiId: string | null
+    hasWaiterService: boolean | null
     timezone: string | null
     isActive: boolean | null
     plan: $Enums.Plan | null
@@ -3162,6 +3164,8 @@ export namespace Prisma {
     currency: string | null
     currencySymbol: string | null
     taxRate: number | null
+    upiId: string | null
+    hasWaiterService: boolean | null
     timezone: string | null
     isActive: boolean | null
     plan: $Enums.Plan | null
@@ -3195,6 +3199,8 @@ export namespace Prisma {
     currency: number
     currencySymbol: number
     taxRate: number
+    upiId: number
+    hasWaiterService: number
     timezone: number
     isActive: number
     plan: number
@@ -3239,6 +3245,8 @@ export namespace Prisma {
     currency?: true
     currencySymbol?: true
     taxRate?: true
+    upiId?: true
+    hasWaiterService?: true
     timezone?: true
     isActive?: true
     plan?: true
@@ -3272,6 +3280,8 @@ export namespace Prisma {
     currency?: true
     currencySymbol?: true
     taxRate?: true
+    upiId?: true
+    hasWaiterService?: true
     timezone?: true
     isActive?: true
     plan?: true
@@ -3305,6 +3315,8 @@ export namespace Prisma {
     currency?: true
     currencySymbol?: true
     taxRate?: true
+    upiId?: true
+    hasWaiterService?: true
     timezone?: true
     isActive?: true
     plan?: true
@@ -3426,6 +3438,8 @@ export namespace Prisma {
     currency: string
     currencySymbol: string
     taxRate: number
+    upiId: string | null
+    hasWaiterService: boolean
     timezone: string
     isActive: boolean
     plan: $Enums.Plan
@@ -3479,6 +3493,8 @@ export namespace Prisma {
     currency?: boolean
     currencySymbol?: boolean
     taxRate?: boolean
+    upiId?: boolean
+    hasWaiterService?: boolean
     timezone?: boolean
     isActive?: boolean
     plan?: boolean
@@ -3528,6 +3544,8 @@ export namespace Prisma {
     currency?: boolean
     currencySymbol?: boolean
     taxRate?: boolean
+    upiId?: boolean
+    hasWaiterService?: boolean
     timezone?: boolean
     isActive?: boolean
     plan?: boolean
@@ -3562,6 +3580,8 @@ export namespace Prisma {
     currency?: boolean
     currencySymbol?: boolean
     taxRate?: boolean
+    upiId?: boolean
+    hasWaiterService?: boolean
     timezone?: boolean
     isActive?: boolean
     plan?: boolean
@@ -3633,6 +3653,8 @@ export namespace Prisma {
       currency: string
       currencySymbol: string
       taxRate: number
+      upiId: string | null
+      hasWaiterService: boolean
       timezone: string
       isActive: boolean
       plan: $Enums.Plan
@@ -4071,6 +4093,8 @@ export namespace Prisma {
     readonly currency: FieldRef<"Tenant", 'String'>
     readonly currencySymbol: FieldRef<"Tenant", 'String'>
     readonly taxRate: FieldRef<"Tenant", 'Float'>
+    readonly upiId: FieldRef<"Tenant", 'String'>
+    readonly hasWaiterService: FieldRef<"Tenant", 'Boolean'>
     readonly timezone: FieldRef<"Tenant", 'String'>
     readonly isActive: FieldRef<"Tenant", 'Boolean'>
     readonly plan: FieldRef<"Tenant", 'Plan'>
@@ -25493,6 +25517,8 @@ export namespace Prisma {
     currency: 'currency',
     currencySymbol: 'currencySymbol',
     taxRate: 'taxRate',
+    upiId: 'upiId',
+    hasWaiterService: 'hasWaiterService',
     timezone: 'timezone',
     isActive: 'isActive',
     plan: 'plan',
@@ -26147,6 +26173,8 @@ export namespace Prisma {
     currency?: StringFilter<"Tenant"> | string
     currencySymbol?: StringFilter<"Tenant"> | string
     taxRate?: FloatFilter<"Tenant"> | number
+    upiId?: StringNullableFilter<"Tenant"> | string | null
+    hasWaiterService?: BoolFilter<"Tenant"> | boolean
     timezone?: StringFilter<"Tenant"> | string
     isActive?: BoolFilter<"Tenant"> | boolean
     plan?: EnumPlanFilter<"Tenant"> | $Enums.Plan
@@ -26195,6 +26223,8 @@ export namespace Prisma {
     currency?: SortOrder
     currencySymbol?: SortOrder
     taxRate?: SortOrder
+    upiId?: SortOrderInput | SortOrder
+    hasWaiterService?: SortOrder
     timezone?: SortOrder
     isActive?: SortOrder
     plan?: SortOrder
@@ -26246,6 +26276,8 @@ export namespace Prisma {
     currency?: StringFilter<"Tenant"> | string
     currencySymbol?: StringFilter<"Tenant"> | string
     taxRate?: FloatFilter<"Tenant"> | number
+    upiId?: StringNullableFilter<"Tenant"> | string | null
+    hasWaiterService?: BoolFilter<"Tenant"> | boolean
     timezone?: StringFilter<"Tenant"> | string
     isActive?: BoolFilter<"Tenant"> | boolean
     plan?: EnumPlanFilter<"Tenant"> | $Enums.Plan
@@ -26294,6 +26326,8 @@ export namespace Prisma {
     currency?: SortOrder
     currencySymbol?: SortOrder
     taxRate?: SortOrder
+    upiId?: SortOrderInput | SortOrder
+    hasWaiterService?: SortOrder
     timezone?: SortOrder
     isActive?: SortOrder
     plan?: SortOrder
@@ -26336,6 +26370,8 @@ export namespace Prisma {
     currency?: StringWithAggregatesFilter<"Tenant"> | string
     currencySymbol?: StringWithAggregatesFilter<"Tenant"> | string
     taxRate?: FloatWithAggregatesFilter<"Tenant"> | number
+    upiId?: StringNullableWithAggregatesFilter<"Tenant"> | string | null
+    hasWaiterService?: BoolWithAggregatesFilter<"Tenant"> | boolean
     timezone?: StringWithAggregatesFilter<"Tenant"> | string
     isActive?: BoolWithAggregatesFilter<"Tenant"> | boolean
     plan?: EnumPlanWithAggregatesFilter<"Tenant"> | $Enums.Plan
@@ -28297,6 +28333,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -28345,6 +28383,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -28393,6 +28433,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -28441,6 +28483,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -28489,6 +28533,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -28523,6 +28569,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -28557,6 +28605,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -31005,6 +31055,8 @@ export namespace Prisma {
     currency?: SortOrder
     currencySymbol?: SortOrder
     taxRate?: SortOrder
+    upiId?: SortOrder
+    hasWaiterService?: SortOrder
     timezone?: SortOrder
     isActive?: SortOrder
     plan?: SortOrder
@@ -31043,6 +31095,8 @@ export namespace Prisma {
     currency?: SortOrder
     currencySymbol?: SortOrder
     taxRate?: SortOrder
+    upiId?: SortOrder
+    hasWaiterService?: SortOrder
     timezone?: SortOrder
     isActive?: SortOrder
     plan?: SortOrder
@@ -31076,6 +31130,8 @@ export namespace Prisma {
     currency?: SortOrder
     currencySymbol?: SortOrder
     taxRate?: SortOrder
+    upiId?: SortOrder
+    hasWaiterService?: SortOrder
     timezone?: SortOrder
     isActive?: SortOrder
     plan?: SortOrder
@@ -36236,6 +36292,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -36283,6 +36341,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -36412,6 +36472,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -36459,6 +36521,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -36649,6 +36713,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -36696,6 +36762,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -36759,6 +36827,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -36806,6 +36876,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -36853,6 +36925,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -36900,6 +36974,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -37029,6 +37105,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -37076,6 +37154,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -37139,6 +37219,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -37186,6 +37268,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -37354,6 +37438,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -37401,6 +37487,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -37794,6 +37882,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -37841,6 +37931,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -37904,6 +37996,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -37951,6 +38045,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -37998,6 +38094,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -38045,6 +38143,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -38164,6 +38264,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -38211,6 +38313,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -38274,6 +38378,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -38321,6 +38427,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -38525,6 +38633,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -38572,6 +38682,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -38798,6 +38910,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -38845,6 +38959,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -39142,6 +39258,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -39189,6 +39307,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -39436,6 +39556,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -39483,6 +39605,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -39587,6 +39711,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -39634,6 +39760,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -39728,6 +39856,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -39775,6 +39905,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -40043,6 +40175,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -40090,6 +40224,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -40588,6 +40724,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -40635,6 +40773,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -40886,6 +41026,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -40933,6 +41075,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -41192,6 +41336,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -41239,6 +41385,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -41302,6 +41450,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -41349,6 +41499,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -41396,6 +41548,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -41443,6 +41597,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -41506,6 +41662,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -41553,6 +41711,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -41600,6 +41760,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -41647,6 +41809,8 @@ export namespace Prisma {
     currency?: string
     currencySymbol?: string
     taxRate?: number
+    upiId?: string | null
+    hasWaiterService?: boolean
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
@@ -41779,6 +41943,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
@@ -41826,6 +41992,8 @@ export namespace Prisma {
     currency?: StringFieldUpdateOperationsInput | string
     currencySymbol?: StringFieldUpdateOperationsInput | string
     taxRate?: FloatFieldUpdateOperationsInput | number
+    upiId?: NullableStringFieldUpdateOperationsInput | string | null
+    hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan

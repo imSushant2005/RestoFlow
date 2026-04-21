@@ -11,6 +11,7 @@ import {
   subscribeTenantStorage,
 } from '../lib/tenantStorage';
 import { useCartStore } from '../store/cartStore';
+import { CustomerFooter } from './CustomerFooter';
 import { CustomerNav } from './CustomerNav';
 import { HandshakeListener } from './HandshakeListener';
 import { WaiterCall } from './WaiterCall';
@@ -19,6 +20,11 @@ import { publicApi } from '../lib/api';
 
 function matches(pathname: string, path: string) {
   return Boolean(matchPath(path, pathname));
+}
+
+function supportsWaiterCalls(plan?: string) {
+  const normalizedPlan = String(plan || '').trim().toUpperCase();
+  return normalizedPlan === 'CAFE' || normalizedPlan === 'DINEPRO' || normalizedPlan === 'PREMIUM';
 }
 
 export function CustomerShell() {
@@ -134,14 +140,10 @@ export function CustomerShell() {
     storageState.activeSessionId || storageState.customerToken || customerName || customerPhone,
   );
   const hasTableOrderingContext = Boolean(tableId && hasOrderingIdentity);
+  const hasWaiterCallAccess = useMemo(() => supportsWaiterCalls(tenantPlan), [tenantPlan]);
 
   const showBottomNav =
     (isMenuRoute && hasOrderingIdentity) || isSessionRoute || isStatusRoute || isHistoryRoute || isProfileRoute;
-  const showWaiterCall = Boolean(
-    storageState.activeSessionId &&
-      storageState.sessionAccessToken &&
-      ((isMenuRoute && hasTableOrderingContext) || isSessionRoute || isStatusRoute),
-  );
 
   const waiterContext = useMemo(
     () => ({
@@ -151,6 +153,13 @@ export function CustomerShell() {
       sessionAccessToken: storageState.sessionAccessToken || null,
     }),
     [storageState.activeSessionId, storageState.lastTableId, storageState.sessionAccessToken, tableId, tenantSlug],
+  );
+  const showWaiterCall = Boolean(
+    hasWaiterCallAccess &&
+      waiterContext.tableId &&
+      storageState.activeSessionId &&
+      storageState.sessionAccessToken &&
+      ((isMenuRoute && hasTableOrderingContext) || isSessionRoute || isStatusRoute),
   );
 
   const pageActionHeight = useMemo(() => {
@@ -173,6 +182,13 @@ export function CustomerShell() {
       )}
 
       <Outlet />
+      <div
+        style={{
+          paddingBottom: showBottomNav ? 'calc(var(--customer-nav-space) + var(--customer-page-action-height) + 1rem)' : '1rem',
+        }}
+      >
+        <CustomerFooter />
+      </div>
 
       {showBottomNav && <CustomerNav />}
       {showWaiterCall && waiterContext.sessionId && waiterContext.sessionAccessToken && (
