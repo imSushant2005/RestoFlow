@@ -21,6 +21,7 @@ const publicOrderSelect = {
   orderNumber: true,
   orderType: true,
   status: true,
+  version: true,
   subtotal: true,
   taxAmount: true,
   discountAmount: true,
@@ -1118,15 +1119,17 @@ export const updateOrderStatusPublic = async (req: Request, res: Response) => {
       newStatus: 'SERVED' as any,
       actorId: order.diningSessionId,
       actorType: 'CUSTOMER',
+      statusPatch: { servedAt: new Date() },
     });
 
-    // Notify Vendor Socket
-    getIO().to(getTenantRoom(tenantId)).emit('order:update', updatedOrder);
-
-    // Notify Session Socket
-    getIO().to(getSessionRoom(tenantId, order.diningSessionId)).emit('order:update', updatedOrder);
-
     await invalidateOperationalCaches(tenantId, order.diningSessionId, id);
+
+    try {
+      getIO().to(getTenantRoom(tenantId)).emit('order:update', updatedOrder);
+      getIO().to(getSessionRoom(tenantId, order.diningSessionId)).emit('order:update', updatedOrder);
+    } catch (emitError) {
+      console.error('[PUBLIC_ORDER_STATUS_SOCKET_EMIT_ERROR]', emitError);
+    }
 
     res.json(updatedOrder);
   } catch (error) {

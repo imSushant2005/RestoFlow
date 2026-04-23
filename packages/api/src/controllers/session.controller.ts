@@ -942,6 +942,10 @@ export const addOrderToSession = async (req: Request, res: Response) => {
       updatedAt: new Date().toISOString(),
     };
 
+    await invalidateSessionCaches(tenant.id, sessionId, [order.id]).catch((err) =>
+      console.error('[SESSION_ORDER_CACHE_INVALIDATION_ERROR]', err),
+    );
+
     getIO().to(tenantRoom).emit('order:new', order);
     getIO().to(sessionRoom).emit('order:new', order);
     getIO().to(tenantRoom).emit('session:update', sessionUpdatePayload);
@@ -955,11 +959,6 @@ export const addOrderToSession = async (req: Request, res: Response) => {
     }
 
     res.status(201).json(order);
-    setImmediate(() => {
-      invalidateSessionCaches(tenant.id, sessionId, [order.id]).catch((err) =>
-        console.error('[SESSION_ORDER_CACHE_INVALIDATION_ERROR]', err),
-      );
-    });
   } catch (error: any) {
     console.error('addOrderToSession error:', error);
     if (error instanceof Error && (error.message === 'ORDER_ITEMS_REQUIRED' || error.message === 'ORDER_ITEMS_INVALID')) {

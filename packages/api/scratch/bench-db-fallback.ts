@@ -1,4 +1,4 @@
-import { PrismaClient } from '@dineflow/prisma';
+import { PrismaClient } from '@bhojflow/prisma';
 
 const AGG_QUERY = `
   WITH orders_summary AS (

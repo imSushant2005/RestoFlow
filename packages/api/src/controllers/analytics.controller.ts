@@ -166,7 +166,7 @@ export const getAnalytics = async (req: Request, res: Response) => {
 
     res.json(result);
   } catch (error) {
-    console.error('RESTOFLOW_ANALYTICS_FAILURE:', error);
+    console.error('BHOJFLOW_ANALYTICS_FAILURE:', error);
     res.status(500).json({ error: 'Failed to synthesize dashboard analytics' });
   }
 };

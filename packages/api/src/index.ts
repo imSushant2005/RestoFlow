@@ -275,7 +275,7 @@ app.use(globalErrorHandler);
 httpServer.on('error', (error: any) => {
   if (error?.code === 'EADDRINUSE') {
     logger.error(
-      `Port ${port} is already in use. Stop the existing process on ${port} and restart @dineflow/api.`,
+      `Port ${port} is already in use. Stop the existing process on ${port} and restart @bhojflow/api.`,
     );
     process.exit(1);
   }
@@ -284,7 +284,7 @@ httpServer.on('error', (error: any) => {
 });
 
 httpServer.listen(port, () => {
-  logger.info(`RESTOFLOW API (V3 Enterprise) running on port ${port}`);
+  logger.info(`BHOJFLOW API (V3 Enterprise) running on port ${port}`);
   
   if (env.RUN_BACKGROUND_JOBS) {
     logger.info('Background jobs enabled inside API process');

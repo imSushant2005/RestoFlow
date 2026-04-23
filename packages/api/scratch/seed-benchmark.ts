@@ -8,7 +8,7 @@ async function seed() {
     data: {
       slug: tenantSlug,
       businessName: 'Benchmark Performance Lab',
-      email: 'perf@restoflow.com',
+      email: 'perf@BHOJFLOW.com',
       plan: 'PREMIUM',
       isActive: true,
     }

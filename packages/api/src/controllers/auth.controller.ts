@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { UserRole } from '@dineflow/prisma';
+import { UserRole } from '@bhojflow/prisma';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import { prisma, withPrismaRetry } from '../db/prisma';
@@ -103,7 +103,7 @@ function normalizeTenantScopedUsername(raw: string, tenantSlug: string) {
   const handlePart = raw.trim().toLowerCase().includes('@') ? raw.trim().toLowerCase().split('@')[0] : raw.trim().toLowerCase();
   const handle = sanitizeTenantHandle(handlePart) || 'staff';
   const slug = sanitizeTenantHandle(tenantSlug) || 'restaurant';
-  return `${handle}@${slug}.restoflow`;
+  return `${handle}@${slug}.BHOJFLOW`;
 }
 
 function issueRefreshCookie(res: Response, refreshToken: string) {

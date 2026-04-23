@@ -1,4 +1,4 @@
-import { PrismaClient } from '@dineflow/prisma';
+import { PrismaClient } from '@bhojflow/prisma';
 const p = new PrismaClient();
 p.$queryRawUnsafe(`
   SELECT indexname, tablename FROM pg_indexes 

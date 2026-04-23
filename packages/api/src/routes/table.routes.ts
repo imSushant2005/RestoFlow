@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../middlewares/auth.middleware';
 import { requireRoles } from '../middlewares/role.middleware';
-import { UserRole } from '@dineflow/prisma';
+import { UserRole } from '@bhojflow/prisma';
 import * as TableController from '../controllers/table.controller';
 
 const router: Router = Router();

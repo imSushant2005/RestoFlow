@@ -1,4 +1,4 @@
-import { PrismaClient } from '@dineflow/prisma';
+import { PrismaClient } from '@bhojflow/prisma';
 import { env } from '../config/env';
 import {
   recordPrismaQuery,

@@ -1,5 +1,5 @@
 {
-  "name": "@dineflow/shared",
+  "name": "@bhojflow/shared",
   "version": "1.0.0",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

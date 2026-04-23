@@ -1,4 +1,4 @@
-import { UserRole } from '@dineflow/prisma';
+import { UserRole } from '@bhojflow/prisma';
 
 declare global {
   namespace Express {

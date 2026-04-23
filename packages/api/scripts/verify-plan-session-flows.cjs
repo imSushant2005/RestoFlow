@@ -6,16 +6,16 @@ const { resolvePostPaymentSessionStatus } = require('../dist/utils/session-settl
 const activeOrders = [{ status: 'NEW' }];
 const servedOrders = [{ status: 'SERVED' }, { status: 'RECEIVED' }];
 
-assert.deepStrictEqual(Object.keys(getAvailablePlans()).sort(), ['CAFE', 'DINEPRO', 'MINI', 'PREMIUM']);
+assert.deepStrictEqual(Object.keys(getAvailablePlans()).sort(), ['CAFE', 'Bhoj Pro', 'MINI', 'PREMIUM']);
 
 assert.strictEqual(parsePlan('FREE'), 'MINI');
 assert.strictEqual(parsePlan('STARTER'), 'MINI');
-assert.strictEqual(parsePlan('GOLD'), 'DINEPRO');
+assert.strictEqual(parsePlan('GOLD'), 'Bhoj Pro');
 assert.strictEqual(parsePlan('PLATINUM'), 'PREMIUM');
 assert.strictEqual(parsePlan('GROWTH'), 'CAFE');
 
-assert.strictEqual(normalizePlan('GOLD'), 'DINEPRO');
-assert.strictEqual(getPlanLimits('GOLD').name, 'DinePro');
+assert.strictEqual(normalizePlan('GOLD'), 'Bhoj Pro');
+assert.strictEqual(getPlanLimits('GOLD').name, 'Bhoj Pro');
 assert.strictEqual(getPlanLimits('PLATINUM').name, 'Premium');
 
 assert.strictEqual(resolvePostPaymentSessionStatus('ACTIVE', activeOrders, false), 'ACTIVE');

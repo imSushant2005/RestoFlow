@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { UserRole } from '@dineflow/prisma';
+import { UserRole } from '@bhojflow/prisma';
 import { requireAuth } from '../middlewares/auth.middleware';
 import { requireRoles } from '../middlewares/role.middleware';
 import * as OrderController from '../controllers/order.controller';

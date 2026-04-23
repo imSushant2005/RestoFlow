@@ -1,4 +1,4 @@
-import { PrismaClient } from '@dineflow/prisma';
+import { PrismaClient } from '@bhojflow/prisma';
 
 async function main() {
   const prisma = new PrismaClient();

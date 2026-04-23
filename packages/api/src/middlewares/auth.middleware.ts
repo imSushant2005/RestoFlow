@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken } from '../utils/jwt';
-import { UserRole } from '@dineflow/prisma';
+import { UserRole } from '@bhojflow/prisma';
 
 export const requireAuth = (req: Request, res: Response, next: NextFunction) => {
   try {

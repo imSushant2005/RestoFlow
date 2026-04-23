@@ -1,4 +1,4 @@
-import { UserRole } from '@dineflow/prisma';
+import { UserRole } from '@bhojflow/prisma';
 
 export const FULL_ACCESS_ROLES: UserRole[] = [UserRole.OWNER, UserRole.MANAGER];
 

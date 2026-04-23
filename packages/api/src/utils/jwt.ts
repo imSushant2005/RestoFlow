@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { jwtConfig } from '../config/auth';
-import { UserRole } from '@dineflow/prisma';
+import { UserRole } from '@bhojflow/prisma';
 
 export interface JwtPayload {
   id: string;

@@ -23,7 +23,7 @@ importers:
 
   apps/customer:
     dependencies:
-      '@dineflow/shared':
+      '@bhojflow/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@tanstack/react-query':
@@ -117,7 +117,7 @@ importers:
       '@clerk/clerk-react':
         specifier: ^5.31.4
         version: 5.61.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@dineflow/shared':
+      '@bhojflow/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@dnd-kit/core':
@@ -226,7 +226,7 @@ importers:
 
   apps/kds:
     dependencies:
-      '@dineflow/shared':
+      '@bhojflow/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@tanstack/react-query':
@@ -321,7 +321,7 @@ importers:
 
   packages/api:
     dependencies:
-      '@dineflow/prisma':
+      '@bhojflow/prisma':
         specifier: workspace:*
         version: link:../../infrastructure/prisma
       '@google/genai':
@@ -391,7 +391,7 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
-      '@dineflow/shared':
+      '@bhojflow/shared':
         specifier: workspace:*
         version: link:../shared
       '@types/bcryptjs':

@@ -6,7 +6,7 @@
  * Run via: pnpx tsx src/db/apply_missing_indexes.ts
  */
 
-import { PrismaClient } from '@dineflow/prisma';
+import { PrismaClient } from '@bhojflow/prisma';
 
 const prisma = new PrismaClient();
 

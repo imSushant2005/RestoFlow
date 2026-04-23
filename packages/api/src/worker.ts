@@ -5,7 +5,7 @@ import { logger } from './utils/logger';
 
 async function main() {
   await checkPrismaReadiness();
-  logger.info('RestoFlow worker booted');
+  logger.info('BHOJFLOW worker booted');
 
   await cleanupStaleSessions();
   startSessionCleanupJob();

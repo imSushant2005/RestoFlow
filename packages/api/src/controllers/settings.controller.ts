@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma, withPrismaRetry } from '../db/prisma';
 import { getPlanLimits, normalizePlan } from '../config/plans';
-import { UserRole, Plan } from '@dineflow/prisma';
+import { UserRole, Plan } from '@bhojflow/prisma';
 import { hashPassword } from '../utils/hash';
 import { z } from 'zod';
 import { deleteCache, withCache } from '../services/cache.service';
@@ -85,7 +85,7 @@ function normalizeLoginEmail(raw: string, tenantSlug: string) {
   if (!trimmed) return '';
   const handlePart = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed;
   const handle = sanitizeSegment(handlePart) || 'staff';
-  return `${handle}@${tenantSlug}.restoflow`;
+  return `${handle}@${tenantSlug}.BHOJFLOW`;
 }
 
 function defaultEmployeeCode(name: string, tenantSlug: string) {
@@ -348,7 +348,7 @@ export const createStaff = async (req: Request, res: Response) => {
     const requestedLogin = payload.username?.trim() || payload.email?.trim() || '';
     const email = normalizeLoginEmail(requestedLogin, tenant.slug);
     if (!isEmailLike(email)) {
-      return res.status(400).json({ error: 'Username format is invalid. Use for example: alex@your-venue.restoflow' });
+      return res.status(400).json({ error: 'Username format is invalid. Use for example: alex@your-venue.BHOJFLOW' });
     }
 
     const baseEmployeeCode = payload.employeeCode?.trim().toUpperCase() || defaultEmployeeCode(name, tenant.slug);
@@ -464,7 +464,7 @@ export const updateStaff = async (req: Request, res: Response) => {
     if (requestedLogin) {
       const email = normalizeLoginEmail(requestedLogin, tenant.slug);
       if (!isEmailLike(email)) {
-        return res.status(400).json({ error: 'Username format is invalid. Use for example: alex@your-venue.restoflow' });
+        return res.status(400).json({ error: 'Username format is invalid. Use for example: alex@your-venue.BHOJFLOW' });
       }
       const existingByEmail = await prisma.user.findFirst({
         where: { email, id: { not: id } },

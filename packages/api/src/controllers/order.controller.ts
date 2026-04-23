@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { randomUUID } from 'crypto';
-import { UserRole } from '@dineflow/prisma';
+import { UserRole } from '@bhojflow/prisma';
 import { prisma, withPrismaRetry } from '../db/prisma';
 import { getIO, getRoleRoom, getSessionRoom, getTenantRoom } from '../socket';
 import { deleteCache, withCache } from '../services/cache.service';
@@ -497,6 +497,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
         customerPhone: true,
         customerName: true,
         orderNumber: true,
+        status: true,
         version: true,
       },
     });
@@ -543,10 +544,25 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
           )?.name?.trim() || 'Service Staff'
         : null;
 
-    // Use the OCC state machine transition service
+    const loadCurrentOrder = () =>
+      prisma.order.findFirst({
+        where: { id: existingOrder.id, tenantId: req.tenantId },
+        select: orderSelect,
+      });
+
+    if (existingOrder.status === normalizedStatus) {
+      const currentOrder = await loadCurrentOrder();
+      await invalidateOrderMutationCaches(req.tenantId!, existingOrder.diningSessionId, existingOrder.id).catch((err) =>
+        console.error('[ORDER_STATUS_CACHE_INVALIDATION_ERROR]', err),
+      );
+      return res.json(currentOrder);
+    }
+
+    // Use the state machine transition service. The server reads the latest
+    // version here so a slightly stale live dashboard does not roll back a valid move.
     let order;
     try {
-      const expectedVersion = typeof req.body.version === 'number' ? req.body.version : existingOrder.version;
+      const expectedVersion = existingOrder.version;
       const metadata = {
         sourceIp: req.ip,
         userAgent: req.get('user-agent'),
@@ -562,6 +578,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
         deviceId: req.headers['x-device-id'] as string | undefined,
         reasonCode: cancelReason,
         metadata,
+        statusPatch,
       });
 
       // Secondary update for DiningSession if SERVED
@@ -576,32 +593,48 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
       }
 
       // ─── STABILITY & SYNC FIXES ─────────────────────────────
-      // 1. Invalidate Dashboad Cache (resolves fallback ordering)
-      await deleteCache(cacheKeys.dashboardLiveOrders(req.tenantId!));
+      const responseOrder = (await loadCurrentOrder()) || order;
 
-      // 2. Broadcast Update to all Dashboard instances
-      getIO().to(getTenantRoom(req.tenantId!)).emit('order:update', order);
+      await invalidateOrderMutationCaches(req.tenantId!, existingOrder.diningSessionId, existingOrder.id).catch((err) =>
+        console.error('[ORDER_STATUS_CACHE_INVALIDATION_ERROR]', err),
+      );
 
-      // 3. Notify Waiters if order is READY for pickup
-      if (normalizedStatus === 'READY') {
-        const pickupPayload = buildWaiterPickupPayload(order as any);
-        getIO().to(getTenantRoom(req.tenantId!)).emit('waiter:pickup_ready', pickupPayload);
+      try {
+        const io = getIO();
+        io.to(getTenantRoom(req.tenantId!)).emit('order:update', responseOrder);
+
+        if (normalizedStatus === 'READY') {
+          const pickupPayload = buildWaiterPickupPayload(responseOrder as any);
+          io.to(getTenantRoom(req.tenantId!)).emit('waiter:pickup_ready', pickupPayload);
+        }
+      } catch (emitError) {
+        console.error('[ORDER_STATUS_SOCKET_EMIT_ERROR]', emitError);
       }
       // ──────────────────────────────────────────────────────
 
-      res.json(order);
+      res.json(responseOrder);
     } catch (err: any) {
       if (err instanceof ConflictError || err.message === 'OCC_COLLISION') {
-        const truth = await prisma.order.findFirst({
-          where: { id: existingOrder.id, tenantId: req.tenantId },
-          select: orderSelect,
-        });
+        const truth = await loadCurrentOrder();
         // Invalidate even on conflict to ensure client eventually syncs
-        await deleteCache(cacheKeys.dashboardLiveOrders(req.tenantId!));
+        await invalidateOrderMutationCaches(req.tenantId!, existingOrder.diningSessionId, existingOrder.id).catch((cacheError) =>
+          console.error('[ORDER_STATUS_CACHE_INVALIDATION_ERROR]', cacheError),
+        );
         
         return res.status(409).json({
           error: 'OCC_CONFLICT',
           message: 'Order status was modified by another user. Syncing...',
+          recovery: { truth },
+        });
+      }
+      if (err instanceof Error && err.message.startsWith('INVALID_TRANSITION')) {
+        const truth = await loadCurrentOrder();
+        await invalidateOrderMutationCaches(req.tenantId!, existingOrder.diningSessionId, existingOrder.id).catch((cacheError) =>
+          console.error('[ORDER_STATUS_CACHE_INVALIDATION_ERROR]', cacheError),
+        );
+        return res.status(409).json({
+          error: 'INVALID_TRANSITION',
+          message: err.message,
           recovery: { truth },
         });
       }
@@ -971,6 +1004,8 @@ export const createAssistedOrder = async (req: Request, res: Response) => {
 
       setImmediate(async () => {
         try {
+          await invalidateOrderMutationCaches(tenant.id, result.session.id, result.order.id);
+
           const io = getIO();
           const tenantRoom = getTenantRoom(tenant.id);
           const sessionRoom = getSessionRoom(tenant.id, result.session.id);
@@ -1046,7 +1081,6 @@ export const createAssistedOrder = async (req: Request, res: Response) => {
             }
           }
 
-          await invalidateOrderMutationCaches(tenant.id, result.session.id, result.order.id);
         } catch (err) {
           console.error('[ASSISTED_ORDER_POST_CREATE_ERROR]', err);
         }

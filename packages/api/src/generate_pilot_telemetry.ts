@@ -1,4 +1,4 @@
-import { PrismaClient } from '@dineflow/prisma';
+import { PrismaClient } from '@bhojflow/prisma';
 
 const prisma = new PrismaClient();
 const PILOT_TENANT_ID = 'cmnocfczm0001o6bnjq98qw8e'; // Venue #1 (aura cafe)

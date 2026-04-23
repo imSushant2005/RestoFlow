@@ -1,4 +1,4 @@
-import { UserRole, OrderStatus } from '@dineflow/prisma';
+import { UserRole, OrderStatus } from '@bhojflow/prisma';
 import { prisma } from '../db/prisma';
 
 const TRANSITIONS: Record<string, string[]> = {

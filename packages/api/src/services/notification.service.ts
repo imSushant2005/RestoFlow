@@ -9,7 +9,7 @@ const twilioClient = env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN
 
 if (env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(
-    'mailto:support@restoflow.com',
+    'mailto:support@bhojflow.com',
     env.VAPID_PUBLIC_KEY,
     env.VAPID_PRIVATE_KEY
   );

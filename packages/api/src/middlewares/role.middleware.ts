@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { UserRole } from '@dineflow/prisma';
+import { UserRole } from '@bhojflow/prisma';
 
 export const requireRoles = (roles: UserRole[]) => {
   return (req: Request, res: Response, next: NextFunction) => {

@@ -1,5 +1,5 @@
 {
-  "name": "@dineflow/api",
+  "name": "@bhojflow/api",
   "version": "1.0.0",
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -9,7 +9,7 @@
     "start:worker": "node --experimental-specifier-resolution=node dist/worker.js"
   },
   "dependencies": {
-    "@dineflow/prisma": "workspace:*",
+    "@bhojflow/prisma": "workspace:*",
     "@google/genai": "^1.46.0",
     "@sentry/node": "^10.48.0",
     "@sentry/profiling-node": "^10.48.0",
@@ -34,7 +34,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@dineflow/shared": "workspace:*",
+    "@bhojflow/shared": "workspace:*",
     "@types/bcryptjs": "^3.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.17",

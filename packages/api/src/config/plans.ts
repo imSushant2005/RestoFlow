@@ -15,7 +15,7 @@ export type PlanLimit = {
   hasWaiterCalling: 'HIDDEN' | 'TOGGLEABLE' | 'ALWAYS';
 };
 
-export type CanonicalPlan = 'MINI' | 'CAFE' | 'DINEPRO' | 'PREMIUM';
+export type CanonicalPlan = 'MINI' | 'CAFE' | 'BHOJPRO' | 'PREMIUM';
 
 const CANONICAL_PLAN_LIMITS: Record<CanonicalPlan, PlanLimit> = {
   MINI: {
@@ -50,12 +50,12 @@ const CANONICAL_PLAN_LIMITS: Record<CanonicalPlan, PlanLimit> = {
     hasFranchiseControls: false,
     hasWaiterCalling: 'TOGGLEABLE',
   },
-  DINEPRO: {
+  BHOJPRO: {
     items: 9999,
     tables: 18,
     staff: 200,
     price: 3499,
-    name: 'Dine Pro',
+    name: 'Bhoj Pro',
     hasKDS: true,
     hasWaiterRole: true,
     hasWaiterApp: true,
@@ -89,8 +89,9 @@ export const PLAN_ALIASES: Record<string, CanonicalPlan> = {
   STARTER: 'MINI',
   CAFE: 'CAFE',
   GROWTH: 'CAFE',
-  DINEPRO: 'DINEPRO',
-  GOLD: 'DINEPRO',
+  BHOJPRO: 'BHOJPRO',
+  'BHOJ PRO': 'BHOJPRO',
+  GOLD: 'BHOJPRO',
   PREMIUM: 'PREMIUM',
   PLATINUM: 'PREMIUM',
 };

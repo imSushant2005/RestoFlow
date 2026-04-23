@@ -2,7 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
-import { UserRole } from '@dineflow/prisma';
+import { UserRole } from '@bhojflow/prisma';
 import { prisma, withPrismaRetry } from './db/prisma';
 import { env } from './config/env';
 import { verifyAccessToken } from './utils/jwt';
