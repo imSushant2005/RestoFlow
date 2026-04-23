@@ -1,4 +1,4 @@
-// schema.prisma - DineFlow V2 Complete Schema
+// schema.prisma - BHOJFLOW V2 Complete Schema
 
 generator client {
   provider = "prisma-client-js"
@@ -13,35 +13,37 @@ datasource db {
 
 // ─── TENANTS (Businesses) ──────────────────────────────────
 model Tenant {
-  id             String    @id @default(cuid())
-  slug           String    @unique // "rustic-bistro" → dineflow.com/order/rustic-bistro
-  businessName   String
-  description    String?
-  logoUrl        String?
-  coverImageUrl  String?
-  primaryColor   String    @default("#FF6B35")
-  accentColor    String    @default("#2D3748")
-  cuisineType    String?
-  businessType   String    @default("restaurant") // restaurant|cafe|hotel|street_vendor|cloud_kitchen
-  address        String?
-  city           String?
-  phone          String?
-  email          String
-  website        String?
-  instagramUrl   String?
-  currency       String    @default("INR")
-  currencySymbol String    @default("₹")
-  taxRate        Float     @default(5.0) // GST percentage
-  timezone       String    @default("Asia/Kolkata")
-  isActive       Boolean   @default(true)
-  plan           Plan      @default(MINI)
-  planStartedAt  DateTime?
-  planExpiresAt  DateTime?
-  trialEndsAt    DateTime? // 1-month free trial
-  businessHours  Json? // { monday: { open: "09:00", close: "22:00", isOpen: true }, ... }
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  isPilot        Boolean   @default(false)
+  id               String    @id @default(cuid())
+  slug             String    @unique // "rustic-bistro" -> bhojflow.com/order/rustic-bistro
+  businessName     String
+  description      String?
+  logoUrl          String?
+  coverImageUrl    String?
+  primaryColor     String    @default("#FF6B35")
+  accentColor      String    @default("#2D3748")
+  cuisineType      String?
+  businessType     String    @default("restaurant") // restaurant|cafe|hotel|street_vendor|cloud_kitchen
+  address          String?
+  city             String?
+  phone            String?
+  email            String
+  website          String?
+  instagramUrl     String?
+  currency         String    @default("INR")
+  currencySymbol   String    @default("₹")
+  taxRate          Float     @default(5.0) // GST percentage
+  upiId            String?
+  hasWaiterService Boolean   @default(false)
+  timezone         String    @default("Asia/Kolkata")
+  isActive         Boolean   @default(true)
+  plan             Plan      @default(MINI)
+  planStartedAt    DateTime?
+  planExpiresAt    DateTime?
+  trialEndsAt      DateTime? // 1-month free trial
+  businessHours    Json? // { monday: { open: "09:00", close: "22:00", isOpen: true }, ... }
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  isPilot          Boolean   @default(false)
 
   // Relations
   users          User[]
@@ -171,6 +173,7 @@ model MenuItem {
 
   @@index([tenantId, categoryId])
   @@index([tenantId, isAvailable])
+  @@index([tenantId, sortOrder])
 }
 
 model ModifierGroup {
@@ -184,6 +187,8 @@ model ModifierGroup {
   sortOrder     Int      @default(0)
 
   modifiers Modifier[]
+
+  @@index([menuItemId, sortOrder])
 }
 
 model Modifier {
@@ -329,6 +334,7 @@ model Bill {
   taxAmount      Float @default(0)
   discountAmount Float @default(0)
   totalAmount    Float
+  tipAmount      Float @default(0)
 
   paymentStatus String    @default("UNPAID") // UNPAID | PAID | PARTIAL
   paymentMethod String? // cash | upi | card
@@ -400,6 +406,7 @@ model Order {
   @@index([tenantId, diningSessionId, status, createdAt])
   @@index([diningSessionId])
   @@index([diningSessionId, createdAt])
+  @@index([tenantId, createdAt])
 }
 
 model OrderItem {
@@ -453,6 +460,7 @@ model Review {
   @@index([orderId])
   @@index([diningSessionId])
   @@index([serviceStaffUserId])
+  @@index([serviceStaffUserId, createdAt])
 }
 
 // ─── ANALYTICS (Daily Snapshots) ──────────────────────────
@@ -482,7 +490,7 @@ model DailyAnalytics {
   @@index([tenantId, date])
 }
 
-// ─── EXPENSES (DinePro+) ──────────────────────────────────
+// ─── EXPENSES (Bhoj Pro+) ──────────────────────────────────
 model Expense {
   id          String   @id @default(cuid())
   tenantId    String
@@ -505,7 +513,7 @@ enum Plan {
   PLATINUM
   MINI
   CAFE
-  DINEPRO
+  BHOJPRO
   PREMIUM
 }
 

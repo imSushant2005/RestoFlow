@@ -13,7 +13,7 @@ function sanitizeSegment(value: string) {
 function buildUsername(name: string, slug?: string) {
   const handle = sanitizeSegment(name) || 'staff';
   const tenant = sanitizeSegment(slug || 'restaurant') || 'restaurant';
-  return `${handle}@${tenant}.restoflow`;
+  return `${handle}@${tenant}.BHOJFLOW`;
 }
 
 function buildEmployeeCode(name: string, slug?: string) {
@@ -384,7 +384,7 @@ export function Settings() {
                         <input name="slug" defaultValue={business?.slug} required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all pr-12" />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">/order</span>
                       </div>
-                      <p className="text-[10px] font-bold text-slate-400 italic">restoflow.com/order/<span className="text-blue-500 font-black">{business?.slug}</span></p>
+                      <p className="text-[10px] font-bold text-slate-400 italic">bhojflow.com/order/<span className="text-blue-500 font-black">{business?.slug}</span></p>
                     </div>
 
                     <div className="md:col-span-2 space-y-1.5">
@@ -569,7 +569,7 @@ export function Settings() {
                         <input
                           name="upiId"
                           defaultValue={business?.upiId || ''}
-                          placeholder="restoflow@upi"
+                          placeholder="bhojflow@upi"
                           className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold text-slate-900 focus:bg-white"
                         />
                         <p className="text-[10px] font-bold text-slate-400">
@@ -832,7 +832,7 @@ export function Settings() {
                              <p className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>QR copy is fixed</p>
                              <p className="mt-1 text-xs font-medium leading-relaxed" style={{ color: 'var(--text-3)' }}>
                                 Every QR now prints <span style={{ color: 'var(--text-1)' }}>Scan me for order</span> at the top,
-                                your venue name under the code, and a permanent <span style={{ color: 'var(--text-1)' }}>Powered by Restoflow</span> footer.
+                                your venue name under the code, and a permanent <span style={{ color: 'var(--text-1)' }}>Powered by BHOJFLOW</span> footer.
                              </p>
                           </div>
                        </div>
@@ -849,7 +849,7 @@ export function Settings() {
                                 Scan me for order
                              </span>
                              <QRCodeSVG 
-                                value="https://restoflow.com/preview" 
+                                value="https://bhojflow.com/preview" 
                                 size={220}
                                 level="H"
                                 fgColor={qrConfig.fgColor}
@@ -865,7 +865,7 @@ export function Settings() {
                                 </span>
                                 <div className="mt-3 h-px w-full" style={{ backgroundColor: `${qrConfig.fgColor}22` }} />
                                 <span className="mt-3 rounded-full px-3 py-1 text-[10px] font-black tracking-[0.2em] uppercase whitespace-nowrap" style={{ color: qrConfig.fgColor, backgroundColor: `${qrConfig.fgColor}10` }}>
-                                   Powered by Restoflow
+                                   Powered by BHOJFLOW
                                 </span>
                              </div>
                           </div>

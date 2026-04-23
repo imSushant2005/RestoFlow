@@ -1,8 +1,8 @@
-import { useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { ChevronRight, Clock3, Plus, Minus, Sparkles, Zap } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { formatINR } from '../lib/currency';
-import { getDirectImageUrl } from '../lib/images';
+import { getImageUrlCandidates } from '../lib/images';
 
 type MenuItemCardProps = {
   item: any;
@@ -13,10 +13,13 @@ type MenuItemCardProps = {
 
 export function MenuItemCard({ item, index = 0, onOpen, onQuickAdd }: MenuItemCardProps) {
   const [imageError, setImageError] = useState(false);
+  const [imageIndex, setImageIndex] = useState(0);
 
   const fallbackImage =
     'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
-  const imageUrl = getDirectImageUrl(item?.imageUrl || item?.images?.[0] || fallbackImage);
+  const rawImageUrl = item?.imageUrl || item?.images?.[0] || fallbackImage;
+  const imageUrls = useMemo(() => getImageUrlCandidates(rawImageUrl), [rawImageUrl]);
+  const imageUrl = imageUrls[imageIndex] || '';
   const itemName = item?.name || 'Untitled Item';
   const itemDescription = item?.description || '';
   const itemPrice = Number.isFinite(Number(item?.price)) ? Number(item.price) : 0;
@@ -54,6 +57,11 @@ export function MenuItemCard({ item, index = 0, onOpen, onQuickAdd }: MenuItemCa
   const mainCartItemId = existingCartItems[0]?.id;
 
   const actionLabel = hasModifierGroups ? 'Customize' : 'Add';
+
+  useEffect(() => {
+    setImageError(false);
+    setImageIndex(0);
+  }, [imageUrls]);
 
   const handleQuickAction = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -98,10 +106,17 @@ export function MenuItemCard({ item, index = 0, onOpen, onQuickAdd }: MenuItemCa
         ) : (
           <img
             src={imageUrl}
+            key={imageUrl}
             alt={itemName}
             loading="lazy"
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-            onError={() => setImageError(true)}
+            onError={() => {
+              if (imageIndex < imageUrls.length - 1) {
+                setImageIndex((current) => current + 1);
+                return;
+              }
+              setImageError(true);
+            }}
           />
         )}
 

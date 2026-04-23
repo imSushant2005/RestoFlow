@@ -185,45 +185,52 @@ async function buildTipSummaryForUser(userId: string) {
   startOfWeek.setHours(0, 0, 0, 0);
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [summary] = await withCache(
-    cacheKeys.authTipSummary(userId),
+  // Tips from Bills (Session-based)
+  const [billSummary] = await withCache(
+    cacheKeys.authTipSummary(userId), // We'll keep the same key but maybe clear it on bill payment too
     () =>
       prisma.$queryRaw<
         Array<{
           todayAmount: number | null;
-          todaySessions: number | null;
+          todayCount: number | null;
           weekAmount: number | null;
-          weekSessions: number | null;
           monthAmount: number | null;
-          monthSessions: number | null;
         }>
       >`
         SELECT
-          COALESCE(SUM("tipAmount") FILTER (WHERE "createdAt" >= ${startOfToday}), 0)::float8 AS "todayAmount",
-          COUNT(*) FILTER (WHERE "createdAt" >= ${startOfToday})::int AS "todaySessions",
-          COALESCE(SUM("tipAmount") FILTER (WHERE "createdAt" >= ${startOfWeek}), 0)::float8 AS "weekAmount",
-          COUNT(*) FILTER (WHERE "createdAt" >= ${startOfWeek})::int AS "weekSessions",
-          COALESCE(SUM("tipAmount") FILTER (WHERE "createdAt" >= ${startOfMonth}), 0)::float8 AS "monthAmount",
-          COUNT(*) FILTER (WHERE "createdAt" >= ${startOfMonth})::int AS "monthSessions"
-        FROM "Review"
-        WHERE "serviceStaffUserId" = ${userId}
-          AND "createdAt" >= ${startOfMonth}
+          COALESCE(SUM(b."tipAmount") FILTER (WHERE b."generatedAt" >= ${startOfToday}), 0)::float8 AS "todayAmount",
+          COUNT(*) FILTER (WHERE b."generatedAt" >= ${startOfToday})::int AS "todayCount",
+          COALESCE(SUM(b."tipAmount") FILTER (WHERE b."generatedAt" >= ${startOfWeek}), 0)::float8 AS "weekAmount",
+          COALESCE(SUM(b."tipAmount") FILTER (WHERE b."generatedAt" >= ${startOfMonth}), 0)::float8 AS "monthAmount"
+        FROM "Bill" b
+        JOIN "DiningSession" ds ON b."sessionId" = ds.id
+        WHERE ds."attendedByUserId" = ${userId}
+          AND b."generatedAt" >= ${startOfMonth}
       `,
     30,
   );
 
+  // Tips from Reviews (Legacy or Direct Feedback based)
+  const [reviewSummary] = await withPrismaRetry(
+    () =>
+      prisma.$queryRaw<Array<{ todayReviewTips: number | null }>>`
+        SELECT COALESCE(SUM("tipAmount") FILTER (WHERE "createdAt" >= ${startOfToday}), 0)::float8 AS "todayReviewTips"
+        FROM "Review"
+        WHERE "serviceStaffUserId" = ${userId} AND "createdAt" >= ${startOfToday}
+      `,
+    'auth-review-tips-lookup'
+  );
+
   return {
     today: {
-      amount: Number(summary?.todayAmount || 0),
-      sessions: Number(summary?.todaySessions || 0),
+      amount: Number(billSummary?.todayAmount || 0) + Number(reviewSummary?.todayReviewTips || 0),
+      sessions: Number(billSummary?.todayCount || 0),
     },
     week: {
-      amount: Number(summary?.weekAmount || 0),
-      sessions: Number(summary?.weekSessions || 0),
+      amount: Number(billSummary?.weekAmount || 0),
     },
     month: {
-      amount: Number(summary?.monthAmount || 0),
-      sessions: Number(summary?.monthSessions || 0),
+      amount: Number(billSummary?.monthAmount || 0),
     },
   };
 }

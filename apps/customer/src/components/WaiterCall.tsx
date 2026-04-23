@@ -1,45 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Hand, HelpCircle, Loader2, Receipt, Sparkles, X } from 'lucide-react';
+import { Check, Hand, HelpCircle, Loader2, Receipt, Sparkles, Utensils, X } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { publicApi } from '../lib/api';
 import { WAITER_ACK_EVENT } from './HandshakeListener';
 
 const BASE_CALL_TYPES = [
+  { id: 'SPOON', label: 'Spoon / Tissue', icon: <Utensils size={22} />, color: 'bg-indigo-500', desc: 'Need spoons, napkins, etc.' },
+  { id: 'ASSISTANCE', label: 'Assistance', icon: <HelpCircle size={22} />, color: 'bg-orange-500', desc: 'Need help with the menu or order' },
   { id: 'BILL', label: 'Request Bill', icon: <Receipt size={22} />, color: 'bg-emerald-500', desc: 'Get the bill at your table' },
-  { id: 'WATER', label: 'Request Water', icon: <Hand size={22} />, color: 'bg-cyan-500', desc: 'Need fresh water' },
-  { id: 'EXTRA', label: 'Request Extra', icon: <Receipt size={22} />, color: 'bg-indigo-500', desc: 'Need spoons, napkins, etc.' },
-  { id: 'HELP', label: 'Need Help', icon: <HelpCircle size={22} />, color: 'bg-orange-500', desc: 'Need assistance with something' },
 ];
 
-function resolveServiceAssistMode(plan?: string, businessType?: string) {
+function resolveServiceAssistMode(plan?: string, hasWaiterService?: boolean) {
   const normalizedPlan = String(plan || '').trim().toUpperCase();
-  const normalizedBusinessType = String(businessType || '').trim().toLowerCase();
 
   if (normalizedPlan === 'MINI') {
     return 'SELF_SERVICE' as const;
   }
 
-  if (normalizedPlan === 'CAFE') {
-    return 'ASSISTED_SERVICE' as const;
-  }
-
-  if (normalizedPlan === 'DINEPRO' || normalizedPlan === 'PREMIUM') {
-    return 'FULL_SERVICE' as const;
-  }
-
-  if (normalizedBusinessType === 'restaurant' || normalizedBusinessType === 'hotel') {
-    return 'FULL_SERVICE' as const;
-  }
-
-  if (normalizedBusinessType === 'cafe') {
-    return 'ASSISTED_SERVICE' as const;
-  }
-
-  if (normalizedBusinessType === 'street_vendor' || normalizedBusinessType === 'cloud_kitchen') {
+  if (normalizedPlan === 'CAFE' && hasWaiterService === false) {
     return 'SELF_SERVICE' as const;
   }
 
-  return 'SELF_SERVICE' as const;
+  return 'FULL_SERVICE' as const;
 }
 
 function incrementCustomerOverlayLock() {
@@ -77,14 +59,15 @@ export function WaiterCall({
   sessionAccessToken: string;
 }) {
   const [inlineError, setInlineError] = useState('');
-  const { activeSheet, setActiveSheet, tenantPlan, tenantBusinessType } = useCartStore();
+  const { activeSheet, setActiveSheet, tenantPlan } = useCartStore();
   const isOpen = activeSheet === 'WAITER';
   const [status, setStatus] = useState<'IDLE' | 'SENDING' | 'SENT' | 'ACCEPTED'>('IDLE');
+  const [waiterName, setWaiterName] = useState('');
   const [sentType, setSentType] = useState('');
   const [manualTable, setManualTable] = useState('');
 
   const tableId = initialTableId || manualTable.trim();
-  const serviceAssistMode = resolveServiceAssistMode(tenantPlan, tenantBusinessType);
+  const serviceAssistMode = resolveServiceAssistMode(tenantPlan);
   const primaryAssistLabel = serviceAssistMode === 'FULL_SERVICE' ? 'Call Waiter' : 'Call Staff';
   const primaryAssistDescription =
     serviceAssistMode === 'FULL_SERVICE'
@@ -112,6 +95,7 @@ export function WaiterCall({
       if (event.detail?.tenantSlug !== tenantSlug) return;
       if (event.detail?.sessionId !== sessionId) return;
 
+      setWaiterName(event.detail?.waiterName || '');
       setStatus('ACCEPTED');
       setActiveSheet('WAITER');
     };
@@ -224,9 +208,13 @@ export function WaiterCall({
                   <div className="absolute -bottom-2 -left-2 h-12 w-12 rounded-full bg-blue-400/20 blur-xl animate-pulse" />
                 </div>
                 <div className="mt-4">
-                  <h3 className="text-3xl font-black tracking-tight text-[color:var(--text-1)]">{acceptedTitle}</h3>
+                  <h3 className="text-3xl font-black tracking-tight text-[color:var(--text-1)]">
+                    {waiterName ? `${waiterName} is Coming!` : acceptedTitle}
+                  </h3>
                   <p className="mt-3 text-lg font-bold leading-tight text-blue-500">
-                    Your request has been accepted. Help will be at your table in a moment.
+                    {waiterName 
+                      ? `${waiterName} has accepted your request and will be at your table in a moment.`
+                      : 'Your request has been accepted. Help will be at your table in a moment.'}
                   </p>
                 </div>
               </div>

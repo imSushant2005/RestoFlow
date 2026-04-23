@@ -74,6 +74,60 @@ function playNotificationSound(url?: string) {
 
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER' | 'UNKNOWN';
 
+const LIVE_ORDER_STATUSES = new Set(['NEW', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED']);
+
+function isLiveBoardOrder(order: any) {
+  return LIVE_ORDER_STATUSES.has(String(order?.status || '').toUpperCase());
+}
+
+function mergeLiveOrder(existing: any, incoming: any) {
+  if (!existing) return incoming;
+
+  return {
+    ...existing,
+    ...incoming,
+    table: incoming?.table ?? existing.table,
+    diningSession: incoming?.diningSession
+      ? {
+          ...existing.diningSession,
+          ...incoming.diningSession,
+          bill: incoming.diningSession.bill
+            ? { ...existing.diningSession?.bill, ...incoming.diningSession.bill }
+            : existing.diningSession?.bill,
+        }
+      : existing.diningSession,
+    items: Array.isArray(incoming?.items) ? incoming.items : existing.items,
+  };
+}
+
+function applyLiveOrderUpdate(old: any[] | undefined, incoming: any) {
+  if (!incoming?.id) return Array.isArray(old) ? old : [];
+
+  const safe = Array.isArray(old) ? old : [];
+  const existing = safe.find((order) => order.id === incoming.id);
+
+  if (
+    existing &&
+    typeof existing.version === 'number' &&
+    typeof incoming.version === 'number' &&
+    incoming.version < existing.version
+  ) {
+    return safe;
+  }
+
+  const merged = mergeLiveOrder(existing, incoming);
+
+  if (!isLiveBoardOrder(merged)) {
+    return safe.filter((order) => order.id !== incoming.id);
+  }
+
+  if (!existing) {
+    return [merged, ...safe];
+  }
+
+  return safe.map((order) => (order.id === incoming.id ? merged : order));
+}
+
 
 function normalizeDashboardRole(rawRole?: string | null): DashboardRole {
   const normalized = (rawRole || '').toUpperCase();
@@ -396,11 +450,7 @@ function DashboardShell() {
     () => ({
       'order:new': (newOrder: any) => {
         if (newOrder?.id) {
-          queryClient.setQueryData(['live-orders'], (old: any[]) => {
-            if (!Array.isArray(old)) return old;
-            if (old.some((o) => o.id === newOrder.id)) return old;
-            return [newOrder, ...old];
-          });
+          queryClient.setQueryData(['live-orders'], (old: any[] | undefined) => applyLiveOrderUpdate(old, newOrder));
         } else {
           queryClient.invalidateQueries({ queryKey: ['live-orders'] });
         }
@@ -408,18 +458,7 @@ function DashboardShell() {
       },
       'order:update': (updatedOrder: any) => {
         if (updatedOrder?.id) {
-          queryClient.setQueryData(['live-orders'], (old: any[]) => {
-            if (!Array.isArray(old)) return old;
-            const exists = old.some((o) => o.id === updatedOrder.id);
-            if (!exists) return old;
-            return old.map((o) => {
-              if (o.id !== updatedOrder.id) return o;
-              if (typeof o.version === 'number' && typeof updatedOrder.version === 'number' && updatedOrder.version <= o.version) {
-                return o;
-              }
-              return updatedOrder;
-            });
-          });
+          queryClient.setQueryData(['live-orders'], (old: any[] | undefined) => applyLiveOrderUpdate(old, updatedOrder));
           queryClient.invalidateQueries({ queryKey: ['order-history'] });
           queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
         } else {
@@ -487,7 +526,6 @@ function DashboardShell() {
             });
           });
         }
-        queryClient.invalidateQueries({ queryKey: ['live-orders'] });
       },
       'session:finished': (payload: any) => {
         if (payload?.sessionId) {
@@ -610,7 +648,7 @@ function DashboardShell() {
       driverObj = driver({
         showProgress: true,
         steps: [
-          { popover: { title: 'Welcome to RestoFlow', description: 'One OS for restaurant operations.', side: 'bottom', align: 'center' }},
+          { popover: { title: 'Welcome to BHOJFLOW', description: 'One OS for restaurant operations.', side: 'bottom', align: 'center' }},
           { element: '#dashboard-stats-grid', onHighlightStarted: () => navigate('/app'), popover: { title: 'Pulse', description: 'Revenue and occupancy.', side: 'bottom', align: 'start' }},
           { element: '#nav-menu', onHighlightStarted: () => navigate('/app/menu'), popover: { title: 'Menu', description: 'Product truth.', side: 'right', align: 'start' }},
           { element: '#nav-tables-qr', onHighlightStarted: () => navigate('/app/tables'), popover: { title: 'Floor', description: 'QR entry.', side: 'right', align: 'start' }},
@@ -689,8 +727,12 @@ function DashboardShell() {
       {mobileNavOpen && <button onClick={() => setMobileNavOpen(false)} className="fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm lg:hidden" />}
       <aside className={`fixed inset-y-0 left-0 z-40 flex h-[100dvh] w-[min(280px,84vw)] flex-col backdrop-blur-xl transition-transform duration-300 lg:sticky lg:top-0 lg:z-10 lg:h-screen lg:translate-x-0 ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'} ${sidebarCollapsed ? 'lg:w-[68px]' : 'lg:w-[240px]'}`} style={{ background: 'var(--sidebar-bg)', borderRight: '1px solid var(--sidebar-border)' }}>
         <div className="px-4 py-6 flex items-center gap-3 border-b border-white/5">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white"><UtensilsCrossed size={16} /></div>
-          {!sidebarCollapsed && <span className="font-black text-lg tracking-tight">RestoFlow</span>}
+          <img
+            src="/bhojflow-logo.png"
+            alt="BHOJFLOW"
+            className="h-8 w-8 rounded-lg object-contain"
+          />
+          {!sidebarCollapsed && <span className="font-black text-lg tracking-tight">BHOJFLOW</span>}
           <button onClick={() => setMobileNavOpen(false)} className="ml-auto lg:hidden p-2"><X size={18} /></button>
         </div>
         <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
@@ -715,7 +757,10 @@ function DashboardShell() {
         <div className="flex-shrink-0 px-4 py-4 lg:px-6 lg:pt-6">
           <div className="flex items-center justify-between lg:hidden mb-4">
              <button onClick={() => setMobileNavOpen(true)} className="p-2 border border-slate-800 rounded-xl"><Menu size={18} /></button>
-             <span className="font-black text-xs uppercase tracking-widest text-slate-500">RestoFlow</span>
+             <div className="flex items-center gap-2">
+               <img src="/bhojflow-logo.png" alt="" className="h-7 w-7 object-contain" />
+               <span className="font-black text-xs uppercase tracking-widest text-slate-500">BHOJFLOW</span>
+             </div>
           </div>
           <VendorTopNav
             path={location.pathname}

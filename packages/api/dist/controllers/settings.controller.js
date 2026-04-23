@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteStaff = exports.updateStaff = exports.createStaff = exports.getStaff = exports.updateBusinessSettings = exports.getBusinessSettings = void 0;
 const prisma_1 = require("../db/prisma");
 const plans_1 = require("../config/plans");
-const prisma_2 = require("@dineflow/prisma");
+const prisma_2 = require("@bhojflow/prisma");
 const hash_1 = require("../utils/hash");
 const zod_1 = require("zod");
 const cache_service_1 = require("../services/cache.service");
@@ -83,7 +83,7 @@ function normalizeLoginEmail(raw, tenantSlug) {
         return '';
     const handlePart = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed;
     const handle = sanitizeSegment(handlePart) || 'staff';
-    return `${handle}@${tenantSlug}.restoflow`;
+    return `${handle}@${tenantSlug}.BHOJFLOW`;
 }
 function defaultEmployeeCode(name, tenantSlug) {
     const tenantPrefix = sanitizeSegment(tenantSlug).slice(0, 4).toUpperCase() || 'REST';
@@ -235,6 +235,8 @@ const updateBusinessSettings = async (req, res) => {
         await Promise.all([
             (0, cache_service_1.deleteCache)(`tenant:${req.tenantId}:business-settings`),
             (0, cache_service_1.deleteCache)(`tenant:${req.tenantId}:billing`),
+            (0, cache_service_1.deleteCache)(normalizedSlug ? `public_menu_${normalizedSlug}` : `public_menu_${tenant.slug}`),
+            (0, cache_service_1.deleteCache)(`public_menu_${tenant.slug}`),
         ]);
         res.json({
             ...tenant,
@@ -302,7 +304,7 @@ const createStaff = async (req, res) => {
         const requestedLogin = payload.username?.trim() || payload.email?.trim() || '';
         const email = normalizeLoginEmail(requestedLogin, tenant.slug);
         if (!isEmailLike(email)) {
-            return res.status(400).json({ error: 'Username format is invalid. Use for example: alex@your-venue.restoflow' });
+            return res.status(400).json({ error: 'Username format is invalid. Use for example: alex@your-venue.BHOJFLOW' });
         }
         const baseEmployeeCode = payload.employeeCode?.trim().toUpperCase() || defaultEmployeeCode(name, tenant.slug);
         const requestedEmployeeCode = baseEmployeeCode;
@@ -405,7 +407,7 @@ const updateStaff = async (req, res) => {
         if (requestedLogin) {
             const email = normalizeLoginEmail(requestedLogin, tenant.slug);
             if (!isEmailLike(email)) {
-                return res.status(400).json({ error: 'Username format is invalid. Use for example: alex@your-venue.restoflow' });
+                return res.status(400).json({ error: 'Username format is invalid. Use for example: alex@your-venue.BHOJFLOW' });
             }
             const existingByEmail = await prisma_1.prisma.user.findFirst({
                 where: { email, id: { not: id } },

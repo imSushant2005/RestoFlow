@@ -11,7 +11,7 @@ const order_payload_service_1 = require("../services/order-payload.service");
 const cache_keys_1 = require("../utils/cache-keys");
 const public_access_1 = require("../utils/public-access");
 const plans_1 = require("../config/plans");
-const WAITER_CALL_TYPES = new Set(['WAITER', 'BILL', 'WATER', 'EXTRA', 'HELP']);
+const WAITER_CALL_TYPES = new Set(['WAITER', 'BILL', 'WATER', 'EXTRA', 'HELP', 'SPOON', 'TISSUE', 'ASSISTANCE']);
 const ORDERABLE_SESSION_STATUSES = ['OPEN', 'PARTIALLY_SENT', 'ACTIVE'];
 const publicOrderSelect = {
     id: true,
@@ -21,6 +21,7 @@ const publicOrderSelect = {
     orderNumber: true,
     orderType: true,
     status: true,
+    version: true,
     subtotal: true,
     taxAmount: true,
     discountAmount: true,
@@ -108,7 +109,7 @@ async function resolveTenantBySlug(tenantSlug) {
     return (0, cache_service_1.withCache)(cache_keys_1.cacheKeys.tenantMeta(tenantSlug), async () => (0, prisma_1.withPrismaRetry)(async () => {
         const tenant = await prisma_1.prisma.tenant.findUnique({
             where: { slug: tenantSlug },
-            select: { id: true, taxRate: true, plan: true },
+            select: { id: true, taxRate: true, plan: true, hasWaiterService: true },
         });
         if (!tenant) {
             throw new Error('Vendor not found');
@@ -131,10 +132,7 @@ async function resolveWaiterTableName(tenantId, tableId) {
     const table = await prisma_1.prisma.table.findFirst({
         where: {
             tenantId,
-            OR: [
-                { id: tableId },
-                { name: { equals: tableId, mode: 'insensitive' } },
-            ],
+            OR: [{ id: tableId }, { name: { equals: tableId, mode: 'insensitive' } }],
         },
         select: { name: true },
     });
@@ -211,7 +209,7 @@ const getPublicMenu = async (req, res) => {
             });
             return {
                 tenantId: tenant.id,
-                name: tenant.businessName, // alias used by customer frontend
+                name: tenant.businessName,
                 businessName: tenant.businessName,
                 businessType: tenant.businessType,
                 description: tenant.description || '',
@@ -226,7 +224,7 @@ const getPublicMenu = async (req, res) => {
                 plan: (0, plans_1.normalizePlan)(tenant.plan),
                 planLimits: (0, plans_1.getPlanLimits)(tenant.plan),
             };
-        }, `public-menu:${tenantSlug}`), 1800); // 30-minute cache
+        }, `public-menu:${tenantSlug}`), 1800);
         res.json(publicData);
     }
     catch (error) {
@@ -244,12 +242,12 @@ const resolveCustomDomain = async (req, res) => {
         const resolution = await (0, cache_service_1.withCache)(cacheKey, async () => {
             const tenant = await prisma_1.prisma.tenant.findFirst({
                 where: { website: { contains: domain } },
-                select: { slug: true }
+                select: { slug: true },
             });
             if (!tenant)
                 throw new Error('Domain not mapped');
             return { success: true, slug: tenant.slug };
-        }, 86400); // 24-hour resolution cache
+        }, 86400);
         res.json(resolution);
     }
     catch (error) {
@@ -264,8 +262,7 @@ const createOrder = async (req, res) => {
         const incomingSessionToken = readOptionalString(sessionId || sessionToken || null);
         const requestedTableInput = readOptionalString(tableId);
         const requestedOrderType = readOptionalString(orderType)?.toUpperCase() || null;
-        const requestIdempotencyKey = readOptionalString(req.header('x-idempotency-key')) ||
-            readOptionalString(req.body?.idempotencyKey);
+        const requestIdempotencyKey = readOptionalString(req.header('x-idempotency-key')) || readOptionalString(req.body?.idempotencyKey);
         const tenant = await resolveTenantBySlug(tenantSlug);
         if (!Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ error: 'Order must include at least one item' });
@@ -366,7 +363,7 @@ const createOrder = async (req, res) => {
         const taxAmount = subtotal * (tenant.taxRate / 100);
         const totalAmount = subtotal + taxAmount;
         const resolvedOrderType = safeTableId ? 'DINE_IN' : requestedOrderType || 'TAKEAWAY';
-        const orderNumber = (0, order_number_service_1.generateOrderNumber)(resolvedOrderType); // Collision-resistant order key
+        const orderNumber = (0, order_number_service_1.generateOrderNumber)(resolvedOrderType);
         let order;
         let lockedSession = resolvedSession;
         try {
@@ -484,6 +481,8 @@ const createOrder = async (req, res) => {
             throw new Error('SESSION_NOT_FOUND');
         }
         const tableIdToUpdate = safeTableId || lockedSession.tableId || null;
+        // C-5: Invalidate caches BEFORE emitting so that re-fetches triggered by the socket event get fresh data
+        await invalidateOperationalCaches(tenant.id, lockedSession.id, order.id).catch((err) => console.error('[CACHE_INVALIDATION_ERROR]', err));
         // Release connection and respond immediately — side effects run in background
         res.status(201).json({
             ...order,
@@ -520,22 +519,19 @@ const createOrder = async (req, res) => {
                         orderNumber,
                     });
                 }
-                await Promise.all([
-                    invalidateOperationalCaches(tenant.id, lockedSession.id, order.id),
-                    requestIdempotencyKey
-                        ? (0, cache_service_1.setCache)(cache_keys_1.cacheKeys.publicOrderIdempotency(tenant.id, requestIdempotencyKey), {
-                            ...order,
+                if (requestIdempotencyKey) {
+                    await (0, cache_service_1.setCache)(cache_keys_1.cacheKeys.publicOrderIdempotency(tenant.id, requestIdempotencyKey), {
+                        ...order,
+                        sessionId: lockedSession.id,
+                        diningSessionId: lockedSession.id,
+                        sessionAccessToken: (0, public_access_1.generateSessionAccessToken)({
+                            tenantId: tenant.id,
                             sessionId: lockedSession.id,
-                            diningSessionId: lockedSession.id,
-                            sessionAccessToken: (0, public_access_1.generateSessionAccessToken)({
-                                tenantId: tenant.id,
-                                sessionId: lockedSession.id,
-                                customerId: lockedSession.customerId,
-                                tableId: lockedSession.tableId || null,
-                            }),
-                        }, 600)
-                        : Promise.resolve(),
-                ]);
+                            customerId: lockedSession.customerId,
+                            tableId: lockedSession.tableId || null,
+                        }),
+                    }, 600).catch((err) => console.error('[IDEMPOTENCY_CACHE_ERROR]', err));
+                }
             }
             catch (err) {
                 console.error('[PUBLIC_ORDER_POST_CREATE_ERROR]', err);
@@ -566,10 +562,12 @@ const createOrder = async (req, res) => {
             return res.status(400).json({ error: 'One or more items are unavailable. Refresh the menu and try again.' });
         }
         if (error instanceof Error && error.message.startsWith('MODIFIER_')) {
-            return res.status(400).json({ error: 'One or more modifier selections are invalid. Review the order and try again.' });
+            return res
+                .status(400)
+                .json({ error: 'One or more modifier selections are invalid. Review the order and try again.' });
         }
         res.status(500).json({
-            error: process.env.NODE_ENV === 'production' ? 'Failed to create order' : message
+            error: process.env.NODE_ENV === 'production' ? 'Failed to create order' : message,
         });
     }
 };
@@ -578,7 +576,7 @@ const getOrderInfo = async (req, res) => {
     try {
         const { tenantSlug, id } = req.params;
         const tenant = await resolveTenantBySlug(tenantSlug);
-        // Cache for 2 minutes since orders don't change status *that* frequently 
+        // Cache for 2 minutes since orders don't change status *that* frequently
         // and live updates are handled by Socket.io anyway.
         const cacheKey = cache_keys_1.cacheKeys.publicOrderInfo(tenant.id, id);
         const cachedOrder = await (0, cache_service_1.getCache)(cacheKey);
@@ -604,7 +602,7 @@ const getOrderInfo = async (req, res) => {
                         customerId: true,
                     },
                 },
-            }
+            },
         }), `public-order-info:${tenant.id}:${id}`);
         if (!order)
             return res.status(404).json({ error: 'Order not found' });
@@ -616,7 +614,7 @@ const getOrderInfo = async (req, res) => {
                 tenantSlug,
             });
         }
-        await (0, cache_service_1.setCache)(cacheKey, order, 120);
+        await (0, cache_service_1.setCache)(cacheKey, order, 5);
         res.json(order);
     }
     catch (error) {
@@ -654,17 +652,17 @@ const getSessionOrders = async (req, res) => {
                 diningSessionId: sessionId,
             },
             include: { table: true, items: true },
-            orderBy: { createdAt: 'desc' }
+            orderBy: { createdAt: 'desc' },
         }), `session-orders:${tenant.id}:${sessionId}`);
         // Parse JSON modifiers before sending
-        const parsedOrders = orders.map(o => ({
+        const parsedOrders = orders.map((o) => ({
             ...o,
-            items: o.items.map(i => ({
+            items: o.items.map((i) => ({
                 ...i,
-                modifiers: typeof i.selectedModifiers === 'string' ? JSON.parse(i.selectedModifiers) : i.selectedModifiers
-            }))
+                modifiers: typeof i.selectedModifiers === 'string' ? JSON.parse(i.selectedModifiers) : i.selectedModifiers,
+            })),
         }));
-        await (0, cache_service_1.setCache)(cacheKey, parsedOrders, 30); // 30-second cache
+        await (0, cache_service_1.setCache)(cacheKey, parsedOrders, 5); // 5-second micro-cache
         res.json(parsedOrders);
     }
     catch (error) {
@@ -737,17 +735,14 @@ const submitFeedback = async (req, res) => {
         else if (String(order.status || '').toUpperCase() !== 'RECEIVED') {
             return res.status(409).json({ error: 'Review is available only after the order is completed.' });
         }
-        const resolvedServiceStaffName = requestedStaffName || order.diningSession?.attendedByName || undefined;
-        const resolvedServiceStaffUserId = order.diningSession?.attendedByUserId || undefined;
-        // Keep feedback idempotent across the whole dining session.
-        // A session allows only one review row, while multiple orders may exist.
-        const existingSessionReview = await prisma_1.prisma.review.findFirst({
-            where: order.diningSessionId ? { diningSessionId: order.diningSessionId } : { orderId: order.id },
-            select: { id: true, orderId: true },
+        const resolvedServiceStaffName = requestedStaffName || order.diningSession?.attendedByName || null;
+        const resolvedServiceStaffUserId = order.diningSession?.attendedByUserId || null;
+        const existingReview = await prisma_1.prisma.review.findUnique({
+            where: { orderId: order.id },
         });
-        if (existingSessionReview) {
+        if (existingReview) {
             const review = await prisma_1.prisma.review.update({
-                where: { id: existingSessionReview.id },
+                where: { id: existingReview.id },
                 data: {
                     overallRating: derivedOverallRating,
                     foodRating: foodRating ?? derivedOverallRating,
@@ -756,7 +751,6 @@ const submitFeedback = async (req, res) => {
                     tipAmount,
                     serviceStaffName: resolvedServiceStaffName,
                     serviceStaffUserId: resolvedServiceStaffUserId,
-                    ...(existingSessionReview.orderId ? {} : { orderId: order.id }),
                 },
             });
             if (order.diningSessionId) {
@@ -828,8 +822,12 @@ const waiterCall = async (req, res) => {
         }
         const tenant = await resolveTenantBySlug(tenantSlug);
         const tenantId = tenant.id;
-        if (!(0, plans_1.getPlanLimits)(tenant.plan).hasWaiterApp) {
+        const planLimits = (0, plans_1.getPlanLimits)(tenant.plan);
+        if (planLimits.hasWaiterCalling === 'HIDDEN') {
             return res.status(403).json({ error: 'Waiter assistance is not available on this plan.' });
+        }
+        if (planLimits.hasWaiterCalling === 'TOGGLEABLE' && !tenant.hasWaiterService) {
+            return res.status(403).json({ error: 'Waiter assistance is currently disabled by the restaurant.' });
         }
         const session = await (0, prisma_1.withPrismaRetry)(() => prisma_1.prisma.diningSession.findFirst({
             where: { id: sessionId, tenantId },
@@ -870,10 +868,6 @@ const waiterCall = async (req, res) => {
     }
 };
 exports.waiterCall = waiterCall;
-/**
- * Staff Acknowledgment of a waiter call.
- * This notifies the specific guest that help is arriving.
- */
 const acknowledgeWaiterCall = async (req, res) => {
     try {
         const { tenantSlug } = req.params;
@@ -885,19 +879,32 @@ const acknowledgeWaiterCall = async (req, res) => {
         const tenantId = await resolveTenantIdBySlug(tenantSlug);
         const session = await prisma_1.prisma.diningSession.findFirst({
             where: { id: sessionId, tenantId },
-            select: { id: true },
+            select: { id: true, attendedByUserId: true },
         });
         if (!session) {
             return res.status(404).json({ error: 'Session not found' });
+        }
+        // Assign waiter to session if not already assigned
+        const waiterId = req.user?.id;
+        const waiterName = req.user?.name || 'Waiter';
+        if (!session.attendedByUserId && waiterId) {
+            await prisma_1.prisma.diningSession.update({
+                where: { id: session.id },
+                data: {
+                    attendedByUserId: waiterId,
+                    attendedByName: waiterName,
+                },
+            });
         }
         const sessionRoom = (0, socket_1.getSessionRoom)(tenantId, session.id);
         (0, socket_1.getIO)().to(sessionRoom).emit('waiter:acknowledged', {
             sessionId: session.id,
             tableId,
             status: 'ACCEPTED',
+            waiterName: waiterName,
             timestamp: new Date().toISOString(),
         });
-        res.json({ success: true, sessionId: session.id });
+        res.json({ success: true, sessionId: session.id, waiterName });
     }
     catch (error) {
         console.error('acknowledgeWaiterCall error:', error);
@@ -927,7 +934,7 @@ const updateOrderStatusPublic = async (req, res) => {
                         customerId: true,
                     },
                 },
-            }
+            },
         });
         if (!order || !order.diningSessionId || !order.diningSession) {
             return res.status(404).json({ error: 'Order not found in this session.' });
@@ -945,12 +952,16 @@ const updateOrderStatusPublic = async (req, res) => {
             newStatus: 'SERVED',
             actorId: order.diningSessionId,
             actorType: 'CUSTOMER',
+            statusPatch: { servedAt: new Date() },
         });
-        // Notify Vendor Socket
-        (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(tenantId)).emit('order:update', updatedOrder);
-        // Notify Session Socket
-        (0, socket_1.getIO)().to((0, socket_1.getSessionRoom)(tenantId, order.diningSessionId)).emit('order:update', updatedOrder);
         await invalidateOperationalCaches(tenantId, order.diningSessionId, id);
+        try {
+            (0, socket_1.getIO)().to((0, socket_1.getTenantRoom)(tenantId)).emit('order:update', updatedOrder);
+            (0, socket_1.getIO)().to((0, socket_1.getSessionRoom)(tenantId, order.diningSessionId)).emit('order:update', updatedOrder);
+        }
+        catch (emitError) {
+            console.error('[PUBLIC_ORDER_STATUS_SOCKET_EMIT_ERROR]', emitError);
+        }
         res.json(updatedOrder);
     }
     catch (error) {

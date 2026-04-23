@@ -3,15 +3,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.prisma = void 0;
 exports.withPrismaRetry = withPrismaRetry;
 exports.checkPrismaReadiness = checkPrismaReadiness;
-const prisma_1 = require("@dineflow/prisma");
+const prisma_1 = require("@bhojflow/prisma");
 const env_1 = require("../config/env");
 const runtime_metrics_service_1 = require("../services/runtime-metrics.service");
 const globalForPrisma = globalThis;
 exports.prisma = globalForPrisma.prisma ||
     new prisma_1.PrismaClient({
-        datasourceUrl: env_1.env.NODE_ENV !== 'production' && env_1.env.DIRECT_DATABASE_URL
-            ? env_1.env.DIRECT_DATABASE_URL
-            : env_1.env.DATABASE_URL,
+        datasourceUrl: env_1.env.DATABASE_URL,
         log: [
             { level: 'warn', emit: 'stdout' },
             { level: 'error', emit: 'stdout' },
@@ -27,8 +25,8 @@ exports.prisma = globalForPrisma.prisma ||
         },
     });
 const PERF_ALERT_THRESHOLD_MS = 500;
-const PRISMA_RETRY_LIMIT = 2;
-const PRISMA_RETRY_BACKOFF_MS = 150;
+const PRISMA_RETRY_LIMIT = 5;
+const PRISMA_RETRY_BACKOFF_MS = 200;
 let prismaReconnectPromise = null;
 exports.prisma.$on('query', (event) => {
     const normalizedQuery = String(event.query || '').replace(/\s+/g, ' ').trim().toUpperCase();

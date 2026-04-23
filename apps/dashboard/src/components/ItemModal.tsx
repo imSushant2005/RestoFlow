@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { Sparkles, Loader2 } from 'lucide-react';
+import { getDirectImageUrl } from '../lib/images';
 
 export function ItemModal({ isOpen, onClose, categoryId, editingItem }: any) {
   const queryClient = useQueryClient();
@@ -125,7 +126,7 @@ export function ItemModal({ isOpen, onClose, categoryId, editingItem }: any) {
             />
             {imageUrl && (
               <div className="mt-2 rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)', background: 'var(--surface-3)' }}>
-                <img src={imageUrl} alt="Preview" className="w-full h-28 object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                <img src={getDirectImageUrl(imageUrl)} alt="Preview" className="w-full h-28 object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
               </div>
             )}
           </div>

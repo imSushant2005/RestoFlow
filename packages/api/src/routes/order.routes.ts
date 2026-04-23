@@ -16,6 +16,11 @@ router.get(
   requireRoles([UserRole.OWNER, UserRole.MANAGER, UserRole.CASHIER, UserRole.WAITER]),
   OrderController.lookupAssistedCustomer,
 );
+router.get(
+  '/assisted/summary',
+  requireRoles([UserRole.OWNER, UserRole.MANAGER, UserRole.CASHIER, UserRole.WAITER]),
+  OrderController.getAssistedSummary,
+);
 router.post(
   '/assisted',
   requireRoles([UserRole.OWNER, UserRole.MANAGER, UserRole.CASHIER, UserRole.WAITER]),

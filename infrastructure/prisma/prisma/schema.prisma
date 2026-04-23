@@ -1,4 +1,4 @@
-// schema.prisma - DineFlow V2 Complete Schema
+// schema.prisma - BHOJFLOW V2 Complete Schema
 
 generator client {
   provider = "prisma-client-js"
@@ -14,7 +14,7 @@ datasource db {
 // ─── TENANTS (Businesses) ──────────────────────────────────
 model Tenant {
   id              String   @id @default(cuid())
-  slug            String   @unique  // "rustic-bistro" → dineflow.com/order/rustic-bistro
+  slug            String   @unique  // "rustic-bistro" -> bhojflow.com/order/rustic-bistro
   businessName    String
   description     String?
   logoUrl         String?
@@ -334,6 +334,7 @@ model Bill {
   taxAmount       Float     @default(0)
   discountAmount  Float     @default(0)
   totalAmount     Float
+  tipAmount       Float     @default(0)
   
   paymentStatus   String    @default("UNPAID") // UNPAID | PAID | PARTIAL
   paymentMethod   String?   // cash | upi | card
@@ -489,7 +490,7 @@ model DailyAnalytics {
   @@index([tenantId, date])
 }
 
-// ─── EXPENSES (DinePro+) ──────────────────────────────────
+// ─── EXPENSES (Bhoj Pro+) ──────────────────────────────────
 model Expense {
   id          String   @id @default(cuid())
   tenantId    String
@@ -512,7 +513,7 @@ enum Plan {
   PLATINUM
   MINI
   CAFE
-  DINEPRO
+  BHOJPRO
   PREMIUM
 }
 

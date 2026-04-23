@@ -9,11 +9,14 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       manifest: {
-        name: 'RestoFlow Customer',
-        short_name: 'RestoFlow',
+        name: 'BHOJFLOW Customer',
+        short_name: 'BHOJFLOW',
         theme_color: '#0f172a',
         background_color: '#020617',
         display: 'standalone',
+        icons: [
+          { src: '/bhojflow-logo.png', sizes: '768x790', type: 'image/png' },
+        ],
       },
       workbox: { globPatterns: ['**/*.{js,css,html,ico,png,svg}'] }
     })

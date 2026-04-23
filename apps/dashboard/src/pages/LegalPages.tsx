@@ -79,7 +79,7 @@ function LegalLayout({
             Need help reviewing these policies?
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-6" style={{ color: 'var(--text-2)' }}>
-            RestroFlow is built for India-first restaurant operations. Before public production launch, we still recommend a final legal review for your billing, tax, privacy, and grievance workflows.
+            BHOJFLOW is built for India-first restaurant operations. Before public production launch, we still recommend a final legal review for your billing, tax, privacy, and grievance workflows.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <button
@@ -111,8 +111,8 @@ export function PrivacyPolicyPage(props: LegalPageProps) {
     <LegalLayout
       {...props}
       eyebrow="Privacy Policy"
-      title="How RestroFlow handles restaurant, staff, and customer data."
-      summary="This Privacy Policy explains how RestroFlow collects, uses, stores, shares, and retains data for merchant workspaces, restaurant staff, and customer ordering experiences. It is written for India-first restaurant operations and should be reviewed with legal counsel before public production rollout."
+      title="How BHOJFLOW handles restaurant, staff, and customer data."
+      summary="This Privacy Policy explains how BHOJFLOW collects, uses, stores, shares, and retains data for merchant workspaces, restaurant staff, and customer ordering experiences. It is written for India-first restaurant operations and should be reviewed with legal counsel before public production rollout."
       updatedAt="April 12, 2026"
       sections={[
         {
@@ -143,7 +143,7 @@ export function PrivacyPolicyPage(props: LegalPageProps) {
           title: 'Rights, consent, and governance',
           points: [
             'Restaurants are responsible for obtaining any customer-facing consents required for marketing communications, loyalty programs, and feedback collection.',
-            'RestroFlow should maintain policy-version acceptance records, grievance contact details, and internal audit logs for privacy-sensitive actions.',
+            'BHOJFLOW should maintain policy-version acceptance records, grievance contact details, and internal audit logs for privacy-sensitive actions.',
             'Before commercial rollout, policy terms should be reviewed in light of the Digital Personal Data Protection Act, 2023, and any sector-specific obligations relevant to the merchant.',
           ],
         },
@@ -157,8 +157,8 @@ export function TermsPage(props: LegalPageProps) {
     <LegalLayout
       {...props}
       eyebrow="Terms & Conditions"
-      title="Commercial terms for using RestroFlow as a restaurant operating platform."
-      summary="These Terms & Conditions describe the commercial and operational rules for merchant workspaces using RestroFlow. They cover trial access, billing, acceptable use, data responsibilities, and service expectations. This draft is launch-ready in structure but should still receive formal legal review before production rollout."
+      title="Commercial terms for using BHOJFLOW as a restaurant operating platform."
+      summary="These Terms & Conditions describe the commercial and operational rules for merchant workspaces using BHOJFLOW. They cover trial access, billing, acceptable use, data responsibilities, and service expectations. This draft is launch-ready in structure but should still receive formal legal review before production rollout."
       updatedAt="April 12, 2026"
       sections={[
         {
@@ -173,7 +173,7 @@ export function TermsPage(props: LegalPageProps) {
           title: 'Operational responsibilities',
           points: [
             'Merchants are responsible for menu accuracy, tax settings, staff permissions, payment reconciliation, and lawful operation of their restaurant workflows.',
-            'RestroFlow provides software tools for service coordination, but restaurants remain responsible for food safety, legal invoicing, staff conduct, and customer communication.',
+            'BHOJFLOW provides software tools for service coordination, but restaurants remain responsible for food safety, legal invoicing, staff conduct, and customer communication.',
             'Sensitive operational actions such as refunds, overrides, exports, and access changes should be limited by role-based permissions and internal merchant policy.',
           ],
         },
@@ -188,7 +188,7 @@ export function TermsPage(props: LegalPageProps) {
         {
           title: 'Acceptable use and limitation',
           points: [
-            'Merchants may not use RestroFlow for unlawful activity, fraudulent payment behavior, abusive communications, or any attempt to disrupt platform integrity.',
+            'Merchants may not use BHOJFLOW for unlawful activity, fraudulent payment behavior, abusive communications, or any attempt to disrupt platform integrity.',
             'Feature access may be suspended where misuse, security risk, unpaid dues, or verification failures create operational or legal risk.',
             'Before public launch, limitation-of-liability, refund, and dispute clauses should be reviewed with counsel and aligned with final commercial packaging.',
           ],

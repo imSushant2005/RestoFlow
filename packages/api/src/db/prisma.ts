@@ -14,10 +14,7 @@ const globalForPrisma = globalThis as typeof globalThis & {
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
-    datasourceUrl:
-      env.NODE_ENV !== 'production' && env.DIRECT_DATABASE_URL
-        ? env.DIRECT_DATABASE_URL
-        : env.DATABASE_URL,
+    datasourceUrl: env.DATABASE_URL,
     log: [
       { level: 'warn', emit: 'stdout' },
       { level: 'error', emit: 'stdout' },
@@ -34,8 +31,8 @@ export const prisma =
   });
 
 const PERF_ALERT_THRESHOLD_MS = 500;
-const PRISMA_RETRY_LIMIT = 2;
-const PRISMA_RETRY_BACKOFF_MS = 150;
+const PRISMA_RETRY_LIMIT = 5;
+const PRISMA_RETRY_BACKOFF_MS = 200;
 let prismaReconnectPromise: Promise<void> | null = null;
 
 (prisma as any).$on('query', (event: any) => {

@@ -98,7 +98,7 @@ export function FirstLoginPasswordGate({ onCompleted, onLogout }: FirstLoginPass
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. raj@your-restaurant.restoflow"
+              placeholder="e.g. raj@your-restaurant.BHOJFLOW"
               className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-sm font-medium text-white placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
             <p className="mt-1 text-xs text-slate-500">

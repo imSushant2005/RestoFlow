@@ -41,8 +41,8 @@ interface CartState {
   setActiveSheet: (sheet: 'NONE' | 'MODIFIER' | 'MENU' | 'CART' | 'WAITER') => void;
 }
 
-const newStorageKey = 'restoflow-cart';
-const legacyStorageKey = 'dineflow-cart';
+const newStorageKey = 'BHOJFLOW-cart';
+const legacyStorageKey = 'BHOJFLOW-cart';
 
 function getItemSignature(item: CartItem) {
   const menuItemId = String(item?.menuItem?.id || item?.id || '');
@@ -152,6 +152,8 @@ export const useCartStore = create<CartState>()(
         customerPhone: state.customerPhone,
         orderType: state.orderType,
         tableSeat: state.tableSeat,
+        tenantPlan: state.tenantPlan,
+        tenantBusinessType: state.tenantBusinessType,
       }),
     }
   )

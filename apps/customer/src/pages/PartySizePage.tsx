@@ -161,7 +161,7 @@ export function PartySizePage() {
 
       <div className="py-6 text-center">
         <p className="text-xs font-medium text-gray-300">
-          Powered by <span className="font-bold text-gray-400">RestoFlow</span>
+          Powered by <span className="font-bold text-gray-400">BHOJFLOW</span>
         </p>
       </div>
     </div>

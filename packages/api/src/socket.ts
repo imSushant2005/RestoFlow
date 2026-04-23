@@ -172,6 +172,7 @@ type ServerToClientEvents = {
     sessionId?: string;
     tableId?: string;
     status: 'ACCEPTED';
+    waiterName?: string;
     timestamp: string;
   }) => void;
 

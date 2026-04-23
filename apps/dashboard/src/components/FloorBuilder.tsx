@@ -175,8 +175,8 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
   // Real-time socket listener for table status changes
   useEffect(() => {
     const token =
-      localStorage.getItem('restoflow_token') ||
-      localStorage.getItem('dineflow_token') ||
+      localStorage.getItem('BHOJFLOW_token') ||
+      localStorage.getItem('BHOJFLOW_token') ||
       localStorage.getItem('accessToken');
     const socket = io(getSocketUrl(), {
       auth: { token, client: 'dashboard-floor' },
@@ -464,7 +464,7 @@ export function FloorBuilder({ zone, tenantSlug }: any) {
                 </span>
                 <div className="mt-3 h-px w-full" style={{ backgroundColor: `${qrConfig.fgColor}22` }} />
                 <span className="text-[10px] font-bold tracking-widest uppercase mt-3 rounded-full px-3 py-1 opacity-80" style={{ color: qrConfig.fgColor, backgroundColor: `${qrConfig.fgColor}10` }}>
-                   Powered by Restoflow
+                   Powered by BHOJFLOW
                 </span>
               </div>
             </div>

@@ -1,4 +1,4 @@
-# Restoflow
+# BHOJFLOW
 
 Smart QR Ordering & Restaurant Management Platform.
 

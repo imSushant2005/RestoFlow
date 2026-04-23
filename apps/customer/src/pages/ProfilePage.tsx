@@ -138,7 +138,7 @@ export function ProfilePage() {
             </h2>
           </div>
           <p className="mt-3 text-sm leading-relaxed" style={{ color: 'var(--text-2)' }}>
-            You can sign out from this device at any time. If you deactivate your account, RestroFlow will anonymize
+            You can sign out from this device at any time. If you deactivate your account, BHOJFLOW will anonymize
             your personal details while keeping billing and operational records intact for the restaurant.
           </p>
           {profile?.deactivatedAt && (

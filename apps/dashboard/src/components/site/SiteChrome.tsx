@@ -1,5 +1,5 @@
 import { ReactNode, useState } from 'react';
-import { ArrowRight, Menu, UtensilsCrossed, X } from 'lucide-react';
+import { ArrowRight, Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 type SiteChromeProps = {
@@ -40,11 +40,13 @@ export function SiteChrome({ children, onLoginClick, onSignupClick, onContactCli
         >
           <div className="flex items-center justify-between gap-4">
             <Link to="/" className="inline-flex min-w-0 items-center gap-3 rounded-full px-1 py-1 transition" style={{ color: 'var(--text-1)' }}>
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-[0_0_24px_rgba(59,130,246,0.35)]" style={{ background: 'var(--brand)' }}>
-                <UtensilsCrossed size={18} />
-              </span>
+              <img
+                src="/bhojflow-logo.png"
+                alt="BHOJFLOW"
+                className="h-11 w-11 rounded-2xl object-contain shadow-[0_0_24px_rgba(59,130,246,0.25)]"
+              />
               <span className="min-w-0 text-left">
-                <span className="block truncate text-base font-black tracking-tight">RestoFlow</span>
+                <span className="block truncate text-base font-black tracking-tight">BHOJFLOW</span>
                 <span className="block truncate text-xs font-semibold" style={{ color: 'var(--brand)' }}>
                   Core OS
                 </span>
@@ -128,12 +130,10 @@ export function SiteChrome({ children, onLoginClick, onSignupClick, onContactCli
         >
           <div className="mb-10 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-xl flex items-center justify-center text-white" style={{ background: 'var(--brand)' }}>
-                <UtensilsCrossed size={14} />
-              </div>
+              <img src="/bhojflow-logo.png" alt="BHOJFLOW" className="h-8 w-8 rounded-xl object-contain" />
                 <div>
                   <p className="text-sm font-black tracking-tight leading-none" style={{ color: 'var(--text-1)' }}>
-                    RestoFlow
+                    BHOJFLOW
                   </p>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-[#5bc0be]" style={{ color: 'var(--brand)' }}>
                     Founder-Led Pilot
@@ -235,11 +235,13 @@ export function SiteChrome({ children, onLoginClick, onSignupClick, onContactCli
           <div className="grid gap-12 lg:grid-cols-[1.5fr_1fr_1fr_1fr] relative z-10">
             <div className="flex flex-col items-start gap-4">
               <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-500/40" style={{ background: 'var(--brand)' }}>
-                  <UtensilsCrossed size={20} />
-                </div>
+                <img
+                  src="/bhojflow-logo.png"
+                  alt="BHOJFLOW"
+                  className="h-12 w-12 rounded-2xl object-contain shadow-lg shadow-blue-500/20"
+                />
                 <div>
-                  <p className="text-xl font-black tracking-tight" style={{ color: 'var(--text-1)' }}>RestoFlow</p>
+                  <p className="text-xl font-black tracking-tight" style={{ color: 'var(--text-1)' }}>BHOJFLOW</p>
                   <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--brand)' }}>Operating System</p>
                 </div>
               </div>
@@ -286,7 +288,7 @@ export function SiteChrome({ children, onLoginClick, onSignupClick, onContactCli
           </div>
 
           <div className="mt-16 pt-8 border-t flex flex-col sm:flex-row justify-between items-center gap-4 text-[10px] font-bold uppercase tracking-[0.2em]" style={{ borderColor: 'var(--border)', color: 'var(--text-3)' }}>
-             <span>&copy; {new Date().getFullYear()} RestoFlow Architecture.</span>
+             <span>&copy; {new Date().getFullYear()} BHOJFLOW Architecture.</span>
              <span className="flex items-center gap-2 opacity-60">
                 <span className="h-1 w-1 rounded-full bg-current" />
                 Designed for Performance

@@ -12,7 +12,7 @@ const twilioClient = env_1.env.TWILIO_ACCOUNT_SID && env_1.env.TWILIO_AUTH_TOKEN
     ? (0, twilio_1.default)(env_1.env.TWILIO_ACCOUNT_SID, env_1.env.TWILIO_AUTH_TOKEN)
     : null;
 if (env_1.env.VAPID_PUBLIC_KEY && env_1.env.VAPID_PRIVATE_KEY) {
-    web_push_1.default.setVapidDetails('mailto:support@restoflow.com', env_1.env.VAPID_PUBLIC_KEY, env_1.env.VAPID_PRIVATE_KEY);
+    web_push_1.default.setVapidDetails('mailto:support@bhojflow.com', env_1.env.VAPID_PUBLIC_KEY, env_1.env.VAPID_PRIVATE_KEY);
 }
 const sendWhatsAppNotification = async (to, message) => {
     if (!twilioClient || !env_1.env.TWILIO_PHONE_NUMBER) {

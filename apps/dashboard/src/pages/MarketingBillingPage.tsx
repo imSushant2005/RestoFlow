@@ -23,7 +23,7 @@ export function MarketingBillingPage({ onLoginClick, onSignupClick, onContactCli
               Billing that feels cleaner for guests and safer for restaurant reconciliation.
             </h1>
             <p className="mt-5 text-base leading-8 sm:text-lg" style={{ color: 'var(--text-2)' }}>
-              RestoFlow keeps GST-aware totals, invoice identity, payment states, and session-linked billing in one
+              BHOJFLOW keeps GST-aware totals, invoice identity, payment states, and session-linked billing in one
               place so restaurants can close the day with fewer surprises.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">

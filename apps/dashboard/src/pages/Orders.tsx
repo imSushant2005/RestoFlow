@@ -167,6 +167,58 @@ function getStatusChipClass(status: string) {
   return 'chip-gray';
 }
 
+const LIVE_ORDER_STATUSES = new Set(['NEW', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED']);
+
+function isLiveBoardOrder(order: any) {
+  return LIVE_ORDER_STATUSES.has(String(order?.status || '').toUpperCase());
+}
+
+function mergeLiveOrder(existing: any, incoming: any) {
+  if (!existing) return incoming;
+
+  return {
+    ...existing,
+    ...incoming,
+    table: incoming?.table ?? existing.table,
+    diningSession: incoming?.diningSession
+      ? {
+          ...existing.diningSession,
+          ...incoming.diningSession,
+          bill: incoming.diningSession.bill
+            ? { ...existing.diningSession?.bill, ...incoming.diningSession.bill }
+            : existing.diningSession?.bill,
+        }
+      : existing.diningSession,
+    items: Array.isArray(incoming?.items) ? incoming.items : existing.items,
+  };
+}
+
+function applyLiveOrderUpdate(old: any, incoming: any) {
+  const safe = Array.isArray(old) ? old : [];
+  if (!incoming?.id) return safe;
+
+  const existing = safe.find((order: any) => order.id === incoming.id);
+  if (
+    existing &&
+    typeof existing.version === 'number' &&
+    typeof incoming.version === 'number' &&
+    incoming.version < existing.version
+  ) {
+    return safe;
+  }
+
+  const merged = mergeLiveOrder(existing, incoming);
+  if (!isLiveBoardOrder(merged)) {
+    return safe.filter((order: any) => order.id !== incoming.id);
+  }
+
+  if (!existing) {
+    return [merged, ...safe];
+  }
+
+  return safe.map((order: any) => (order.id === incoming.id ? merged : order));
+}
+
 
 const TicketCard = memo(({
   ticket,
@@ -907,9 +959,8 @@ export function Orders({ role }: { role?: string }) {
       const res = await api.get('/orders');
       return res.data;
     },
-    // C-7: Reduced staleTime for more responsive dashboard updates
-    staleTime: 1000 * 3,
-    refetchInterval: 1000 * 15,
+    staleTime: 1000,
+    refetchInterval: 1000 * 5,
     retry: 2,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
@@ -928,8 +979,8 @@ export function Orders({ role }: { role?: string }) {
 
 
   const statusMutation = useMutation({
-    mutationFn: async ({ id, status, cancelReason, expectedVersion }: any) => {
-      const res = await api.patch(`/orders/${id}/status`, { status, cancelReason, version: expectedVersion });
+    mutationFn: async ({ id, status, cancelReason }: any) => {
+      const res = await api.patch(`/orders/${id}/status`, { status, cancelReason });
       return res.data;
     },
     onMutate: async (newUpdate: any) => {
@@ -957,10 +1008,7 @@ export function Orders({ role }: { role?: string }) {
       const recoveryTruth = err.response?.data?.recovery?.truth;
       if (err.response?.status === 409 || err.response?.data?.error === 'OCC_CONFLICT') {
         if (recoveryTruth?.id) {
-          queryClient.setQueryData(['live-orders'], (old: any) => {
-            const safe = Array.isArray(old) ? old : [];
-            return safe.map((order: any) => (order.id === recoveryTruth.id ? recoveryTruth : order));
-          });
+          queryClient.setQueryData(['live-orders'], (old: any) => applyLiveOrderUpdate(old, recoveryTruth));
         }
 
         setLocalToast({
@@ -986,6 +1034,11 @@ export function Orders({ role }: { role?: string }) {
       }
 
       queryClient.setQueryData(['live-orders'], context?.previousState);
+    },
+    onSuccess: (updatedOrder: any) => {
+      if (updatedOrder?.id) {
+        queryClient.setQueryData(['live-orders'], (old: any) => applyLiveOrderUpdate(old, updatedOrder));
+      }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['live-orders'] });
@@ -1747,7 +1800,7 @@ export function Orders({ role }: { role?: string }) {
                    <p className="text-sm text-red-200 mt-1 opacity-80 font-bold">
                      {isOffline 
                        ? 'Please check your router or cellular data.' 
-                       : 'Restoflow is currently unable to reach the database. Retrying...'}
+                       : 'BHOJFLOW is currently unable to reach the database. Retrying...'}
                    </p>
                  </div>
                </div>

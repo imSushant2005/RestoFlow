@@ -247,7 +247,7 @@ export function OrderStatus() {
   const shareWhatsApp = (order: any) => {
     const items = Array.isArray(order.items) ? order.items : [];
     const itemLines = items.map((item: any) => `- ${item?.name || 'Item'} x${item?.quantity || 1}`).join('\n');
-    const message = `RestoFlow Order Summary\n\nOrder: ${order.orderNumber || ''}\nTable: ${order.table?.name || 'Takeaway'}\n\n${itemLines}\n\nTotal: ${formatINR(order.totalAmount || 0)}`;
+    const message = `BHOJFLOW Order Summary\n\nOrder: ${order.orderNumber || ''}\nTable: ${order.table?.name || 'Takeaway'}\n\n${itemLines}\n\nTotal: ${formatINR(order.totalAmount || 0)}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
   };
 

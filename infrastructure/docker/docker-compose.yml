@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: dineflow
+      POSTGRES_DB: BHOJFLOW
     ports:
       - '5432:5432'
     volumes:
@@ -25,7 +25,7 @@ services:
     image: edoburu/pgbouncer:1.20.1
     restart: always
     environment:
-      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/dineflow"
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/BHOJFLOW"
       POOL_MODE: transaction
       MAX_CLIENT_CONN: "1000"
       DEFAULT_POOL_SIZE: "15"
@@ -45,7 +45,7 @@ services:
       - pgbouncer
       - redis
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@pgbouncer:5432/dineflow?schema=public&pgbouncer=true
+      - DATABASE_URL=postgresql://postgres:postgres@pgbouncer:5432/BHOJFLOW?schema=public&pgbouncer=true
       - REDIS_URL=redis://redis:6379
       - PORT=4000
       - JWT_SECRET=super-secret-jwt-key-change-in-production

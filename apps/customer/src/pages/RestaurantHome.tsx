@@ -167,7 +167,7 @@ export function RestaurantHome() {
 
         <div className="mt-auto pt-6 text-center">
           <p className="text-xs text-gray-300 font-medium">
-            Powered by <span className="font-bold text-gray-400">RestoFlow</span>
+            Powered by <span className="font-bold text-gray-400">BHOJFLOW</span>
           </p>
         </div>
       </div>

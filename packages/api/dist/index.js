@@ -282,14 +282,14 @@ Sentry.setupExpressErrorHandler(app);
 app.use(error_middleware_1.globalErrorHandler);
 httpServer.on('error', (error) => {
     if (error?.code === 'EADDRINUSE') {
-        logger_1.logger.error(`Port ${port} is already in use. Stop the existing process on ${port} and restart @dineflow/api.`);
+        logger_1.logger.error(`Port ${port} is already in use. Stop the existing process on ${port} and restart @bhojflow/api.`);
         process.exit(1);
     }
     logger_1.logger.error({ error }, 'HTTP server failed to start');
     process.exit(1);
 });
 httpServer.listen(port, () => {
-    logger_1.logger.info(`RESTOFLOW API (V3 Enterprise) running on port ${port}`);
+    logger_1.logger.info(`BHOJFLOW API (V3 Enterprise) running on port ${port}`);
     if (env_1.env.RUN_BACKGROUND_JOBS) {
         logger_1.logger.info('Background jobs enabled inside API process');
         (0, session_cleanup_service_1.startSessionCleanupJob)();

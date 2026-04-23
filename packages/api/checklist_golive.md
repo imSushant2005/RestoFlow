@@ -1,7 +1,7 @@
-# 🚀 Restoflow Go-Live Checklist
+# 🚀 BHOJFLOW Go-Live Checklist
 **Status:** Ready for controlled production launch (First 100+ Vendors)
 
-This document is the operational manual for launching the new performance-hardened Restoflow architecture. It prioritizes stability and observability during the initial rollout phase.
+This document is the operational manual for launching the new performance-hardened BHOJFLOW architecture. It prioritizes stability and observability during the initial rollout phase.
 
 ---
 

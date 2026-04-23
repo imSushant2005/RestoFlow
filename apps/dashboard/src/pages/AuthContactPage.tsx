@@ -20,7 +20,7 @@ type FormState = {
 const contactCards = [
   {
     title: 'Sales and demos',
-    value: 'hello@restoflow.com',
+    value: 'hello@bhojflow.com',
     summary: 'Product walkthroughs, pricing conversations, and launch planning for new workspaces.',
     icon: <Mail size={18} />,
   },
@@ -52,7 +52,7 @@ export function AuthContactPage({ onLoginClick, onSignupClick }: AuthContactPage
   const [success, setSuccess] = useState('');
 
   const mailtoHref = useMemo(() => {
-    const subject = encodeURIComponent(`[RestoFlow] ${form.inquiryType} - ${form.restaurant || form.name || 'New inquiry'}`);
+    const subject = encodeURIComponent(`[BHOJFLOW] ${form.inquiryType} - ${form.restaurant || form.name || 'New inquiry'}`);
     const body = encodeURIComponent(
       [
         `Name: ${form.name}`,
@@ -63,7 +63,7 @@ export function AuthContactPage({ onLoginClick, onSignupClick }: AuthContactPage
         form.message,
       ].join('\n'),
     );
-    return `mailto:hello@restoflow.com?subject=${subject}&body=${body}`;
+    return `mailto:hello@bhojflow.com?subject=${subject}&body=${body}`;
   }, [form.email, form.inquiryType, form.message, form.name, form.restaurant]);
 
   const handleSubmit = (e: FormEvent) => {
@@ -85,7 +85,7 @@ export function AuthContactPage({ onLoginClick, onSignupClick }: AuthContactPage
       <main className="space-y-16 pb-8">
         <section className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
           <div className="max-w-[520px]">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--brand)' }}>Contact RestoFlow</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--brand)' }}>Contact BHOJFLOW</p>
             <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-1)' }}>
               Talk to the team about rollout, billing, and restaurant operations.
             </h1>
@@ -186,7 +186,7 @@ export function AuthContactPage({ onLoginClick, onSignupClick }: AuthContactPage
                   <ArrowRight size={15} />
                 </button>
                 <a
-                  href="mailto:hello@restoflow.com"
+                  href="mailto:hello@bhojflow.com"
                   className="rounded-full border px-5 py-3 text-sm font-semibold transition hover:brightness-95"
                   style={{ background: 'var(--surface-2)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
                 >

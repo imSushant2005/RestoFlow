@@ -26,7 +26,7 @@ export function HomePage({ onLoginClick, onSignupClick, onContactClick }: HomePa
               Run ordering, kitchen, tables, service, and billing from one trusted operating system.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-8 sm:text-lg" style={{ color: 'var(--text-2)' }}>
-              RestoFlow gives restaurants one connected flow from QR scan to final bill. Guests get a cleaner ordering
+              BHOJFLOW gives restaurants one connected flow from QR scan to final bill. Guests get a cleaner ordering
               experience. Staff get live operational clarity. Owners get safer billing and role-based control.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -46,14 +46,14 @@ export function HomePage({ onLoginClick, onSignupClick, onContactClick }: HomePa
               ))}
             </div>
             <p className="mt-5 max-w-2xl text-sm leading-7" style={{ color: 'var(--text-3)' }}>
-              RestoFlow manages ordering, session flow, and bill generation. Guests still pay the restaurant directly by
+              BHOJFLOW manages ordering, session flow, and bill generation. Guests still pay the restaurant directly by
               cash, UPI, card, or the venue&apos;s existing collection method.
             </p>
           </div>
 
           <div className="grid gap-4">
             <div className="overflow-hidden rounded-[32px] border p-4 shadow-2xl" style={{ borderColor: 'var(--border)', background: 'rgba(15, 23, 42, 0.8)' }}>
-              <img src={dashboardPreview} alt="RestoFlow dashboard preview" className="h-[320px] w-full rounded-[24px] object-cover object-top" />
+              <img src={dashboardPreview} alt="BHOJFLOW dashboard preview" className="h-[320px] w-full rounded-[24px] object-cover object-top" />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <article className="rounded-[28px] border p-5" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>

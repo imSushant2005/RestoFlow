@@ -22,7 +22,7 @@ import { getActiveSessionForTenant, setActiveSessionForTenant } from '../lib/ten
 import { useCartStore } from '../store/cartStore';
 
 function buildIdempotencyKey(tenantSlug: string) {
-  return `restoflow_${tenantSlug}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  return `BHOJFLOW_${tenantSlug}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function incrementCustomerOverlayLock() {

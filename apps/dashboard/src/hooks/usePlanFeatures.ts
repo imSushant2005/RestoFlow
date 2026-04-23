@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 
-export type PlanTier = 'MINI' | 'CAFE' | 'DINEPRO' | 'PREMIUM';
+export type PlanTier = 'MINI' | 'CAFE' | 'BHOJPRO' | 'PREMIUM';
 
 type ServerPlanLimits = {
   name?: string;
@@ -24,8 +24,9 @@ const PLAN_ALIASES: Record<string, PlanTier> = {
   STARTER: 'MINI',
   CAFE: 'CAFE',
   GROWTH: 'CAFE',
-  DINEPRO: 'DINEPRO',
-  GOLD: 'DINEPRO',
+  BHOJPRO: 'BHOJPRO',
+  'BHOJ PRO': 'BHOJPRO',
+  GOLD: 'BHOJPRO',
   PREMIUM: 'PREMIUM',
   PLATINUM: 'PREMIUM',
 };
@@ -77,8 +78,8 @@ const PLAN_FEATURES_MAP: Record<PlanTier, PlanFeatures> = {
     maxFloors: 1,
     hasFranchiseControls: false,
   },
-  DINEPRO: {
-    name: 'Dine Pro',
+  BHOJPRO: {
+    name: 'Bhoj Pro',
     tables: 18,
     staff: 200,
     hasKDS: true,

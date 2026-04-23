@@ -1280,9 +1280,11 @@ export const requestSessionPayment = async (req: Request, res: Response) => {
       );
     }
 
+    const tipAmount = Math.max(0, Number(req.body?.tipAmount) || 0);
+
     const totals = calculateSessionOrderTotals(session.orders);
     const reconciledBill = reconcileSessionBill(session.bill, totals);
-    const totalAmount = Number(reconciledBill?.totalAmount || totals.totalAmount || 0);
+    const finalTotalWithTip = Number(reconciledBill?.totalAmount || totals.totalAmount || 0) + tipAmount;
 
     if (requestedMethod === 'online' && !tenant.upiId) {
       return res.status(409).json({
@@ -1296,6 +1298,8 @@ export const requestSessionPayment = async (req: Request, res: Response) => {
           where: { sessionId },
           data: {
             paymentMethod: requestedMethod,
+            tipAmount: tipAmount,
+            totalAmount: finalTotalWithTip,
           },
         }),
       `session-payment-request:${tenant.id}:${sessionId}`,
@@ -1330,12 +1334,12 @@ export const requestSessionPayment = async (req: Request, res: Response) => {
         ? {
             sessionId: session.id,
             method: 'online' as const,
-            amount: totalAmount,
+            amount: finalTotalWithTip,
             upiId: tenant.upiId,
             upiUri: buildUpiUri({
               upiId: tenant.upiId,
               payeeName: tenant.businessName || 'Restaurant',
-              amount: totalAmount,
+              amount: finalTotalWithTip,
               note: reconciledBill?.invoiceNumber
                 ? `Bill ${reconciledBill.invoiceNumber}`
                 : `Session ${session.id.slice(-6).toUpperCase()}`,

@@ -218,7 +218,7 @@ export function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-xs font-medium text-gray-400">
-          Powered by <span className="font-bold text-gray-500">RestoFlow</span>
+          Powered by <span className="font-bold text-gray-500">BHOJFLOW</span>
         </p>
       </div>
     </div>

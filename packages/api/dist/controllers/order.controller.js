@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createAssistedOrder = exports.lookupAssistedCustomer = exports.updateOrderStatus = exports.getOrder = exports.getOrderHistory = exports.getOrders = void 0;
+exports.createAssistedOrder = exports.lookupAssistedCustomer = exports.updateOrderStatus = exports.getOrder = exports.getOrderHistory = exports.getAssistedSummary = exports.getOrders = void 0;
 const crypto_1 = require("crypto");
 const prisma_1 = require("../db/prisma");
 const socket_1 = require("../socket");
@@ -307,6 +307,31 @@ const getOrders = async (req, res) => {
     }
 };
 exports.getOrders = getOrders;
+const getAssistedSummary = async (req, res) => {
+    try {
+        const tenantId = req.tenantId;
+        const today = getTodayStart();
+        const summary = await prisma_1.prisma.order.aggregate({
+            where: {
+                tenantId,
+                placedBy: 'vendor',
+                createdAt: { gte: today },
+                status: { not: 'CANCELLED' }
+            },
+            _sum: { totalAmount: true },
+            _count: { id: true }
+        });
+        res.json({
+            totalRevenue: summary._sum?.totalAmount || 0,
+            orderCount: summary._count?.id || 0,
+        });
+    }
+    catch (error) {
+        console.error('getAssistedSummary error:', error);
+        res.status(500).json({ error: 'Failed to fetch assisted ordering summary' });
+    }
+};
+exports.getAssistedSummary = getAssistedSummary;
 const getOrderHistory = async (req, res) => {
     try {
         const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -399,6 +424,7 @@ const updateOrderStatus = async (req, res) => {
                 customerPhone: true,
                 customerName: true,
                 orderNumber: true,
+                status: true,
                 version: true,
             },
         });
@@ -433,10 +459,20 @@ const updateOrderStatus = async (req, res) => {
                 select: { name: true },
             }))?.name?.trim() || 'Service Staff'
             : null;
-        // Use the OCC state machine transition service
+        const loadCurrentOrder = () => prisma_1.prisma.order.findFirst({
+            where: { id: existingOrder.id, tenantId: req.tenantId },
+            select: orderSelect,
+        });
+        if (existingOrder.status === normalizedStatus) {
+            const currentOrder = await loadCurrentOrder();
+            await invalidateOrderMutationCaches(req.tenantId, existingOrder.diningSessionId, existingOrder.id).catch((err) => console.error('[ORDER_STATUS_CACHE_INVALIDATION_ERROR]', err));
+            return res.json(currentOrder);
+        }
+        // Use the state machine transition service. The server reads the latest
+        // version here so a slightly stale live dashboard does not roll back a valid move.
         let order;
         try {
-            const expectedVersion = typeof req.body.version === 'number' ? req.body.version : existingOrder.version;
+            const expectedVersion = existingOrder.version;
             const metadata = {
                 sourceIp: req.ip,
                 userAgent: req.get('user-agent'),
@@ -463,38 +499,49 @@ const updateOrderStatus = async (req, res) => {
                     },
                 });
             }
+            // ─── STABILITY & SYNC FIXES ─────────────────────────────
+            const responseOrder = (await loadCurrentOrder()) || order;
+            await invalidateOrderMutationCaches(req.tenantId, existingOrder.diningSessionId, existingOrder.id).catch((err) => console.error('[ORDER_STATUS_CACHE_INVALIDATION_ERROR]', err));
+            try {
+                const io = (0, socket_1.getIO)();
+                io.to((0, socket_1.getTenantRoom)(req.tenantId)).emit('order:update', responseOrder);
+                if (normalizedStatus === 'READY') {
+                    const pickupPayload = buildWaiterPickupPayload(responseOrder);
+                    io.to((0, socket_1.getTenantRoom)(req.tenantId)).emit('waiter:pickup_ready', pickupPayload);
+                }
+            }
+            catch (emitError) {
+                console.error('[ORDER_STATUS_SOCKET_EMIT_ERROR]', emitError);
+            }
+            // ──────────────────────────────────────────────────────
+            res.json(responseOrder);
         }
         catch (err) {
             if (err instanceof order_service_1.ConflictError || err.message === 'OCC_COLLISION') {
-                const truth = await prisma_1.prisma.order.findFirst({
-                    where: { id: existingOrder.id, tenantId: req.tenantId },
-                    select: orderSelect
-                });
+                const truth = await loadCurrentOrder();
+                // Invalidate even on conflict to ensure client eventually syncs
+                await invalidateOrderMutationCaches(req.tenantId, existingOrder.diningSessionId, existingOrder.id).catch((cacheError) => console.error('[ORDER_STATUS_CACHE_INVALIDATION_ERROR]', cacheError));
                 return res.status(409).json({
                     error: 'OCC_CONFLICT',
                     message: 'Order status was modified by another user. Syncing...',
-                    recovery: { truth }
+                    recovery: { truth },
                 });
             }
-            throw err;
+            if (err instanceof Error && err.message.startsWith('INVALID_TRANSITION')) {
+                const truth = await loadCurrentOrder();
+                await invalidateOrderMutationCaches(req.tenantId, existingOrder.diningSessionId, existingOrder.id).catch((cacheError) => console.error('[ORDER_STATUS_CACHE_INVALIDATION_ERROR]', cacheError));
+                return res.status(409).json({
+                    error: 'INVALID_TRANSITION',
+                    message: err.message,
+                    recovery: { truth },
+                });
+            }
+            console.error('updateOrderStatus error:', err);
+            res.status(500).json({ error: 'Failed to update order status' });
         }
-        const tenantRoom = (0, socket_1.getTenantRoom)(req.tenantId);
-        (0, socket_1.getIO)().to(tenantRoom).emit('order:update', order);
-        if (order.diningSessionId) {
-            (0, socket_1.getIO)().to((0, socket_1.getSessionRoom)(req.tenantId, order.diningSessionId)).emit('order:update', order);
-        }
-        if (normalizedStatus === 'READY') {
-            (0, socket_1.getIO)().to((0, socket_1.getRoleRoom)(req.tenantId, 'WAITER')).emit('waiter:pickup_ready', buildWaiterPickupPayload(order));
-        }
-        // Respond immediately — cache invalidation runs async after response is flushed
-        res.json(order);
-        setImmediate(() => {
-            invalidateOrderMutationCaches(req.tenantId, existingOrder.diningSessionId, existingOrder.id).catch((err) => console.error('[CACHE_INVALIDATION_ERROR]', err));
-        });
     }
     catch (error) {
-        console.error('updateOrderStatus error:', error);
-        res.status(500).json({ error: 'Failed to update order status' });
+        res.status(500).json({ error: 'Internal server error' });
     }
 };
 exports.updateOrderStatus = updateOrderStatus;
@@ -635,19 +682,6 @@ const createAssistedOrder = async (req, res) => {
         if (table && guestCount > Number(table.capacity || 0)) {
             return res.status(400).json({ error: 'Guest count exceeds table capacity.' });
         }
-        const activeTableSession = table
-            ? await prisma_1.prisma.diningSession.findFirst({
-                where: {
-                    tenantId: tenant.id,
-                    tableId: table.id,
-                    sessionStatus: { notIn: ['CLOSED', 'CANCELLED'] },
-                },
-                select: { id: true },
-            })
-            : null;
-        if (activeTableSession) {
-            return res.status(409).json({ error: 'This table already has an active session. Choose another table or finish the open session first.' });
-        }
         const staffName = await resolveStaffName(prisma_1.prisma, req.user.id);
         const { subtotal, orderItems } = await (0, order_payload_service_1.buildServerPricedOrderPayload)(prisma_1.prisma, tenant.id, req.body?.items);
         const taxAmount = subtotal * (Number(tenant.taxRate || 0) / 100);
@@ -686,33 +720,62 @@ const createAssistedOrder = async (req, res) => {
                 const orderNumber = (0, order_number_service_1.generateOrderNumber)(orderType);
                 const isDirectBill = fulfillmentMode === 'DIRECT_BILL';
                 const shouldSettleImmediately = isDirectBill && (markPaid || Boolean(paymentMethod));
-                const sessionStatus = isDirectBill
-                    ? shouldSettleImmediately
-                        ? 'CLOSED'
-                        : 'AWAITING_BILL'
-                    : 'ACTIVE';
-                const session = await tx.diningSession.create({
-                    data: {
-                        tenantId: tenant.id,
-                        tableId: table?.id || null,
-                        customerId: customer.id,
-                        partySize: guestCount,
-                        sessionStatus: sessionStatus,
-                        source: isDirectBill ? 'staff_assisted_direct_bill' : 'staff_assisted',
-                        isBillGenerated: isDirectBill,
-                        billGeneratedAt: isDirectBill ? new Date() : null,
-                        closedAt: shouldSettleImmediately ? new Date() : null,
-                        attendedByUserId: req.user.id,
-                        attendedByName: staffName,
-                    },
-                    select: {
-                        id: true,
-                        tenantId: true,
-                        tableId: true,
-                        sessionStatus: true,
-                        closedAt: true,
-                    },
-                });
+                let session;
+                if (!isDirectBill) {
+                    if (table) {
+                        session = await tx.diningSession.findFirst({
+                            where: {
+                                tenantId: tenant.id,
+                                tableId: table.id,
+                                sessionStatus: { in: ['ACTIVE', 'AWAITING_BILL'] },
+                            },
+                            select: { id: true, tenantId: true, tableId: true, sessionStatus: true, closedAt: true },
+                        });
+                    }
+                    else if (customerPhone.length >= 10) {
+                        session = await tx.diningSession.findFirst({
+                            where: {
+                                tenantId: tenant.id,
+                                customerId: customer.id,
+                                tableId: null,
+                                sessionStatus: 'ACTIVE',
+                            },
+                            select: { id: true, tenantId: true, tableId: true, sessionStatus: true, closedAt: true },
+                        });
+                    }
+                }
+                if (session && session.sessionStatus === 'AWAITING_BILL') {
+                    session = await tx.diningSession.update({
+                        where: { id: session.id },
+                        data: { sessionStatus: 'ACTIVE', isBillGenerated: false, billGeneratedAt: null },
+                        select: { id: true, tenantId: true, tableId: true, sessionStatus: true, closedAt: true },
+                    });
+                }
+                if (!session) {
+                    const sessionStatus = isDirectBill ? (shouldSettleImmediately ? 'CLOSED' : 'AWAITING_BILL') : 'ACTIVE';
+                    session = await tx.diningSession.create({
+                        data: {
+                            tenantId: tenant.id,
+                            tableId: table?.id || null,
+                            customerId: customer.id,
+                            partySize: guestCount,
+                            sessionStatus: sessionStatus,
+                            source: isDirectBill ? 'staff_assisted_direct_bill' : 'staff_assisted',
+                            isBillGenerated: isDirectBill,
+                            billGeneratedAt: isDirectBill ? new Date() : null,
+                            closedAt: shouldSettleImmediately ? new Date() : null,
+                            attendedByUserId: req.user.id,
+                            attendedByName: staffName,
+                        },
+                        select: {
+                            id: true,
+                            tenantId: true,
+                            tableId: true,
+                            sessionStatus: true,
+                            closedAt: true,
+                        },
+                    });
+                }
                 const order = await tx.order.create({
                     data: {
                         tenantId: tenant.id,
@@ -801,6 +864,7 @@ const createAssistedOrder = async (req, res) => {
             });
             setImmediate(async () => {
                 try {
+                    await invalidateOrderMutationCaches(tenant.id, result.session.id, result.order.id);
                     const io = (0, socket_1.getIO)();
                     const tenantRoom = (0, socket_1.getTenantRoom)(tenant.id);
                     const sessionRoom = (0, socket_1.getSessionRoom)(tenant.id, result.session.id);
@@ -876,7 +940,6 @@ const createAssistedOrder = async (req, res) => {
                             });
                         }
                     }
-                    await invalidateOrderMutationCaches(tenant.id, result.session.id, result.order.id);
                 }
                 catch (err) {
                     console.error('[ASSISTED_ORDER_POST_CREATE_ERROR]', err);

@@ -715,7 +715,7 @@ export function SessionTracker() {
 
       <div className="py-10 text-center opacity-30">
         <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--text-3)' }}>
-          Powered by RestoFlow
+          Powered by BHOJFLOW
         </p>
       </div>
     </div>

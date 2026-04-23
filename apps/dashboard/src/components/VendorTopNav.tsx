@@ -166,7 +166,7 @@ export function VendorTopNav({
   }, []);
 
   useEffect(() => {
-    document.title = `${headerLabel} | Restoflow Dashboard`;
+    document.title = `${headerLabel} | BHOJFLOW Dashboard`;
   }, [headerLabel]);
 
   useEffect(() => {

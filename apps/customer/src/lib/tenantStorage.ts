@@ -129,5 +129,5 @@ export function clearCustomerContextForTenant(tenantSlug: string | null | undefi
 
 export function clearLegacyCustomerStorage() {
   Object.values(LEGACY_KEYS).forEach((key) => localStorage.removeItem(key));
-  localStorage.removeItem('restoflow_session');
+  localStorage.removeItem('BHOJFLOW_session');
 }

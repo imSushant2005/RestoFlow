@@ -110,6 +110,8 @@ const COPY = {
 const CALL_LABELS = {
   WAITER: { en: 'Waiter requested', hi: 'वेटर बुलाया गया', hinglish: 'Waiter bulaya gaya', tone: '#b45309' },
   BILL: { en: 'Bill requested', hi: 'बिल माँगा गया', hinglish: 'Bill manga gaya', tone: '#047857' },
+  SPOON: { en: 'Spoon / Tissue', hi: 'चम्मच / टिश्यू', hinglish: 'Spoon / Tissue manga', tone: '#4338ca' },
+  ASSISTANCE: { en: 'Needs assistance', hi: 'मदद चाहिए', hinglish: 'Madad chahiye', tone: '#c2410c' },
   WATER: { en: 'Water requested', hi: 'पानी माँगा गया', hinglish: 'Pani manga gaya', tone: '#0f766e' },
   EXTRA: { en: 'Extra item requested', hi: 'अतिरिक्त आइटम माँगा गया', hinglish: 'Extra item manga gaya', tone: '#4338ca' },
   HELP: { en: 'Needs assistance', hi: 'मदद चाहिए', hinglish: 'Madad chahiye', tone: '#c2410c' },
@@ -238,6 +240,13 @@ export function WaiterPage() {
     staleTime: 1000 * 60,
     retry: false,
   });
+
+  const { data: profile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: async () => (await api.get('/auth/profile')).data,
+  });
+
+  const tipsToday = profile?.tipSummary?.totalAmount || 0;
 
   const language = getLanguage(authMe?.user?.preferredLanguage);
   const t = COPY[language];
@@ -423,13 +432,13 @@ export function WaiterPage() {
 
   const billCount = waiterCalls.filter((call) => String(call.type || '').toUpperCase() === 'BILL').length;
   const helpCount = waiterCalls.length - billCount;
-  const todayTips = Number(authMe?.user?.tipsSummary?.today?.amount || 0);
+  
   const stats = [
     { label: t.active, value: readyQueue.length + waiterCalls.length, icon: Bell, tone: '#2563eb' },
     { label: t.ready, value: readyQueue.length, icon: UtensilsCrossed, tone: '#059669' },
     { label: t.bills, value: billCount, icon: Receipt, tone: '#d97706' },
     { label: t.help, value: helpCount, icon: HelpCircle, tone: '#7c3aed' },
-    { label: t.tips, value: `₹${todayTips.toFixed(0)}`, icon: IndianRupee, tone: '#0f766e' },
+    { label: t.tips, value: `₹${tipsToday.toFixed(0)}`, icon: IndianRupee, tone: '#0f766e' },
   ];
 
   if (isLoading) {

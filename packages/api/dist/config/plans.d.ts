@@ -12,8 +12,10 @@ export type PlanLimit = {
     hasAssistedCustomerLookup: boolean;
     maxFloors: number;
     hasFranchiseControls: boolean;
+    hasWaiterCalling: 'HIDDEN' | 'TOGGLEABLE' | 'ALWAYS';
 };
-export type CanonicalPlan = 'MINI' | 'CAFE' | 'DINEPRO' | 'PREMIUM';
+export type CanonicalPlan = 'MINI' | 'CAFE' | 'BHOJPRO' | 'PREMIUM';
+export declare const PLAN_ALIASES: Record<string, CanonicalPlan>;
 export declare const PLAN_LIMITS: Record<string, PlanLimit>;
 export declare function parsePlan(plan: unknown): CanonicalPlan | null;
 export declare function normalizePlan(plan: unknown): CanonicalPlan;

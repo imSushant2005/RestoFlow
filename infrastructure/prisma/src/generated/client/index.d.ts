@@ -125,7 +125,7 @@ export namespace $Enums {
   PLATINUM: 'PLATINUM',
   MINI: 'MINI',
   CAFE: 'CAFE',
-  DINEPRO: 'DINEPRO',
+  BHOJPRO: 'BHOJPRO',
   PREMIUM: 'PREMIUM'
 };
 
@@ -17605,6 +17605,7 @@ export namespace Prisma {
     taxAmount: number | null
     discountAmount: number | null
     totalAmount: number | null
+    tipAmount: number | null
   }
 
   export type BillSumAggregateOutputType = {
@@ -17612,6 +17613,7 @@ export namespace Prisma {
     taxAmount: number | null
     discountAmount: number | null
     totalAmount: number | null
+    tipAmount: number | null
   }
 
   export type BillMinAggregateOutputType = {
@@ -17623,6 +17625,7 @@ export namespace Prisma {
     taxAmount: number | null
     discountAmount: number | null
     totalAmount: number | null
+    tipAmount: number | null
     paymentStatus: string | null
     paymentMethod: string | null
     paidAt: Date | null
@@ -17642,6 +17645,7 @@ export namespace Prisma {
     taxAmount: number | null
     discountAmount: number | null
     totalAmount: number | null
+    tipAmount: number | null
     paymentStatus: string | null
     paymentMethod: string | null
     paidAt: Date | null
@@ -17661,6 +17665,7 @@ export namespace Prisma {
     taxAmount: number
     discountAmount: number
     totalAmount: number
+    tipAmount: number
     paymentStatus: number
     paymentMethod: number
     paidAt: number
@@ -17678,6 +17683,7 @@ export namespace Prisma {
     taxAmount?: true
     discountAmount?: true
     totalAmount?: true
+    tipAmount?: true
   }
 
   export type BillSumAggregateInputType = {
@@ -17685,6 +17691,7 @@ export namespace Prisma {
     taxAmount?: true
     discountAmount?: true
     totalAmount?: true
+    tipAmount?: true
   }
 
   export type BillMinAggregateInputType = {
@@ -17696,6 +17703,7 @@ export namespace Prisma {
     taxAmount?: true
     discountAmount?: true
     totalAmount?: true
+    tipAmount?: true
     paymentStatus?: true
     paymentMethod?: true
     paidAt?: true
@@ -17715,6 +17723,7 @@ export namespace Prisma {
     taxAmount?: true
     discountAmount?: true
     totalAmount?: true
+    tipAmount?: true
     paymentStatus?: true
     paymentMethod?: true
     paidAt?: true
@@ -17734,6 +17743,7 @@ export namespace Prisma {
     taxAmount?: true
     discountAmount?: true
     totalAmount?: true
+    tipAmount?: true
     paymentStatus?: true
     paymentMethod?: true
     paidAt?: true
@@ -17840,6 +17850,7 @@ export namespace Prisma {
     taxAmount: number
     discountAmount: number
     totalAmount: number
+    tipAmount: number
     paymentStatus: string
     paymentMethod: string | null
     paidAt: Date | null
@@ -17878,6 +17889,7 @@ export namespace Prisma {
     taxAmount?: boolean
     discountAmount?: boolean
     totalAmount?: boolean
+    tipAmount?: boolean
     paymentStatus?: boolean
     paymentMethod?: boolean
     paidAt?: boolean
@@ -17899,6 +17911,7 @@ export namespace Prisma {
     taxAmount?: boolean
     discountAmount?: boolean
     totalAmount?: boolean
+    tipAmount?: boolean
     paymentStatus?: boolean
     paymentMethod?: boolean
     paidAt?: boolean
@@ -17920,6 +17933,7 @@ export namespace Prisma {
     taxAmount?: boolean
     discountAmount?: boolean
     totalAmount?: boolean
+    tipAmount?: boolean
     paymentStatus?: boolean
     paymentMethod?: boolean
     paidAt?: boolean
@@ -17954,6 +17968,7 @@ export namespace Prisma {
       taxAmount: number
       discountAmount: number
       totalAmount: number
+      tipAmount: number
       paymentStatus: string
       paymentMethod: string | null
       paidAt: Date | null
@@ -18365,6 +18380,7 @@ export namespace Prisma {
     readonly taxAmount: FieldRef<"Bill", 'Float'>
     readonly discountAmount: FieldRef<"Bill", 'Float'>
     readonly totalAmount: FieldRef<"Bill", 'Float'>
+    readonly tipAmount: FieldRef<"Bill", 'Float'>
     readonly paymentStatus: FieldRef<"Bill", 'String'>
     readonly paymentMethod: FieldRef<"Bill", 'String'>
     readonly paidAt: FieldRef<"Bill", 'DateTime'>
@@ -25759,6 +25775,7 @@ export namespace Prisma {
     taxAmount: 'taxAmount',
     discountAmount: 'discountAmount',
     totalAmount: 'totalAmount',
+    tipAmount: 'tipAmount',
     paymentStatus: 'paymentStatus',
     paymentMethod: 'paymentMethod',
     paidAt: 'paidAt',
@@ -27535,6 +27552,7 @@ export namespace Prisma {
     taxAmount?: FloatFilter<"Bill"> | number
     discountAmount?: FloatFilter<"Bill"> | number
     totalAmount?: FloatFilter<"Bill"> | number
+    tipAmount?: FloatFilter<"Bill"> | number
     paymentStatus?: StringFilter<"Bill"> | string
     paymentMethod?: StringNullableFilter<"Bill"> | string | null
     paidAt?: DateTimeNullableFilter<"Bill"> | Date | string | null
@@ -27556,6 +27574,7 @@ export namespace Prisma {
     taxAmount?: SortOrder
     discountAmount?: SortOrder
     totalAmount?: SortOrder
+    tipAmount?: SortOrder
     paymentStatus?: SortOrder
     paymentMethod?: SortOrderInput | SortOrder
     paidAt?: SortOrderInput | SortOrder
@@ -27580,6 +27599,7 @@ export namespace Prisma {
     taxAmount?: FloatFilter<"Bill"> | number
     discountAmount?: FloatFilter<"Bill"> | number
     totalAmount?: FloatFilter<"Bill"> | number
+    tipAmount?: FloatFilter<"Bill"> | number
     paymentStatus?: StringFilter<"Bill"> | string
     paymentMethod?: StringNullableFilter<"Bill"> | string | null
     paidAt?: DateTimeNullableFilter<"Bill"> | Date | string | null
@@ -27601,6 +27621,7 @@ export namespace Prisma {
     taxAmount?: SortOrder
     discountAmount?: SortOrder
     totalAmount?: SortOrder
+    tipAmount?: SortOrder
     paymentStatus?: SortOrder
     paymentMethod?: SortOrderInput | SortOrder
     paidAt?: SortOrderInput | SortOrder
@@ -27628,6 +27649,7 @@ export namespace Prisma {
     taxAmount?: FloatWithAggregatesFilter<"Bill"> | number
     discountAmount?: FloatWithAggregatesFilter<"Bill"> | number
     totalAmount?: FloatWithAggregatesFilter<"Bill"> | number
+    tipAmount?: FloatWithAggregatesFilter<"Bill"> | number
     paymentStatus?: StringWithAggregatesFilter<"Bill"> | string
     paymentMethod?: StringNullableWithAggregatesFilter<"Bill"> | string | null
     paidAt?: DateTimeNullableWithAggregatesFilter<"Bill"> | Date | string | null
@@ -29915,6 +29937,7 @@ export namespace Prisma {
     taxAmount?: number
     discountAmount?: number
     totalAmount: number
+    tipAmount?: number
     paymentStatus?: string
     paymentMethod?: string | null
     paidAt?: Date | string | null
@@ -29936,6 +29959,7 @@ export namespace Prisma {
     taxAmount?: number
     discountAmount?: number
     totalAmount: number
+    tipAmount?: number
     paymentStatus?: string
     paymentMethod?: string | null
     paidAt?: Date | string | null
@@ -29953,6 +29977,7 @@ export namespace Prisma {
     taxAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalAmount?: FloatFieldUpdateOperationsInput | number
+    tipAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
     paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
     paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -29974,6 +29999,7 @@ export namespace Prisma {
     taxAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalAmount?: FloatFieldUpdateOperationsInput | number
+    tipAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
     paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
     paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -29993,6 +30019,7 @@ export namespace Prisma {
     taxAmount?: number
     discountAmount?: number
     totalAmount: number
+    tipAmount?: number
     paymentStatus?: string
     paymentMethod?: string | null
     paidAt?: Date | string | null
@@ -30010,6 +30037,7 @@ export namespace Prisma {
     taxAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalAmount?: FloatFieldUpdateOperationsInput | number
+    tipAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
     paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
     paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -30029,6 +30057,7 @@ export namespace Prisma {
     taxAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalAmount?: FloatFieldUpdateOperationsInput | number
+    tipAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
     paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
     paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -32179,6 +32208,7 @@ export namespace Prisma {
     taxAmount?: SortOrder
     discountAmount?: SortOrder
     totalAmount?: SortOrder
+    tipAmount?: SortOrder
     paymentStatus?: SortOrder
     paymentMethod?: SortOrder
     paidAt?: SortOrder
@@ -32194,6 +32224,7 @@ export namespace Prisma {
     taxAmount?: SortOrder
     discountAmount?: SortOrder
     totalAmount?: SortOrder
+    tipAmount?: SortOrder
   }
 
   export type BillMaxOrderByAggregateInput = {
@@ -32205,6 +32236,7 @@ export namespace Prisma {
     taxAmount?: SortOrder
     discountAmount?: SortOrder
     totalAmount?: SortOrder
+    tipAmount?: SortOrder
     paymentStatus?: SortOrder
     paymentMethod?: SortOrder
     paidAt?: SortOrder
@@ -32224,6 +32256,7 @@ export namespace Prisma {
     taxAmount?: SortOrder
     discountAmount?: SortOrder
     totalAmount?: SortOrder
+    tipAmount?: SortOrder
     paymentStatus?: SortOrder
     paymentMethod?: SortOrder
     paidAt?: SortOrder
@@ -32239,6 +32272,7 @@ export namespace Prisma {
     taxAmount?: SortOrder
     discountAmount?: SortOrder
     totalAmount?: SortOrder
+    tipAmount?: SortOrder
   }
 
   export type EnumOrderTypeFilter<$PrismaModel = never> = {
@@ -35652,6 +35686,7 @@ export namespace Prisma {
     taxAmount?: number
     discountAmount?: number
     totalAmount: number
+    tipAmount?: number
     paymentStatus?: string
     paymentMethod?: string | null
     paidAt?: Date | string | null
@@ -35671,6 +35706,7 @@ export namespace Prisma {
     taxAmount?: number
     discountAmount?: number
     totalAmount: number
+    tipAmount?: number
     paymentStatus?: string
     paymentMethod?: string | null
     paidAt?: Date | string | null
@@ -36199,6 +36235,7 @@ export namespace Prisma {
     taxAmount?: FloatFilter<"Bill"> | number
     discountAmount?: FloatFilter<"Bill"> | number
     totalAmount?: FloatFilter<"Bill"> | number
+    tipAmount?: FloatFilter<"Bill"> | number
     paymentStatus?: StringFilter<"Bill"> | string
     paymentMethod?: StringNullableFilter<"Bill"> | string | null
     paidAt?: DateTimeNullableFilter<"Bill"> | Date | string | null
@@ -39156,6 +39193,7 @@ export namespace Prisma {
     taxAmount?: number
     discountAmount?: number
     totalAmount: number
+    tipAmount?: number
     paymentStatus?: string
     paymentMethod?: string | null
     paidAt?: Date | string | null
@@ -39175,6 +39213,7 @@ export namespace Prisma {
     taxAmount?: number
     discountAmount?: number
     totalAmount: number
+    tipAmount?: number
     paymentStatus?: string
     paymentMethod?: string | null
     paidAt?: Date | string | null
@@ -39464,6 +39503,7 @@ export namespace Prisma {
     taxAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalAmount?: FloatFieldUpdateOperationsInput | number
+    tipAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
     paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
     paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -39483,6 +39523,7 @@ export namespace Prisma {
     taxAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalAmount?: FloatFieldUpdateOperationsInput | number
+    tipAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
     paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
     paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -42298,6 +42339,7 @@ export namespace Prisma {
     taxAmount?: number
     discountAmount?: number
     totalAmount: number
+    tipAmount?: number
     paymentStatus?: string
     paymentMethod?: string | null
     paidAt?: Date | string | null
@@ -42948,6 +42990,7 @@ export namespace Prisma {
     taxAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalAmount?: FloatFieldUpdateOperationsInput | number
+    tipAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
     paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
     paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -42967,6 +43010,7 @@ export namespace Prisma {
     taxAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalAmount?: FloatFieldUpdateOperationsInput | number
+    tipAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
     paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
     paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -42985,6 +43029,7 @@ export namespace Prisma {
     taxAmount?: FloatFieldUpdateOperationsInput | number
     discountAmount?: FloatFieldUpdateOperationsInput | number
     totalAmount?: FloatFieldUpdateOperationsInput | number
+    tipAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
     paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
     paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null

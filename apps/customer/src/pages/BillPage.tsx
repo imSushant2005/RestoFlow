@@ -124,6 +124,7 @@ export function BillPage() {
   const [serviceRating, setServiceRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
   const [tipAmount, setTipAmount] = useState(0);
+  const [activeTipType, setActiveTipType] = useState<number | 'custom' | null>(null);
   const [submittingReview, setSubmittingReview] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [requestingMethod, setRequestingMethod] = useState<'cash' | 'online' | null>(null);
@@ -325,7 +326,7 @@ export function BillPage() {
     const items = session.orders?.flatMap((order: any) => order.items || []) || [];
     const itemLines = items.map((item: any) => `- ${item.name} x${item.quantity}: ${formatINR(item.totalPrice)}`).join('\n');
     const message = [
-      `Final Bill - ${session.tenant?.businessName || 'Restoflow'}`,
+      `Final Bill - ${session.tenant?.businessName || 'BHOJFLOW'}`,
       '',
       `Table: ${serviceLabel}`,
       itemLines,
@@ -382,6 +383,9 @@ export function BillPage() {
     try {
       const response = await publicApi.post(`/${tenantSlug}/sessions/${sessionId}/payment-request`, {
         method,
+        tipAmount,
+      }, {
+        headers: getTenantPublicAuthHeaders(tenantSlug),
       });
       setSession(response.data);
       setCheckoutOpen(false);
@@ -506,6 +510,8 @@ export function BillPage() {
   const hasCashRequest = isAwaitingBill && unpaidBill && requestedMethod === 'cash';
   const showCheckoutControls = isAwaitingBill && unpaidBill;
   const onlineAvailable = Boolean(session?.tenant?.upiConfigured);
+  const totalPayable = (bill.totalAmount || 0) + tipAmount;
+  const isDineIn = session?.orders?.[0]?.orderType === 'DINE_IN';
   const verificationSecondsLeft =
     paymentSubmittedAt && unpaidBill
       ? Math.max(0, 120 - Math.floor((verificationNow - paymentSubmittedAt) / 1000))
@@ -652,7 +658,7 @@ export function BillPage() {
                       Bill Checkout
                     </p>
                     <h3 className="mt-2 text-xl font-black" style={{ color: 'var(--text-1)' }}>
-                      Choose how you want to pay {formatINR(bill.totalAmount)}
+                      Choose how you want to pay {formatINR(totalPayable)}
                     </h3>
                     <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
                       Cash keeps the checkout simple. Online payment stays locked to the exact bill amount sent by the restaurant.
@@ -709,7 +715,7 @@ export function BillPage() {
                       Waiting for UPI Link
                     </p>
                     <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
-                      The restaurant will send an exact-amount online payment link here. The amount will stay locked to {formatINR(bill.totalAmount)}.
+                      The restaurant will send an exact-amount online payment link here. The amount will stay locked to {formatINR(totalPayable)}.
                     </p>
                   </div>
                 )}
@@ -725,7 +731,7 @@ export function BillPage() {
                           Exact Amount UPI Link
                         </p>
                         <h4 className="mt-2 text-2xl font-black" style={{ color: 'var(--text-1)' }}>
-                          {formatINR(paymentLink.amount || bill.totalAmount)}
+                          {formatINR(paymentLink.amount || totalPayable)}
                         </h4>
                         <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
                           Pay to {paymentLink.upiId}. The amount is fixed and cannot be changed from this checkout step.
@@ -738,7 +744,7 @@ export function BillPage() {
                         <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
                           Amount Locked
                         </p>
-                        <p className="mt-1 text-lg font-black">{formatINR(paymentLink.amount || bill.totalAmount)}</p>
+                        <p className="mt-1 text-lg font-black">{formatINR(paymentLink.amount || totalPayable)}</p>
                       </div>
                     </div>
 
@@ -836,10 +842,78 @@ export function BillPage() {
                 <span className="text-2xl font-black tracking-tight" style={{ color: 'var(--text-1)' }}>
                   Total
                 </span>
-                <span className="text-4xl font-black" style={{ color: 'var(--brand)' }}>
-                  {formatINR(bill.totalAmount)}
-                </span>
+                <div className="text-right">
+                  <p className="text-4xl font-black" style={{ color: 'var(--brand)' }}>
+                    {formatINR(totalPayable)}
+                  </p>
+                  {tipAmount > 0 && (
+                    <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-emerald-500">
+                      Incl. {formatINR(tipAmount)} Tip
+                    </p>
+                  )}
+                </div>
               </div>
+
+              {isDineIn && !bill.paymentStatus && !showCheckoutControls && (
+                <div className="mt-8 space-y-4">
+                  <div className="flex items-center justify-between px-1">
+                    <h4 className="text-[11px] font-black uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>
+                      Support your waiter
+                    </h4>
+                    {tipAmount > 0 && (
+                      <button 
+                        onClick={() => { setTipAmount(0); setActiveTipType(null); }}
+                        className="text-[10px] font-black uppercase tracking-widest text-red-500"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[30, 50, 100].map((amount) => (
+                      <button
+                        key={amount}
+                        onClick={() => { setTipAmount(amount); setActiveTipType(amount); }}
+                        className="rounded-2xl border py-3 text-sm font-black transition-all active:scale-95"
+                        style={{
+                          background: activeTipType === amount ? 'var(--brand)' : 'var(--surface-3)',
+                          borderColor: activeTipType === amount ? 'var(--brand)' : 'var(--border)',
+                          color: activeTipType === amount ? 'white' : 'var(--text-1)',
+                        }}
+                      >
+                        {formatINR(amount)}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setActiveTipType('custom')}
+                      className="rounded-2xl border py-3 text-sm font-black transition-all active:scale-95"
+                      style={{
+                        background: activeTipType === 'custom' ? 'var(--brand)' : 'var(--surface-3)',
+                        borderColor: activeTipType === 'custom' ? 'var(--brand)' : 'var(--border)',
+                        color: activeTipType === 'custom' ? 'white' : 'var(--text-1)',
+                      }}
+                    >
+                      {activeTipType === 'custom' ? 'Custom' : 'Edit'}
+                    </button>
+                  </div>
+                  {activeTipType === 'custom' && (
+                    <div className="relative fade-in">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="Enter custom tip (e.g. 150)"
+                        value={tipAmount || ''}
+                        onChange={(e) => setTipAmount(Math.max(0, Number(e.target.value)))}
+                        className="w-full rounded-2xl border px-5 py-4 font-black outline-none transition-all focus:ring-2 focus:ring-blue-500/20"
+                        style={{ background: 'var(--surface-3)', borderColor: 'var(--brand-soft)', color: 'var(--text-1)' }}
+                      />
+                      <div className="absolute right-5 top-1/2 -translate-y-1/2 text-xs font-black uppercase tracking-widest text-emerald-500">
+                        Custom Support
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
 
             <div className="text-center">
@@ -1042,7 +1116,7 @@ export function BillPage() {
                   How would you like to pay?
                 </h3>
                 <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
-                  Total payable: {formatINR(bill.totalAmount)}
+                  Total payable: {formatINR(totalPayable)}
                 </p>
               </div>
               <button

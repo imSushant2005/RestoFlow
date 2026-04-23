@@ -10,7 +10,7 @@ type IntroVideoSectionProps = {
 
 export function IntroVideoSection({
   title = 'See the full restaurant flow in one connected operating system.',
-  description = 'This walkthrough shows how RestoFlow connects QR ordering, kitchen updates, waiter coordination, billing, and completion without dropping the customer or staff context between steps.',
+  description = 'This walkthrough shows how BHOJFLOW connects QR ordering, kitchen updates, waiter coordination, billing, and completion without dropping the customer or staff context between steps.',
   posterSrc = dashboardPoster,
 }: IntroVideoSectionProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -18,7 +18,7 @@ export function IntroVideoSection({
   const [isReady, setIsReady] = useState(false);
   const [hasFailed, setHasFailed] = useState(false);
 
-  const videoSrc = import.meta.env.VITE_SITE_INTRO_VIDEO_URL || '/restoflow-intro.mp4';
+  const videoSrc = import.meta.env.VITE_SITE_INTRO_VIDEO_URL || '/BHOJFLOW-intro.mp4';
 
   useEffect(() => {
     const element = videoRef.current;
@@ -85,7 +85,7 @@ export function IntroVideoSection({
                 <source src={videoSrc} type="video/mp4" />
               </video>
             ) : (
-              <img src={posterSrc} alt="RestoFlow dashboard preview" className="h-full w-full object-cover" />
+              <img src={posterSrc} alt="BHOJFLOW dashboard preview" className="h-full w-full object-cover" />
             )}
 
             {!isReady ? (

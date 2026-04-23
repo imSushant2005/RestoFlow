@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { ChevronRight, Minus, Plus, X } from 'lucide-react';
 import { formatINR } from '../lib/currency';
-import { getDirectImageUrl } from '../lib/images';
+import { getImageUrlCandidates } from '../lib/images';
 import { useCartStore } from '../store/cartStore';
 
 type NormalizedModifier = {
@@ -52,12 +52,14 @@ export function ModifierModal({ item, onClose }: any) {
   const [notes, setNotes] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
+  const [imageIndex, setImageIndex] = useState(0);
   const [selectedByGroup, setSelectedByGroup] = useState<Record<string, NormalizedModifier[]>>({});
 
   const safeBasePrice = Number.isFinite(Number(item?.price)) ? Number(item.price) : 0;
   const safeName = item?.name || 'Untitled Item';
   const safeDescription = item?.description || '';
-  const safeImageUrl = getDirectImageUrl(item?.imageUrl || item?.images?.[0] || '');
+  const imageUrls = useMemo(() => getImageUrlCandidates(item?.imageUrl || item?.images?.[0] || ''), [item?.imageUrl, item?.images]);
+  const safeImageUrl = imageUrls[imageIndex] || '';
   const safeItemId = item?.id || '';
 
   const normalizedGroups = useMemo<NormalizedGroup[]>(
@@ -136,7 +138,16 @@ export function ModifierModal({ item, onClose }: any) {
 
   useEffect(() => {
     setImageLoadFailed(false);
-  }, [safeImageUrl]);
+    setImageIndex(0);
+  }, [imageUrls]);
+
+  const handleImageError = () => {
+    if (imageIndex < imageUrls.length - 1) {
+      setImageIndex((current) => current + 1);
+      return;
+    }
+    setImageLoadFailed(true);
+  };
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -274,9 +285,10 @@ export function ModifierModal({ item, onClose }: any) {
                   {safeImageUrl && !imageLoadFailed ? (
                     <img
                       src={safeImageUrl}
+                      key={safeImageUrl}
                       alt={safeName}
                       className="h-full w-full object-cover"
-                      onError={() => setImageLoadFailed(true)}
+                      onError={handleImageError}
                     />
                   ) : (
                     <div
@@ -349,9 +361,10 @@ export function ModifierModal({ item, onClose }: any) {
               <>
                 <img
                   src={safeImageUrl}
+                  key={safeImageUrl}
                   alt={safeName}
                   className="absolute inset-0 hidden h-full w-full object-cover transition-transform duration-700 sm:block sm:hover:scale-105"
-                  onError={() => setImageLoadFailed(true)}
+                  onError={handleImageError}
                 />
                 <div className="absolute inset-0 hidden sm:block sm:bg-gradient-to-t sm:from-slate-950/90 sm:via-slate-950/25 sm:to-transparent" />
               </>

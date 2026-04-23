@@ -12,6 +12,7 @@ export type PlanLimit = {
   hasAssistedCustomerLookup: boolean;
   maxFloors: number;
   hasFranchiseControls: boolean;
+  hasWaiterCalling: 'HIDDEN' | 'TOGGLEABLE' | 'ALWAYS';
 };
 
 export type CanonicalPlan = 'MINI' | 'CAFE' | 'DINEPRO' | 'PREMIUM';
@@ -23,14 +24,15 @@ const CANONICAL_PLAN_LIMITS: Record<CanonicalPlan, PlanLimit> = {
     staff: 1,
     price: 799,
     name: 'Mini',
-    hasKDS: true,
-    hasWaiterRole: true,
+    hasKDS: false,
+    hasWaiterRole: false,
     hasWaiterApp: false,
-    hasAdvancedAnalytics: true,
-    hasAssistedDirectBill: true,
-    hasAssistedCustomerLookup: true,
+    hasAdvancedAnalytics: false,
+    hasAssistedDirectBill: false,
+    hasAssistedCustomerLookup: false,
     maxFloors: 1,
     hasFranchiseControls: false,
+    hasWaiterCalling: 'HIDDEN',
   },
   CAFE: {
     items: 200,
@@ -46,6 +48,7 @@ const CANONICAL_PLAN_LIMITS: Record<CanonicalPlan, PlanLimit> = {
     hasAssistedCustomerLookup: true,
     maxFloors: 1,
     hasFranchiseControls: false,
+    hasWaiterCalling: 'TOGGLEABLE',
   },
   DINEPRO: {
     items: 9999,
@@ -61,6 +64,7 @@ const CANONICAL_PLAN_LIMITS: Record<CanonicalPlan, PlanLimit> = {
     hasAssistedCustomerLookup: true,
     maxFloors: 2,
     hasFranchiseControls: false,
+    hasWaiterCalling: 'ALWAYS',
   },
   PREMIUM: {
     items: 99999,
@@ -76,17 +80,16 @@ const CANONICAL_PLAN_LIMITS: Record<CanonicalPlan, PlanLimit> = {
     hasAssistedCustomerLookup: true,
     maxFloors: 10,
     hasFranchiseControls: true,
+    hasWaiterCalling: 'ALWAYS',
   },
 };
 
-const PLAN_ALIASES: Record<string, CanonicalPlan> = {
+export const PLAN_ALIASES: Record<string, CanonicalPlan> = {
   MINI: 'MINI',
-  FREE: 'MINI',
   STARTER: 'MINI',
   CAFE: 'CAFE',
   GROWTH: 'CAFE',
   DINEPRO: 'DINEPRO',
-  // Legacy tier kept in the Prisma enum before the current service-model naming.
   GOLD: 'DINEPRO',
   PREMIUM: 'PREMIUM',
   PLATINUM: 'PREMIUM',

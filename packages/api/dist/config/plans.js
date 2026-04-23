@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PLAN_LIMITS = void 0;
+exports.PLAN_LIMITS = exports.PLAN_ALIASES = void 0;
 exports.parsePlan = parsePlan;
 exports.normalizePlan = normalizePlan;
 exports.getPlanLimits = getPlanLimits;
@@ -12,14 +12,15 @@ const CANONICAL_PLAN_LIMITS = {
         staff: 1,
         price: 799,
         name: 'Mini',
-        hasKDS: true,
-        hasWaiterRole: true,
+        hasKDS: false,
+        hasWaiterRole: false,
         hasWaiterApp: false,
-        hasAdvancedAnalytics: true,
-        hasAssistedDirectBill: true,
-        hasAssistedCustomerLookup: true,
+        hasAdvancedAnalytics: false,
+        hasAssistedDirectBill: false,
+        hasAssistedCustomerLookup: false,
         maxFloors: 1,
         hasFranchiseControls: false,
+        hasWaiterCalling: 'HIDDEN',
     },
     CAFE: {
         items: 200,
@@ -35,13 +36,14 @@ const CANONICAL_PLAN_LIMITS = {
         hasAssistedCustomerLookup: true,
         maxFloors: 1,
         hasFranchiseControls: false,
+        hasWaiterCalling: 'TOGGLEABLE',
     },
-    DINEPRO: {
+    BHOJPRO: {
         items: 9999,
         tables: 18,
         staff: 200,
         price: 3499,
-        name: 'Dine Pro',
+        name: 'Bhoj Pro',
         hasKDS: true,
         hasWaiterRole: true,
         hasWaiterApp: true,
@@ -50,6 +52,7 @@ const CANONICAL_PLAN_LIMITS = {
         hasAssistedCustomerLookup: true,
         maxFloors: 2,
         hasFranchiseControls: false,
+        hasWaiterCalling: 'ALWAYS',
     },
     PREMIUM: {
         items: 99999,
@@ -65,17 +68,17 @@ const CANONICAL_PLAN_LIMITS = {
         hasAssistedCustomerLookup: true,
         maxFloors: 10,
         hasFranchiseControls: true,
+        hasWaiterCalling: 'ALWAYS',
     },
 };
-const PLAN_ALIASES = {
+exports.PLAN_ALIASES = {
     MINI: 'MINI',
-    FREE: 'MINI',
     STARTER: 'MINI',
     CAFE: 'CAFE',
     GROWTH: 'CAFE',
-    DINEPRO: 'DINEPRO',
-    // Legacy tier kept in the Prisma enum before the current service-model naming.
-    GOLD: 'DINEPRO',
+    BHOJPRO: 'BHOJPRO',
+    'BHOJ PRO': 'BHOJPRO',
+    GOLD: 'BHOJPRO',
     PREMIUM: 'PREMIUM',
     PLATINUM: 'PREMIUM',
 };
@@ -84,7 +87,7 @@ exports.PLAN_LIMITS = {
 };
 function parsePlan(plan) {
     const key = String(plan || '').trim().toUpperCase();
-    return PLAN_ALIASES[key] ?? null;
+    return exports.PLAN_ALIASES[key] ?? null;
 }
 function normalizePlan(plan) {
     return parsePlan(plan) || 'MINI';

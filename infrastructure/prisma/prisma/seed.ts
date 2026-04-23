@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding Restoflow demo data...');
+  console.log('Seeding BHOJFLOW demo data...');
 
   await prisma.dailyAnalytics.deleteMany();
   await prisma.review.deleteMany();
@@ -42,7 +42,7 @@ async function main() {
     data: {
       tenantId: tenant.id,
       name: 'Demo Owner',
-      email: 'owner@dineflow.demo',
+      email: 'owner@bhojflow.demo',
       passwordHash: ownerPasswordHash,
       role: UserRole.OWNER
     }
@@ -52,7 +52,7 @@ async function main() {
     data: {
       tenantId: tenant.id,
       name: 'Kitchen Staff',
-      email: 'staff@dineflow.demo',
+      email: 'staff@bhojflow.demo',
       passwordHash: staffPasswordHash,
       role: UserRole.KITCHEN
     }
@@ -189,7 +189,7 @@ async function main() {
   });
 
   console.log('Seed complete');
-  console.log('Owner login: owner@dineflow.demo / demo1234');
+  console.log('Owner login: owner@bhojflow.demo / demo1234');
 }
 
 main()

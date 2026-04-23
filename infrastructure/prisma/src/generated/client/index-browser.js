@@ -345,6 +345,7 @@ exports.Prisma.BillScalarFieldEnum = {
   taxAmount: 'taxAmount',
   discountAmount: 'discountAmount',
   totalAmount: 'totalAmount',
+  tipAmount: 'tipAmount',
   paymentStatus: 'paymentStatus',
   paymentMethod: 'paymentMethod',
   paidAt: 'paidAt',
@@ -499,7 +500,7 @@ exports.Plan = exports.$Enums.Plan = {
   PLATINUM: 'PLATINUM',
   MINI: 'MINI',
   CAFE: 'CAFE',
-  DINEPRO: 'DINEPRO',
+  BHOJPRO: 'BHOJPRO',
   PREMIUM: 'PREMIUM'
 };
 

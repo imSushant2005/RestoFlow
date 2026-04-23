@@ -70,7 +70,7 @@ const PLANS: PricingPlan[] = [
     idealFor: 'Cafés, QSR+, compact dine-in, one-floor restaurants',
     serviceStyle: 'QR + assisted dine-in',
     description:
-      'Cafe is where RestoFlow starts feeling like an operating system, not just a QR menu. It brings table sessions, waiter requests, and staff coordination into one calmer service flow.',
+      'Cafe is where BHOJFLOW starts feeling like an operating system, not just a QR menu. It brings table sessions, waiter requests, and staff coordination into one calmer service flow.',
     gradient: 'from-fuchsia-600 to-violet-600',
     icon: <Target className="text-[var(--text-1)]" size={24} />,
     popular: true,
@@ -85,19 +85,19 @@ const PLANS: PricingPlan[] = [
       'Shared QR + staff ordering for smoother dine-in handoff',
       'Best for up to 9 live tables and 5 staff accounts',
     ],
-    upgradeHint: 'Move to Dine Pro when multiple devices, larger floors, or full-service coordination become the bottleneck.',
+    upgradeHint: 'Move to Bhoj Pro when multiple devices, larger floors, or full-service coordination become the bottleneck.',
     cta: 'Start Cafe trial',
   },
   {
-    id: 'DINEPRO',
-    name: 'Dine Pro',
+    id: 'BHOJPRO',
+    name: 'Bhoj Pro',
     price: '₹3,499',
     headline: 'Built for busy dine-in service, not just ordering',
     positioning: 'For restaurants where floor coordination directly affects revenue.',
     idealFor: 'Busy dine-in venues, larger floors, multi-device service teams',
     serviceStyle: 'Full waiter-service control',
     description:
-      'Dine Pro is for serious service operations. Managers, kitchen, cashiers, and service staff stay aligned on the same live picture so rush hours feel more controlled and less reactive.',
+      'Bhoj Pro is for serious service operations. Managers, kitchen, cashiers, and service staff stay aligned on the same live picture so rush hours feel more controlled and less reactive.',
     gradient: 'from-orange-500 to-rose-600',
     icon: <Rocket className="text-[var(--text-1)]" size={24} />,
     outcomes: [
@@ -112,7 +112,7 @@ const PLANS: PricingPlan[] = [
       'Stronger live ops visibility across larger teams',
     ],
     upgradeHint: 'Move to Hotel / Enterprise when one outlet turns into multi-outlet operations and central oversight becomes the real problem.',
-    cta: 'Move to Dine Pro',
+    cta: 'Move to Bhoj Pro',
   },
   {
     id: 'PREMIUM',
@@ -133,7 +133,7 @@ const PLANS: PricingPlan[] = [
       'Create clearer visibility across branches and supervisors',
     ],
     features: [
-      'Everything in Dine Pro, plus central rollout context',
+      'Everything in Bhoj Pro, plus central rollout context',
       'Designed for multi-outlet and hotel-style operations',
       'Higher-touch implementation and support lane',
       'Commercial scope depends on outlets, devices, and workflow depth',
@@ -178,7 +178,7 @@ export function PlansHub() {
 
   const recommendedPlan = useMemo<PlanTier>(() => {
     if (answers.multi || answers.tables > 18) return 'PREMIUM';
-    if (answers.tables > 9) return 'DINEPRO';
+    if (answers.tables > 9) return 'BHOJPRO';
     if (answers.tables > 4 || answers.qr) return 'CAFE';
     return 'MINI';
   }, [answers]);
@@ -227,7 +227,7 @@ export function PlansHub() {
         <div className="max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-3)]">Important</p>
           <p className="mt-2 text-sm font-medium leading-6 text-[var(--text-2)]">
-            RestoFlow generates the bill and tracks service status. Guests still pay your restaurant directly using cash,
+            BHOJFLOW generates the bill and tracks service status. Guests still pay your restaurant directly using cash,
             UPI, card, or your existing collection method.
           </p>
         </div>
@@ -462,7 +462,7 @@ export function PlansHub() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <ServiceStyleCard plan="Mini" style="Token + self-pickup" focus="Counter-led and compact service" />
           <ServiceStyleCard plan="Cafe" style="QR + staff together" focus="Hybrid service on one floor" />
-          <ServiceStyleCard plan="Dine Pro" style="Full waiter coordination" focus="Busy dine-in operations" />
+          <ServiceStyleCard plan="Bhoj Pro" style="Full waiter coordination" focus="Busy dine-in operations" />
           <ServiceStyleCard plan="Hotel / Enterprise" style="Central outlet control" focus="Hotels and multi-outlet groups" />
         </div>
       </div>
@@ -490,7 +490,7 @@ export function PlansHub() {
             <h4 className="font-black text-[var(--text-1)]">How payment collection works</h4>
           </div>
           <p className="mb-4 text-sm font-medium text-[var(--text-2)]">
-            RestoFlow handles the order, session, and bill workflow. The guest still pays your restaurant directly using
+            BHOJFLOW handles the order, session, and bill workflow. The guest still pays your restaurant directly using
             cash, UPI, card, or your existing setup. We do not sit in the middle of your collection.
           </p>
           <p className="text-sm font-black uppercase tracking-widest text-emerald-400">No platform commission. No payment lock-in.</p>

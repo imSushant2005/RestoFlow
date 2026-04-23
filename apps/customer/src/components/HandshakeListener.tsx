@@ -25,9 +25,10 @@ export function HandshakeListener({
     });
 
     socket.on('waiter:acknowledged', (data) => {
+      const waiterName = data?.waiterName || 'Staff';
       notify({
-        title: 'Staff is Coming!',
-        message: 'Your request has been accepted. A waiter will be at your table shortly.',
+        title: `${waiterName} is Coming!`,
+        message: `Your request has been accepted. ${waiterName} will be at your table shortly.`,
         type: 'success',
       });
 
@@ -35,6 +36,7 @@ export function HandshakeListener({
         new CustomEvent(WAITER_ACK_EVENT, {
           detail: {
             ...data,
+            waiterName,
             tenantSlug,
             sessionId,
           },

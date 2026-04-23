@@ -164,7 +164,7 @@ export function InvoicesPage() {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `restoflow-ca-day-book-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.download = `BHOJFLOW-ca-day-book-${format(new Date(), 'yyyy-MM-dd')}.csv`;
     link.click();
     window.URL.revokeObjectURL(url);
   };

@@ -61,7 +61,7 @@ export function Onboarding({ nextPath }: OnboardingProps) {
   
   const recommendedPlan = useMemo(() => {
     if (businessType === 'chain' || tableCount > 18) return 'PREMIUM';
-    if (businessType === 'resto' || tableCount > 9) return 'DINEPRO';
+    if (businessType === 'resto' || tableCount > 9) return 'BHOJPRO';
     if (businessType === 'cafe' || tableCount > 4) return 'CAFE';
     return 'MINI';
   }, [businessType, tableCount]);
@@ -302,7 +302,7 @@ export function Onboarding({ nextPath }: OnboardingProps) {
                     </label>
                     <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0f1728] focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
                       <div className="flex items-center">
-                        <span className="border-r border-white/10 px-4 py-3 text-sm text-slate-500">restoflow.com/order/</span>
+                        <span className="border-r border-white/10 px-4 py-3 text-sm text-slate-500">bhojflow.com/order/</span>
                         <input
                           value={form.slug}
                           onChange={(e) => setForm((prev) => ({ ...prev, slug: slugify(e.target.value) }))}
@@ -519,7 +519,7 @@ export function Onboarding({ nextPath }: OnboardingProps) {
                 <div className="mt-5 grid gap-3">
                   <div className="rounded-2xl border border-slate-200 px-4 py-3">
                     <p className="text-xs font-medium text-slate-400">Workspace URL</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-800">restoflow.com/order/{form.slug || 'your-workspace'}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">bhojflow.com/order/{form.slug || 'your-workspace'}</p>
                   </div>
                   <div className="rounded-2xl border border-slate-200 px-4 py-3">
                     <p className="text-xs font-medium text-slate-400">GSTIN</p>

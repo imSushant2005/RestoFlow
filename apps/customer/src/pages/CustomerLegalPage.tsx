@@ -10,7 +10,7 @@ const PRIVACY_SECTIONS = [
   {
     title: 'Information we use',
     body:
-      'Restoflow may process guest name, phone number, session activity, order details, and restaurant usage data so the live ordering flow works correctly.',
+      'BHOJFLOW may process guest name, phone number, session activity, order details, and restaurant usage data so the live ordering flow works correctly.',
   },
   {
     title: 'Why it is used',
@@ -20,12 +20,12 @@ const PRIVACY_SECTIONS = [
   {
     title: 'Payments',
     body:
-      'Restoflow does not collect your restaurant payment inside this guest experience. Payment is made directly to the restaurant using its existing method such as cash, UPI, card, or another accepted option.',
+      'BHOJFLOW does not collect your restaurant payment inside this guest experience. Payment is made directly to the restaurant using its existing method such as cash, UPI, card, or another accepted option.',
   },
   {
     title: 'Support and retention',
     body:
-      'Restaurants and Restoflow may keep operational records for support, audits, billing history, and service quality improvements.',
+      'Restaurants and BHOJFLOW may keep operational records for support, audits, billing history, and service quality improvements.',
   },
 ];
 
@@ -43,7 +43,7 @@ const TERMS_SECTIONS = [
   {
     title: 'Payments and settlement',
     body:
-      'Bills may be generated inside the flow, but the final payment is completed directly with the restaurant and not processed by Restoflow in this interface.',
+      'Bills may be generated inside the flow, but the final payment is completed directly with the restaurant and not processed by BHOJFLOW in this interface.',
   },
   {
     title: 'Fair use',
@@ -63,7 +63,7 @@ export function CustomerLegalPage({ type }: CustomerLegalPageProps) {
   return (
     <>
       <Helmet>
-        <title>{title} | Restoflow</title>
+        <title>{title} | BHOJFLOW</title>
       </Helmet>
 
       <div className="mx-auto flex w-full max-w-[980px] flex-1 flex-col px-4 pb-10 pt-6 sm:px-6 lg:px-8">
@@ -78,13 +78,13 @@ export function CustomerLegalPage({ type }: CustomerLegalPageProps) {
                 style={{ background: 'var(--surface-raised)', borderColor: 'var(--border)', color: 'var(--brand)' }}
               >
                 {icon}
-                Restoflow
+                BHOJFLOW
               </div>
               <h1 className="mt-4 text-2xl font-black tracking-tight sm:text-3xl" style={{ color: 'var(--text-1)' }}>
                 {title}
               </h1>
               <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed sm:text-[15px]" style={{ color: 'var(--text-3)' }}>
-                This guest ordering experience is powered by Restoflow and operated live by the restaurant you are ordering from.
+                This guest ordering experience is powered by BHOJFLOW and operated live by the restaurant you are ordering from.
               </p>
             </div>
 

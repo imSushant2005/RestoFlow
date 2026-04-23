@@ -17,7 +17,7 @@ export function parseApiError(err: any, fallback: string) {
     return axiosMessage;
   }
 
-  console.error('[RESTOFLOW_AUTH_ERROR_FALLBACK]', {
+  console.error('[BHOJFLOW_AUTH_ERROR_FALLBACK]', {
     status: err?.response?.status,
     data: responseData,
     message: err?.message

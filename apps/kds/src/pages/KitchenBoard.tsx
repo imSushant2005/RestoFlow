@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { OrderCard } from '../components/OrderCard';
 import { getCustomerAppUrl, getSocketUrl } from '../lib/network';
-import { UtensilsCrossed, Clock, CheckCircle2, ChefHat, Flame, LogOut } from 'lucide-react';
+import { Clock, CheckCircle2, ChefHat, Flame, LogOut } from 'lucide-react';
 
 const COLS = [
   {
@@ -272,9 +272,7 @@ export function KitchenBoard({ onLogout }: { onLogout?: () => void }) {
       <header className="flex flex-shrink-0 flex-col gap-3 border-b border-slate-800 bg-slate-900 px-3 py-3 sm:px-4 lg:flex-row lg:items-center lg:justify-between lg:px-6 lg:py-4">
         <div className="flex items-center justify-between gap-3 lg:justify-start lg:gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <UtensilsCrossed size={16} className="text-white" />
-            </div>
+            <img src="/bhojflow-logo.png" alt="BHOJFLOW" className="h-8 w-8 rounded-lg object-contain" />
             <div>
               <h1 className="text-white font-black text-lg tracking-tight leading-none">Kitchen Display</h1>
               <p className="text-slate-500 text-xs font-medium mt-0.5">

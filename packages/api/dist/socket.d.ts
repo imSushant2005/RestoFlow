@@ -1,6 +1,6 @@
 import { Server } from 'socket.io';
 import { Server as HttpServer } from 'http';
-import { UserRole } from '@dineflow/prisma';
+import { UserRole } from '@bhojflow/prisma';
 type VerifiedAccessToken = {
     userId: string;
     tenantId: string;
@@ -117,6 +117,7 @@ type ServerToClientEvents = {
         sessionId?: string;
         tableId?: string;
         status: 'ACCEPTED';
+        waiterName?: string;
         timestamp: string;
     }) => void;
     'waiter:pickup_ready': (payload: {

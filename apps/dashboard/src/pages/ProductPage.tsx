@@ -25,7 +25,7 @@ export function ProductPage({ onLoginClick, onSignupClick, onContactClick }: Pro
               One product surface for the full restaurant journey, not a pile of disconnected screens.
             </h1>
             <p className="mt-5 text-base leading-8 sm:text-lg" style={{ color: 'var(--text-2)' }}>
-              RestoFlow connects customer ordering, table context, kitchen coordination, waiter flow, billing, and
+              BHOJFLOW connects customer ordering, table context, kitchen coordination, waiter flow, billing, and
               owner visibility so each role works from the same operational truth.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">

@@ -10,7 +10,7 @@ import { cacheKeys } from '../utils/cache-keys';
 import { authorizeSessionAccess, generateSessionAccessToken } from '../utils/public-access';
 import { getPlanLimits, normalizePlan } from '../config/plans';
 
-const WAITER_CALL_TYPES = new Set(['WAITER', 'BILL', 'WATER', 'EXTRA', 'HELP']);
+const WAITER_CALL_TYPES = new Set(['WAITER', 'BILL', 'WATER', 'EXTRA', 'HELP', 'SPOON', 'TISSUE', 'ASSISTANCE']);
 const ORDERABLE_SESSION_STATUSES = ['OPEN', 'PARTIALLY_SENT', 'ACTIVE'] as const;
 
 const publicOrderSelect = {
@@ -125,7 +125,7 @@ async function resolveTenantBySlug(tenantSlug: string) {
         async () => {
           const tenant = await prisma.tenant.findUnique({
             where: { slug: tenantSlug },
-            select: { id: true, taxRate: true, plan: true },
+            select: { id: true, taxRate: true, plan: true, hasWaiterService: true },
           });
 
           if (!tenant) {
@@ -963,8 +963,13 @@ export const waiterCall = async (req: Request, res: Response) => {
     const tenant = await resolveTenantBySlug(tenantSlug);
     const tenantId = tenant.id;
 
-    if (!getPlanLimits(tenant.plan).hasWaiterApp) {
+    const planLimits = getPlanLimits(tenant.plan);
+    if (planLimits.hasWaiterCalling === 'HIDDEN') {
       return res.status(403).json({ error: 'Waiter assistance is not available on this plan.' });
+    }
+
+    if (planLimits.hasWaiterCalling === 'TOGGLEABLE' && !tenant.hasWaiterService) {
+      return res.status(403).json({ error: 'Waiter assistance is currently disabled by the restaurant.' });
     }
 
     const session = await withPrismaRetry(
@@ -1030,11 +1035,25 @@ export const acknowledgeWaiterCall = async (req: Request, res: Response) => {
     const tenantId = await resolveTenantIdBySlug(tenantSlug);
     const session = await prisma.diningSession.findFirst({
       where: { id: sessionId, tenantId },
-      select: { id: true },
+      select: { id: true, attendedByUserId: true },
     });
 
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Assign waiter to session if not already assigned
+    const waiterId = req.user?.id;
+    const waiterName = (req.user as any)?.name || 'Waiter';
+
+    if (!session.attendedByUserId && waiterId) {
+      await prisma.diningSession.update({
+        where: { id: session.id },
+        data: {
+          attendedByUserId: waiterId,
+          attendedByName: waiterName,
+        },
+      });
     }
 
     const sessionRoom = getSessionRoom(tenantId, session.id);
@@ -1042,10 +1061,11 @@ export const acknowledgeWaiterCall = async (req: Request, res: Response) => {
       sessionId: session.id,
       tableId,
       status: 'ACCEPTED',
+      waiterName: waiterName,
       timestamp: new Date().toISOString(),
     });
 
-    res.json({ success: true, sessionId: session.id });
+    res.json({ success: true, sessionId: session.id, waiterName });
   } catch (error) {
     console.error('acknowledgeWaiterCall error:', error);
     const message = error instanceof Error ? error.message : 'Failed to notify guest';

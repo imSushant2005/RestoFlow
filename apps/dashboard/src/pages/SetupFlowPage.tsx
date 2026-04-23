@@ -23,7 +23,7 @@ export function SetupFlowPage({ onLoginClick, onSignupClick, onContactClick }: S
               Roll out the restaurant in a practical sequence instead of hoping every tool lines up on day one.
             </h1>
             <p className="mt-5 text-base leading-8 sm:text-lg" style={{ color: 'var(--text-2)' }}>
-              RestoFlow is designed so restaurant owners can create the workspace, finish profile details, load the
+              BHOJFLOW is designed so restaurant owners can create the workspace, finish profile details, load the
               menu, map tables and QR, assign staff access, and run a test journey before going live.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -39,7 +39,7 @@ export function SetupFlowPage({ onLoginClick, onSignupClick, onContactClick }: S
 
           <div className="grid gap-4">
             <article className="overflow-hidden rounded-[32px] border p-4 shadow-2xl" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-              <img src={setupPreview} alt="RestoFlow setup preview" className="h-[320px] w-full rounded-[24px] object-cover object-top" />
+              <img src={setupPreview} alt="BHOJFLOW setup preview" className="h-[320px] w-full rounded-[24px] object-cover object-top" />
             </article>
             <article className="overflow-hidden rounded-[28px] border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
               <img src={tablesPreview} alt="Tables and QR mapping preview" className="h-[180px] w-full rounded-[20px] object-cover object-top" />

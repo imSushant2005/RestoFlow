@@ -5,7 +5,7 @@ import { Lock, ShieldAlert, Activity, Users, Database } from 'lucide-react';
 import { getApiBaseUrl } from '../lib/network';
 
 // Hardcoded for V3 MVP. In prod this comes from a secure admin boundary.
-const ADMIN_SECRET = 'super_secret_admin_restoflow_v3';
+const ADMIN_SECRET = 'super_secret_admin_BHOJFLOW_v3';
 
 export function Admin() {
   const [metrics, setMetrics] = useState<any>(null);
@@ -57,7 +57,7 @@ export function Admin() {
           <ShieldAlert size={32} />
         </div>
         <div>
-          <h1 className="text-3xl font-black tracking-tighter text-white">RESTOFLOW <span className="text-red-500">ROOT</span></h1>
+          <h1 className="text-3xl font-black tracking-tighter text-white">BHOJFLOW <span className="text-red-500">ROOT</span></h1>
           <p className="text-gray-400 font-medium">Global Network Commander</p>
         </div>
       </header>

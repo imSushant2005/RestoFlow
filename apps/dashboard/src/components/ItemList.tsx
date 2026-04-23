@@ -10,6 +10,7 @@ import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useS
 import { SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
 import { arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { getDirectImageUrl } from '../lib/images';
 
 type DraftState = {
   name: string;
@@ -37,7 +38,7 @@ function SortableItemCard({
     transition,
   };
 
-  const imageUrl = item?.images?.[0] || item?.imageUrl || '';
+  const imageUrl = getDirectImageUrl(item?.images?.[0] || item?.imageUrl || '');
 
   return (
     <div
@@ -231,8 +232,8 @@ export function ItemList({ categoryId }: { categoryId: string }) {
 
   useEffect(() => {
     const token =
-      localStorage.getItem('restoflow_token') ||
-      localStorage.getItem('dineflow_token') ||
+      localStorage.getItem('BHOJFLOW_token') ||
+      localStorage.getItem('BHOJFLOW_token') ||
       localStorage.getItem('accessToken');
     const socket = io(getSocketUrl(), {
       auth: { token, client: 'dashboard-menu' },

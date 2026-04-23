@@ -21,7 +21,7 @@ const razorpay = hasRazorpayConfig
 const PLAN_PRICING = {
     MINI: 799 * 100,
     CAFE: 1599 * 100,
-    DINEPRO: 3499 * 100,
+    BHOJPRO: 3499 * 100,
     PREMIUM: 6499 * 100,
 };
 const createSubscriptionOrder = async (req, res) => {

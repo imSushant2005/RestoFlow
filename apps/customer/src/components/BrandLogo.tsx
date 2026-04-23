@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { UtensilsCrossed } from 'lucide-react';
-import { getDirectImageUrl } from '../lib/images';
+import { getImageUrlCandidates } from '../lib/images';
 
 type BrandLogoProps = {
   src?: string | null;
@@ -19,11 +19,11 @@ function getInitials(name?: string | null) {
     .filter(Boolean)
     .slice(0, 2);
 
-  if (tokens.length === 0) return 'RF';
+  if (tokens.length === 0) return 'BF';
   if (tokens.length === 1) {
     return tokens[0].slice(0, 2).toUpperCase();
   }
-  return tokens.map((token) => token[0]?.toUpperCase() || '').join('') || 'RF';
+  return tokens.map((token) => token[0]?.toUpperCase() || '').join('') || 'BF';
 }
 
 export function BrandLogo({
@@ -35,12 +35,15 @@ export function BrandLogo({
   fallbackClassName = '',
   iconSize = 24,
 }: BrandLogoProps) {
-  const normalizedSrc = useMemo(() => getDirectImageUrl(src), [src]);
+  const imageUrls = useMemo(() => getImageUrlCandidates(src), [src]);
+  const [imageIndex, setImageIndex] = useState(0);
   const [hasError, setHasError] = useState(false);
+  const normalizedSrc = imageUrls[imageIndex] || '';
 
   useEffect(() => {
+    setImageIndex(0);
     setHasError(false);
-  }, [normalizedSrc]);
+  }, [imageUrls]);
 
   const initials = getInitials(name || alt);
 
@@ -49,9 +52,16 @@ export function BrandLogo({
       {normalizedSrc && !hasError ? (
         <img
           src={normalizedSrc}
+          key={normalizedSrc}
           alt={alt}
           loading="lazy"
-          onError={() => setHasError(true)}
+          onError={() => {
+            if (imageIndex < imageUrls.length - 1) {
+              setImageIndex((current) => current + 1);
+              return;
+            }
+            setHasError(true);
+          }}
           className={imageClassName}
         />
       ) : (

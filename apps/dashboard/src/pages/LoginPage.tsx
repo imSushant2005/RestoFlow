@@ -290,7 +290,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
             required
-            placeholder="Use your usual RestoFlow login"
+            placeholder="Use your usual BHOJFLOW login"
           />
 
           <button

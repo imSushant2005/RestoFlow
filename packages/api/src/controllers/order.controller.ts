@@ -348,6 +348,32 @@ export const getOrders = async (req: Request, res: Response) => {
   }
 };
 
+export const getAssistedSummary = async (req: Request, res: Response) => {
+  try {
+    const tenantId = req.tenantId!;
+    const today = getTodayStart();
+
+    const summary = await prisma.order.aggregate({
+      where: {
+        tenantId,
+        placedBy: 'vendor',
+        createdAt: { gte: today },
+        status: { not: 'CANCELLED' as any }
+      },
+      _sum: { totalAmount: true },
+      _count: { id: true }
+    });
+
+    res.json({
+      totalRevenue: (summary._sum as any)?.totalAmount || 0,
+      orderCount: (summary._count as any)?.id || 0,
+    });
+  } catch (error) {
+    console.error('getAssistedSummary error:', error);
+    res.status(500).json({ error: 'Failed to fetch assisted ordering summary' });
+  }
+};
+
 export const getOrderHistory = async (req: Request, res: Response) => {
   try {
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
@@ -549,6 +575,20 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
         });
       }
 
+      // ─── STABILITY & SYNC FIXES ─────────────────────────────
+      // 1. Invalidate Dashboad Cache (resolves fallback ordering)
+      await deleteCache(cacheKeys.dashboardLiveOrders(req.tenantId!));
+
+      // 2. Broadcast Update to all Dashboard instances
+      getIO().to(getTenantRoom(req.tenantId!)).emit('order:update', order);
+
+      // 3. Notify Waiters if order is READY for pickup
+      if (normalizedStatus === 'READY') {
+        const pickupPayload = buildWaiterPickupPayload(order as any);
+        getIO().to(getTenantRoom(req.tenantId!)).emit('waiter:pickup_ready', pickupPayload);
+      }
+      // ──────────────────────────────────────────────────────
+
       res.json(order);
     } catch (err: any) {
       if (err instanceof ConflictError || err.message === 'OCC_COLLISION') {
@@ -556,6 +596,9 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
           where: { id: existingOrder.id, tenantId: req.tenantId },
           select: orderSelect,
         });
+        // Invalidate even on conflict to ensure client eventually syncs
+        await deleteCache(cacheKeys.dashboardLiveOrders(req.tenantId!));
+        
         return res.status(409).json({
           error: 'OCC_CONFLICT',
           message: 'Order status was modified by another user. Syncing...',

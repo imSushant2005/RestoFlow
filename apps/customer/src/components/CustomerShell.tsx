@@ -23,8 +23,9 @@ function matches(pathname: string, path: string) {
 }
 
 function supportsWaiterCalls(plan?: string) {
-  const normalizedPlan = String(plan || '').trim().toUpperCase();
-  return normalizedPlan === 'CAFE' || normalizedPlan === 'DINEPRO' || normalizedPlan === 'PREMIUM';
+  const p = String(plan || '').trim().toUpperCase();
+  // MINI is strictly hidden. CAFE is toggleable. Bhoj Pro+ is always.
+  return p === 'CAFE' || p === 'BHOJPRO' || p === 'PREMIUM' || p === 'GOLD';
 }
 
 export function CustomerShell() {
@@ -35,6 +36,7 @@ export function CustomerShell() {
   const setTenantBusinessType = useCartStore((state) => state.setTenantBusinessType);
   const tenantPlan = useCartStore((state) => state.tenantPlan);
   const tenantBusinessType = useCartStore((state) => state.tenantBusinessType);
+  const [hasWaiterService, setHasWaiterService] = useState<boolean | undefined>(undefined);
   const location = useLocation();
   const cartItems = useCartStore((state) => state.items);
   const customerName = useCartStore((state) => state.customerName);
@@ -105,6 +107,9 @@ export function CustomerShell() {
     if (cachedMenu?.businessType && !tenantBusinessType) {
       setTenantBusinessType(cachedMenu.businessType);
     }
+    if (cachedMenu?.hasWaiterService !== undefined && hasWaiterService === undefined) {
+      setHasWaiterService(cachedMenu.hasWaiterService);
+    }
 
     if ((cachedMenu?.plan || tenantPlan) && (cachedMenu?.businessType || tenantBusinessType)) {
       return;
@@ -120,6 +125,9 @@ export function CustomerShell() {
         }
         if (res.data?.businessType) {
           setTenantBusinessType(res.data.businessType);
+        }
+        if (res.data?.hasWaiterService !== undefined) {
+          setHasWaiterService(res.data.hasWaiterService);
         }
       } catch (err) {
         console.error('[TENANT_PROFILE_SYNC_ERROR]', err);
@@ -154,12 +162,14 @@ export function CustomerShell() {
     }),
     [storageState.activeSessionId, storageState.lastTableId, storageState.sessionAccessToken, tableId, tenantSlug],
   );
+  const isCafe = String(tenantPlan).toUpperCase() === 'CAFE';
   const showWaiterCall = Boolean(
     hasWaiterCallAccess &&
+      (!isCafe || hasWaiterService !== false) &&
       waiterContext.tableId &&
       storageState.activeSessionId &&
       storageState.sessionAccessToken &&
-      ((isMenuRoute && hasTableOrderingContext) || isSessionRoute || isStatusRoute),
+      ((isMenuRoute && hasTableOrderingContext) || isSessionRoute || isStatusRoute)
   );
 
   const pageActionHeight = useMemo(() => {

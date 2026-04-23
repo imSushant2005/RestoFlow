@@ -19,8 +19,8 @@ export function DemoPage({ onLoginClick, onSignupClick, onContactClick }: DemoPa
     en: {
       header: {
         tag: "Guided Demo",
-        titleDesktop: "Follow the full RestoFlow story from workspace creation to completed order and settled bill.",
-        titleMobile: "See how RestoFlow powers your restaurant right from your pocket.",
+        titleDesktop: "Follow the full BHOJFLOW story from workspace creation to completed order and settled bill.",
+        titleMobile: "See how BHOJFLOW powers your restaurant right from your pocket.",
         subtitleDesktop: "This is not just a gallery. Each step explains who the screen is for, what it changes operationally, and why the connected flow is stronger than using separate customer, kitchen, and billing systems.",
         subtitleMobile: "Discover how our mobile-first system connects your customers, kitchen, and billing seamlessly without bulky hardware."
       },
@@ -75,8 +75,8 @@ export function DemoPage({ onLoginClick, onSignupClick, onContactClick }: DemoPa
     in: {
       header: {
         tag: "Guided Demo",
-        titleDesktop: "RestoFlow ka poora safar dekhein: Naya account banane se lekar order poora hone tak.",
-        titleMobile: "Dekhiye kaise RestoFlow aapke mobile se hi restaurant ko smart banata hai.",
+        titleDesktop: "BHOJFLOW ka poora safar dekhein: Naya account banane se lekar order poora hone tak.",
+        titleMobile: "Dekhiye kaise BHOJFLOW aapke mobile se hi restaurant ko smart banata hai.",
         subtitleDesktop: "Ye sirf screenshots nahi hain. Har step samajhata hai ki konsi screen kiske liye hai aur kaise connected systems alag-alag software use karne se behtar hain.",
         subtitleMobile: "Janiye kaise mobile-first system aapke customers, kitchen aur billing ko bina kisi bhari hardware ke connect karta hai."
       },
