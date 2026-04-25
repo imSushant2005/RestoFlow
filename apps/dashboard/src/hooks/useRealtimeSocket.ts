@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { clearDashboardAuthStorage, hasRecentManualLogout } from '../lib/authSession';
+import { refreshAccessToken } from '../lib/api';
 import { getSocketUrl } from '../lib/network';
 
 type SocketStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
@@ -36,6 +37,7 @@ export function useRealtimeSocket({
   const handlersRef = useRef<RealtimeHandlers>(handlers);
   const onReconnectRef = useRef<typeof onReconnect>(onReconnect);
   const socketRef = useRef<Socket | null>(null);
+  const authRecoveryAttemptedRef = useRef(false);
   // Tracks whether this is the very first connect or a subsequent reconnect.
   // onReconnect (full query invalidation) should NOT fire on initial page load.
   const isFirstConnectRef = useRef<boolean>(true);
@@ -68,6 +70,7 @@ export function useRealtimeSocket({
     }
 
     setStatus('connecting');
+    authRecoveryAttemptedRef.current = false;
 
     const socket = io(getSocketUrl(), {
       auth: { token: accessToken, client: 'dashboard' },
@@ -81,9 +84,20 @@ export function useRealtimeSocket({
     });
 
     socketRef.current = socket;
+    let disposed = false;
+
+    const hardLogout = () => {
+      socket.io.opts.reconnection = false;
+      setStatus('disconnected');
+      clearDashboardAuthStorage();
+      if (!hasRecentManualLogout() && window.location.pathname !== '/login') {
+        window.location.assign('/login');
+      }
+    };
 
     const handleConnect = () => {
       setStatus('connected');
+      authRecoveryAttemptedRef.current = false;
       if (isFirstConnectRef.current) {
         // Initial connect: do NOT fire onReconnect (avoids double-fetching all queries on page load)
         isFirstConnectRef.current = false;
@@ -100,12 +114,29 @@ export function useRealtimeSocket({
 
     const handleConnectError = (error: unknown) => {
       if (isAuthSocketError(error)) {
-        socket.io.opts.reconnection = false;
-        setStatus('disconnected');
-        clearDashboardAuthStorage();
-        if (!hasRecentManualLogout() && window.location.pathname !== '/login') {
-          window.location.assign('/login');
+        if (authRecoveryAttemptedRef.current || hasRecentManualLogout()) {
+          hardLogout();
+          return;
         }
+
+        authRecoveryAttemptedRef.current = true;
+        socket.io.opts.reconnection = false;
+        setStatus('reconnecting');
+
+        void refreshAccessToken()
+          .then((nextAccessToken) => {
+            if (disposed || !nextAccessToken) return;
+
+            socket.auth = { token: nextAccessToken, client: 'dashboard' };
+            socket.io.opts.reconnection = true;
+            if (!socket.connected) {
+              socket.connect();
+            }
+          })
+          .catch(() => {
+            if (disposed) return;
+            hardLogout();
+          });
         return;
       }
       setStatus('reconnecting');
@@ -137,6 +168,7 @@ export function useRealtimeSocket({
       'session:finished',
       'session:settled',
       'session:completed',
+      'session:payment_requested',
       'session:payment_submitted',
       'session:payment_rejected',
     ];
@@ -159,6 +191,7 @@ export function useRealtimeSocket({
     }, 8000);
 
     return () => {
+      disposed = true;
       window.clearInterval(heartbeatId);
       socket.disconnect();
       socketRef.current = null;

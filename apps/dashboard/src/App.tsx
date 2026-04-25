@@ -1,5 +1,5 @@
 import { Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
 import {
@@ -8,7 +8,6 @@ import {
   Receipt,
   CreditCard,
   BarChart3,
-  Smartphone,
   Settings2,
   ChevronRight,
   Store,
@@ -31,13 +30,15 @@ const MenuBuilder = lazy(() => import('./pages/MenuBuilder').then((m) => ({ defa
 const FloorPlan = lazy(() => import('./pages/FloorPlan').then((m) => ({ default: m.FloorPlan })));
 const Orders = lazy(() => import('./pages/Orders').then((m) => ({ default: m.Orders })));
 const Analytics = lazy(() => import('./pages/Analytics').then((m) => ({ default: m.Analytics })));
-const AssistedOrderingPage = lazy(() => import('./pages/AssistedOrderingPage').then((m) => ({ default: m.AssistedOrderingPage })));
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })));
 const Onboarding = lazy(() => import('./pages/Onboarding').then((m) => ({ default: m.Onboarding })));
 const Billing = lazy(() => import('./pages/InvoicesPage').then((m) => ({ default: m.InvoicesPage })));
 const SubscriptionPage = lazy(() => import('./pages/PlansHub').then((m) => ({ default: m.PlansHub })));
 const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
 const WaiterPage = lazy(() => import('./pages/WaiterPage').then((m) => ({ default: m.WaiterPage })));
+const CounterOperatorPage = lazy(() =>
+  import('./pages/AssistedOrderingPage').then((m) => ({ default: m.AssistedOrderingPage })),
+);
 const AuthContactPage = lazy(() => import('./pages/AuthContactPage').then((m) => ({ default: m.AuthContactPage })));
 const DemoPage = lazy(() => import('./pages/DemoPage').then((m) => ({ default: m.DemoPage })));
 const HomePage = lazy(() => import('./pages/HomePage').then((m) => ({ default: m.HomePage })));
@@ -83,7 +84,7 @@ function isLiveBoardOrder(order: any) {
 function mergeLiveOrder(existing: any, incoming: any) {
   if (!existing) return incoming;
 
-  return {
+  const merged = {
     ...existing,
     ...incoming,
     table: incoming?.table ?? existing.table,
@@ -98,6 +99,23 @@ function mergeLiveOrder(existing: any, incoming: any) {
       : existing.diningSession,
     items: Array.isArray(incoming?.items) ? incoming.items : existing.items,
   };
+
+  const existingVersion = Number(existing?.version);
+  const incomingVersion = Number(incoming?.version);
+  const pendingStatus = String(existing?.__pendingStatus || '').toUpperCase();
+  const incomingStatus = String(incoming?.status || '').toUpperCase();
+  if (
+    pendingStatus &&
+    (incomingStatus === pendingStatus ||
+      (Number.isFinite(existingVersion) && Number.isFinite(incomingVersion) && incomingVersion > existingVersion))
+  ) {
+    const clean = { ...merged };
+    delete clean.__pendingStatus;
+    delete clean.__pendingStatusAt;
+    return clean;
+  }
+
+  return merged;
 }
 
 function applyLiveOrderUpdate(old: any[] | undefined, incoming: any) {
@@ -105,6 +123,21 @@ function applyLiveOrderUpdate(old: any[] | undefined, incoming: any) {
 
   const safe = Array.isArray(old) ? old : [];
   const existing = safe.find((order) => order.id === incoming.id);
+  const pendingStatus = String(existing?.__pendingStatus || '').toUpperCase();
+  const incomingStatus = String(incoming?.status || '').toUpperCase();
+  const existingVersion = Number(existing?.version);
+  const incomingVersion = Number(incoming?.version);
+
+  if (
+    existing &&
+    pendingStatus &&
+    incomingStatus !== pendingStatus &&
+    Number.isFinite(existingVersion) &&
+    Number.isFinite(incomingVersion) &&
+    incomingVersion <= existingVersion
+  ) {
+    return safe;
+  }
 
   if (
     existing &&
@@ -324,6 +357,7 @@ function DashboardShell() {
   const [notificationsHydrated, setNotificationsHydrated] = useState(false);
   const [notifications, setNotifications] = useState<OpsNotification[]>([]);
   const [toasts, setToasts] = useState<any[]>([]);
+  const paymentNoticeKeysRef = useRef<Set<string>>(new Set());
   const role = normalizeDashboardRole(localStorage.getItem('userRole'));
   const defaultRoute = getDefaultRouteForRole(role);
   const canAccessDashboard = FULL_ACCESS_ROLES.has(role);
@@ -332,7 +366,6 @@ function DashboardShell() {
   const canAccessOrders = ORDERS_ACCESS_ROLES.has(role);
   const canAccessBilling = BILLING_ACCESS_ROLES.has(role);
   const canAccessAnalytics = role !== "UNKNOWN";
-  const canAccessAssistedOrdering = role !== "UNKNOWN";
   const canAccessSettings = FULL_ACCESS_ROLES.has(role);
   const canShowFirstTimeDemo = FULL_ACCESS_ROLES.has(role);
   const canShowAdminShellData = BUSINESS_READ_ROLES.has(role);
@@ -403,6 +436,38 @@ function DashboardShell() {
       }, 6000);
     },
     [setNotifications, setToasts],
+  );
+
+  const pushPaymentVerificationNotification = useCallback(
+    (payload: any) => {
+      const sessionId = typeof payload?.sessionId === 'string' ? payload.sessionId : '';
+      const key = sessionId || `${payload?.tableName || 'session'}:${payload?.totalAmount || ''}`;
+      if (key && paymentNoticeKeysRef.current.has(key)) return;
+
+      if (key) {
+        paymentNoticeKeysRef.current.add(key);
+        window.setTimeout(() => {
+          paymentNoticeKeysRef.current.delete(key);
+        }, 1000 * 30);
+      }
+
+      const amount = Number(payload?.totalAmount ?? payload?.bill?.totalAmount ?? 0);
+      const tableName = payload?.tableName ? `Table ${payload.tableName}` : 'A session';
+      pushNotification({
+        title: 'Verify Payment',
+        message: `${tableName} marked ${amount > 0 ? formatINR(amount) : 'the payment'} as paid. Check the account now.`,
+        level: 'warning',
+        sound: 'https://assets.mixkit.co/active_storage/sfx/495/495-preview.mp3',
+        metadata: {
+          sessionId: payload?.sessionId,
+          tableId: payload?.tableId,
+          tableName: payload?.tableName,
+          totalAmount: amount,
+          kind: 'PAYMENT_VERIFICATION',
+        },
+      });
+    },
+    [pushNotification],
   );
 
   const unreadNotificationCount = useMemo(
@@ -526,6 +591,14 @@ function DashboardShell() {
             });
           });
         }
+        if (payload?.sessionId || payload?.bill || payload?.status) {
+          queryClient.invalidateQueries({ queryKey: ['live-orders'] });
+          queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
+        }
+        if (String(payload?.bill?.paymentStatus || '').toUpperCase() === 'PENDING_VERIFICATION') {
+          pushPaymentVerificationNotification(payload);
+          window.dispatchEvent(new CustomEvent(DASHBOARD_PAYMENT_SUBMITTED_EVENT, { detail: payload }));
+        }
       },
       'session:finished': (payload: any) => {
         if (payload?.sessionId) {
@@ -548,21 +621,7 @@ function DashboardShell() {
       'session:payment_submitted': (payload: any) => {
         queryClient.invalidateQueries({ queryKey: ['live-orders'] });
         queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
-        const amount = Number(payload?.totalAmount || 0);
-        const tableName = payload?.tableName ? `Table ${payload.tableName}` : 'A session';
-        pushNotification({
-          title: 'Check Account',
-          message: `${tableName} marked ${amount > 0 ? formatINR(amount) : 'the payment'} as completed. Please verify it now.`,
-          level: 'warning',
-          sound: 'https://assets.mixkit.co/active_storage/sfx/495/495-preview.mp3',
-          metadata: {
-            sessionId: payload?.sessionId,
-            tableId: payload?.tableId,
-            tableName: payload?.tableName,
-            totalAmount: amount,
-            kind: 'PAYMENT_VERIFICATION',
-          },
-        });
+        pushPaymentVerificationNotification(payload);
         window.dispatchEvent(new CustomEvent(DASHBOARD_PAYMENT_SUBMITTED_EVENT, { detail: payload }));
       },
       'session:payment_rejected': () => {
@@ -591,7 +650,7 @@ function DashboardShell() {
         queryClient.invalidateQueries({ queryKey: ['bill-counter-orders'] });
       },
     }),
-    [pushNotification, queryClient, refreshLiveOrderCount],
+    [pushNotification, pushPaymentVerificationNotification, queryClient, refreshLiveOrderCount],
   );
 
   useRealtimeSocket({
@@ -698,10 +757,10 @@ function DashboardShell() {
     ...(canAccessMenu ? ['/app/menu'] : []),
     ...(canAccessTables ? ['/app/tables'] : []),
     ...(canAccessOrders ? ['/app/orders'] : []),
+    ...(canAccessOrders ? ['/app/counter'] : []),
     ...(role === 'WAITER' ? ['/app/waiter'] : []),
     ...(canAccessBilling ? ['/app/billing', '/app/subscription'] : []),
     ...(canAccessAnalytics ? ['/app/analytics'] : []),
-    ...(canAccessAssistedOrdering ? ['/app/assisted'] : []),
     ...(canAccessSettings ? ['/app/settings'] : []),
   ]);
 
@@ -715,9 +774,9 @@ function DashboardShell() {
     ...(canAccessMenu ? [{ to: '/app/menu', label: 'Menu', icon: <UtensilsCrossed size={18} /> }] : []),
     ...(canAccessTables ? [{ to: '/app/tables', label: 'Tables', icon: <Store size={18} /> }] : []),
     ...(canAccessOrders && role !== 'WAITER' ? [{ to: '/app/orders', label: 'Live Orders', icon: <Receipt size={18} />, badge: liveOrderCount }] : []),
+    ...(canAccessOrders && role !== 'WAITER' ? [{ to: '/app/counter', label: 'Counter POS', icon: <CreditCard size={18} /> }] : []),
     ...(canAccessBilling ? [{ to: '/app/billing', label: 'Billing', icon: <CreditCard size={18} /> }] : []),
     ...(canAccessAnalytics ? [{ to: '/app/analytics', label: 'Analytics', icon: <BarChart3 size={18} /> }] : []),
-    ...(canAccessAssistedOrdering ? [{ to: '/app/assisted', label: 'Assisted Order', icon: <Smartphone size={18} /> }] : []),
     ...(canAccessSettings ? [{ to: '/app/settings', label: 'Settings', icon: <Settings2 size={18} /> }] : []),
   ];
 
@@ -753,8 +812,8 @@ function DashboardShell() {
         </button>
       </aside>
 
-      <main className="relative z-10 flex flex-1 flex-col lg:h-full lg:overflow-hidden">
-        <div className="flex-shrink-0 px-4 py-4 lg:px-6 lg:pt-6">
+      <main className="relative z-10 flex min-h-[100dvh] min-w-0 flex-1 flex-col bg-transparent lg:h-full lg:min-h-0 lg:overflow-hidden">
+        <div className="flex-shrink-0 px-3 pt-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-5">
           <div className="flex items-center justify-between lg:hidden mb-4">
              <button onClick={() => setMobileNavOpen(true)} className="p-2 border border-slate-800 rounded-xl"><Menu size={18} /></button>
              <div className="flex items-center gap-2">
@@ -785,15 +844,15 @@ function DashboardShell() {
             }}
           />
         </div>
-        <div className="flex-1 overflow-y-auto px-4 pb-4 lg:px-6">
+        <div id="scroll-container" className="min-h-0 flex-1 px-2 pb-2 pt-2 sm:px-3 sm:pb-3 lg:px-5 lg:pb-5 overflow-y-auto custom-scrollbar relative">
           <DashboardErrorBoundary>
             <Routes>
               {canAccessDashboard && <Route index element={withScreenFallback(<DashboardOverview />)} />}
               {canAccessMenu && <Route path="menu" element={withScreenFallback(<MenuBuilder />)} />}
               {canAccessTables && <Route path="tables" element={withScreenFallback(<FloorPlan />)} />}
               {canAccessOrders && <Route path="orders" element={withScreenFallback(<Orders role={role} />)} />}
+              {canAccessOrders && <Route path="counter" element={withScreenFallback(<CounterOperatorPage />)} />}
               {canAccessAnalytics && <Route path="analytics" element={withScreenFallback(<Analytics />)} />}
-              {canAccessAssistedOrdering && <Route path="assisted" element={withScreenFallback(<AssistedOrderingPage />)} />}
               {canAccessSettings && <Route path="settings" element={withScreenFallback(<Settings />)} />}
               {canAccessBilling && <Route path="billing" element={withScreenFallback(<Billing />)} />}
               {canAccessBilling && <Route path="subscription" element={withScreenFallback(<SubscriptionPage />)} />}

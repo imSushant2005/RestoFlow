@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { env } from '../config/env';
 import { prisma, withPrismaRetry } from '../db/prisma';
+import { verifyCustomerAccessToken } from '../utils/public-access';
 
 /**
  * Middleware to authenticate customer JWT tokens.
@@ -15,11 +14,7 @@ export const customerAuth = async (req: Request, res: Response, next: NextFuncti
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, env.JWT_SECRET) as {
-      customerId: string;
-      phone: string;
-      tenantSlug?: string | null;
-    };
+    const decoded = verifyCustomerAccessToken(token);
 
     const customer = await withPrismaRetry(
       () =>

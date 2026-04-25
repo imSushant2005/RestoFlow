@@ -80,6 +80,78 @@ function deriveBillFromSession(session: any) {
   };
 }
 
+function formatBillDateTime(
+  value: string | number | Date | null | undefined,
+  options: Intl.DateTimeFormatOptions,
+) {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '-';
+  return parsed.toLocaleString('en-IN', options);
+}
+
+function getPaymentMethodLabel(value: unknown) {
+  const normalized = String(value || '').trim().toUpperCase();
+  switch (normalized) {
+    case 'ONLINE':
+    case 'UPI':
+      return 'Online / UPI';
+    case 'CASH':
+      return 'Cash';
+    case 'CARD':
+      return 'Card';
+    default:
+      return normalized ? normalized.replace(/_/g, ' ') : 'Pending';
+  }
+}
+
+function getInvoiceLineItems(items: any[]) {
+  const grouped = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      totalPrice: number;
+      detail: string;
+    }
+  >();
+
+  for (const item of Array.isArray(items) ? items : []) {
+    const quantity = Math.max(1, Number(item?.quantity || 1));
+    const lineTotal = Number(item?.totalPrice || 0);
+    const unitPrice = quantity > 0 ? lineTotal / quantity : Number(item?.unitPrice || 0);
+    const modifierNames = (Array.isArray(item?.selectedModifiers) ? item.selectedModifiers : item?.modifiers || [])
+      .map((modifier: any) => String(modifier?.name || '').trim())
+      .filter(Boolean);
+    const note = [item?.notes, item?.specialInstructions]
+      .map((entry) => String(entry || '').trim())
+      .find(Boolean);
+    const detail = [modifierNames.join(', '), note ? `Note: ${note}` : ''].filter(Boolean).join(' | ');
+    const name = String(item?.name || item?.menuItem?.name || 'Menu Item').trim() || 'Menu Item';
+    const key = `${name}__${unitPrice.toFixed(2)}__${detail}`;
+
+    if (grouped.has(key)) {
+      const existing = grouped.get(key)!;
+      existing.quantity += quantity;
+      existing.totalPrice += lineTotal;
+      continue;
+    }
+
+    grouped.set(key, {
+      id: String(item?.id || key),
+      name,
+      quantity,
+      unitPrice,
+      totalPrice: lineTotal,
+      detail,
+    });
+  }
+
+  return Array.from(grouped.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function RatingStars({
   label,
   value,
@@ -123,8 +195,9 @@ export function BillPage() {
   const [foodRating, setFoodRating] = useState(0);
   const [serviceRating, setServiceRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
-  const [tipAmount, setTipAmount] = useState(0);
-  const [activeTipType, setActiveTipType] = useState<number | 'custom' | null>(null);
+  const [checkoutTipAmount, setCheckoutTipAmount] = useState(0);
+  const [activeCheckoutTipType, setActiveCheckoutTipType] = useState<number | 'custom' | null>(null);
+  const [reviewTipAmount, setReviewTipAmount] = useState(0);
   const [submittingReview, setSubmittingReview] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [requestingMethod, setRequestingMethod] = useState<'cash' | 'online' | null>(null);
@@ -257,7 +330,7 @@ export function BillPage() {
 
     const intervalId = window.setInterval(() => {
       void fetchBill(true);
-    }, 8000);
+    }, 2500);
 
     return () => window.clearInterval(intervalId);
   }, [fetchBill, session?.bill?.paymentStatus, sessionId, tenantSlug]);
@@ -323,17 +396,20 @@ export function BillPage() {
   const shareWhatsApp = () => {
     const resolvedBill = deriveBillFromSession(session);
     if (!resolvedBill) return;
-    const items = session.orders?.flatMap((order: any) => order.items || []) || [];
-    const itemLines = items.map((item: any) => `- ${item.name} x${item.quantity}: ${formatINR(item.totalPrice)}`).join('\n');
+    const items = getInvoiceLineItems(session.orders?.flatMap((order: any) => order.items || []) || []);
+    const itemLines = items
+      .map((item) => `- ${item.name} x${item.quantity}: ${formatINR(item.totalPrice)}`)
+      .join('\n');
     const message = [
-      `Final Bill - ${session.tenant?.businessName || 'BHOJFLOW'}`,
+      `Invoice ${String(resolvedBill.invoiceNumber || sessionId || 'PENDING').toUpperCase()} - ${session.tenant?.businessName || 'BHOJFLOW'}`,
       '',
-      `Table: ${serviceLabel}`,
+      `Service: ${serviceLabel}`,
       itemLines,
       '',
       `Subtotal: ${formatINR(resolvedBill.subtotal)}`,
       `Tax: ${formatINR(resolvedBill.taxAmount)}`,
       `Total: ${formatINR(resolvedBill.totalAmount)}`,
+      `Payment: ${getPaymentMethodLabel(resolvedBill.paymentMethod)}`,
     ]
       .filter(Boolean)
       .join('\n');
@@ -354,7 +430,7 @@ export function BillPage() {
         foodRating,
         serviceRating,
         comment: reviewComment.trim() || undefined,
-        tipAmount,
+        tipAmount: reviewTipAmount,
         serviceStaffName: session?.attendedByName || undefined,
         ...(sessionAccessToken ? { sessionAccessToken } : {}),
       }, {
@@ -366,7 +442,7 @@ export function BillPage() {
       setFoodRating(0);
       setServiceRating(0);
       setReviewComment('');
-      setTipAmount(0);
+      setReviewTipAmount(0);
     } catch (error: any) {
       window.alert(error?.response?.data?.error || 'Failed to submit your review.');
     } finally {
@@ -383,11 +459,12 @@ export function BillPage() {
     try {
       const response = await publicApi.post(`/${tenantSlug}/sessions/${sessionId}/payment-request`, {
         method,
-        tipAmount,
+        tipAmount: checkoutTipAmount,
       }, {
         headers: getTenantPublicAuthHeaders(tenantSlug),
       });
       setSession(response.data);
+      setCheckoutTipAmount(Number(response.data?.bill?.tipAmount || checkoutTipAmount));
       setCheckoutOpen(false);
       setPaymentSubmitted(false);
       setPaymentSubmittedAt(null);
@@ -503,22 +580,61 @@ export function BillPage() {
   const tipSummary = Number(session?.review?.tipAmount || 0);
   const paymentMethod = String(bill.paymentMethod || '').toUpperCase();
   const sessionStatus = String(session?.sessionStatus || '').toUpperCase();
-  const unpaidBill = String(bill.paymentStatus || '').toUpperCase() !== 'PAID';
+  const billPaymentStatus = String(bill.paymentStatus || '').toUpperCase();
+  const paymentPendingVerification = billPaymentStatus === 'PENDING_VERIFICATION';
+  const unpaidBill = billPaymentStatus !== 'PAID';
   const isAwaitingBill = sessionStatus === 'AWAITING_BILL';
   const requestedMethod = String(bill.paymentMethod || '').toLowerCase();
-  const hasOnlineRequest = isAwaitingBill && unpaidBill && requestedMethod === 'online';
-  const hasCashRequest = isAwaitingBill && unpaidBill && requestedMethod === 'cash';
-  const showCheckoutControls = isAwaitingBill && unpaidBill;
+  const hasOnlineRequest = isAwaitingBill && unpaidBill && !paymentPendingVerification && requestedMethod === 'online';
+  const hasCashRequest = isAwaitingBill && unpaidBill && !paymentPendingVerification && requestedMethod === 'cash';
+  const showCheckoutControls = isAwaitingBill && unpaidBill && !paymentPendingVerification;
   const onlineAvailable = Boolean(session?.tenant?.upiConfigured);
-  const totalPayable = (bill.totalAmount || 0) + tipAmount;
+  const billTipAmount = Number(bill.tipAmount || 0);
+  const pendingCheckoutTip = requestedMethod || billTipAmount > 0 ? 0 : checkoutTipAmount;
+  const displayedCheckoutTip = billTipAmount || pendingCheckoutTip;
+  const totalPayable = Number(bill.totalAmount || 0) + pendingCheckoutTip;
   const isDineIn = session?.orders?.[0]?.orderType === 'DINE_IN';
+  const invoiceNumber = String(bill.invoiceNumber || session?.id?.slice(-8) || 'PENDING').toUpperCase();
+  const invoiceIssuedAt = bill.paidAt || bill.updatedAt || session?.updatedAt || session?.openedAt;
+  const merchantName = String(bill.businessName || session?.tenant?.businessName || 'BHOJFLOW');
+  const merchantAddress = String(bill.businessAddress || session?.tenant?.address || '').trim();
+  const merchantPhone = String(session?.tenant?.phone || '').trim();
+  const merchantGstin = String(bill.gstin || '').trim();
+  const guestName = String(session?.customer?.name || session?.customerName || 'Walk-in Guest').trim();
+  const guestPhone = String(session?.customer?.phone || session?.customerPhone || '').trim();
+  const invoiceLineItems = getInvoiceLineItems(allItems);
+  const paymentFlow = [
+    {
+      title: 'Bill Ready',
+      detail: invoiceNumber,
+      complete: Boolean(bill?.totalAmount || bill?.subtotal || allItems.length),
+      active: !showCheckoutControls && !paymentPendingVerification && billPaymentStatus !== 'PAID',
+    },
+    {
+      title: paymentLink || hasOnlineRequest ? 'Pay Online' : hasCashRequest ? 'Cash Desk' : 'Choose Method',
+      detail: paymentLink ? 'Exact amount shared' : hasCashRequest ? 'Pay at counter' : 'Cash or online',
+      complete: Boolean(requestedMethod),
+      active: showCheckoutControls && !requestedMethod,
+    },
+    {
+      title: billPaymentStatus === 'PAID' ? 'Confirmed' : paymentPendingVerification || paymentSubmitted ? 'Verification' : 'Restaurant Closure',
+      detail:
+        billPaymentStatus === 'PAID'
+          ? 'Settled'
+          : paymentPendingVerification || paymentSubmitted
+            ? 'Cashier checking'
+            : 'Pending vendor close',
+      complete: billPaymentStatus === 'PAID',
+      active: paymentPendingVerification || paymentSubmitted,
+    },
+  ];
   const verificationSecondsLeft =
     paymentSubmittedAt && unpaidBill
       ? Math.max(0, 120 - Math.floor((verificationNow - paymentSubmittedAt) / 1000))
       : 0;
   const paymentBannerLabel = bill.paymentStatus === 'PAID'
     ? 'Payment Confirmed'
-    : paymentSubmitted
+    : paymentSubmitted || paymentPendingVerification
       ? 'Payment Verification in Progress'
       : paymentLink
         ? 'Exact UPI Amount Ready'
@@ -546,14 +662,22 @@ export function BillPage() {
         </button>
 
         <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2" style={{ color: 'var(--text-3)' }}>
-          Final Bill
+          Guest Invoice
         </p>
         <h1 className="text-5xl font-black tracking-tight" style={{ color: 'var(--text-1)' }}>
-          {formatINR(bill.totalAmount)}
+          {formatINR(totalPayable)}
         </h1>
         <p className="text-sm font-bold mt-3 opacity-60" style={{ color: 'var(--text-2)' }}>
           {[session.tenant?.businessName, serviceLabel].filter(Boolean).join(' | ')}
         </p>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[11px] font-black uppercase tracking-[0.16em]">
+          <span className="rounded-full px-3 py-1" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-1)' }}>
+            {invoiceNumber}
+          </span>
+          <span className="rounded-full px-3 py-1" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-2)' }}>
+            {getPaymentMethodLabel(paymentMethod || requestedMethod)}
+          </span>
+        </div>
 
         {/* Live Tracking Journey Indicator */}
         <div className="mt-8 flex items-center justify-center gap-2 max-w-[280px] mx-auto opacity-80">
@@ -576,6 +700,26 @@ export function BillPage() {
               </div>
             );
           })}
+        </div>
+
+        <div className="mt-6 grid grid-cols-3 gap-2 max-w-[520px] mx-auto text-left">
+          {paymentFlow.map((step) => (
+            <div
+              key={step.title}
+              className="rounded-2xl border px-3 py-3"
+              style={{
+                background: step.complete ? 'rgba(16,185,129,0.12)' : step.active ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)',
+                borderColor: step.complete ? 'rgba(16,185,129,0.35)' : 'rgba(255,255,255,0.08)',
+              }}
+            >
+              <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: step.complete ? '#d1fae5' : 'rgba(255,255,255,0.62)' }}>
+                {step.title}
+              </p>
+              <p className="mt-2 text-xs font-semibold" style={{ color: 'var(--text-1)' }}>
+                {step.detail}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -600,24 +744,83 @@ export function BillPage() {
           </div>
 
           <div className="p-8 space-y-10">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pb-8 border-b border-dashed" style={{ borderColor: 'var(--border)' }}>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: 'var(--text-3)' }}>
-                  Session Date
+            <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                {
+                  label: 'Invoice No.',
+                  value: invoiceNumber,
+                },
+                {
+                  label: 'Issued',
+                  value: formatBillDateTime(invoiceIssuedAt, {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  }),
+                },
+                {
+                  label: 'Service',
+                  value: serviceLabel,
+                },
+                {
+                  label: 'Status',
+                  value: billPaymentStatus === 'PAID' ? 'Paid' : paymentPendingVerification ? 'Verifying' : 'Open',
+                },
+              ].map((meta) => (
+                <div
+                  key={meta.label}
+                  className="rounded-3xl border px-4 py-4"
+                  style={{ background: 'var(--surface-3)', borderColor: 'var(--border)' }}
+                >
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                    {meta.label}
+                  </p>
+                  <p className="mt-2 text-sm font-black" style={{ color: 'var(--text-1)' }}>
+                    {meta.value}
+                  </p>
+                </div>
+              ))}
+            </section>
+
+            <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div
+                className="rounded-3xl border p-5"
+                style={{ background: 'var(--surface-3)', borderColor: 'var(--border)' }}
+              >
+                <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>
+                  Hotel / Restaurant
                 </p>
-                <p className="font-bold text-sm" style={{ color: 'var(--text-1)' }}>
-                  {new Date(session.openedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
-                </p>
+                <h3 className="mt-3 text-lg font-black" style={{ color: 'var(--text-1)' }}>
+                  {merchantName}
+                </h3>
+                {merchantAddress && (
+                  <p className="mt-2 text-sm font-semibold leading-6" style={{ color: 'var(--text-2)' }}>
+                    {merchantAddress}
+                  </p>
+                )}
+                <div className="mt-4 space-y-2 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
+                  {merchantPhone && <p>Phone: {merchantPhone}</p>}
+                  {merchantGstin && <p>GSTIN: {merchantGstin}</p>}
+                </div>
               </div>
-              <div className="text-left sm:text-right">
-                <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: 'var(--text-3)' }}>
-                  Service Staff
+
+              <div
+                className="rounded-3xl border p-5"
+                style={{ background: 'var(--surface-3)', borderColor: 'var(--border)' }}
+              >
+                <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>
+                  Guest Details
                 </p>
-                <p className="font-bold text-sm" style={{ color: 'var(--text-1)' }}>
-                  {serviceStaffName}
-                </p>
+                <h3 className="mt-3 text-lg font-black" style={{ color: 'var(--text-1)' }}>
+                  {guestName}
+                </h3>
+                <div className="mt-4 space-y-2 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
+                  <p>Service point: {serviceLabel}</p>
+                  <p>Service staff: {serviceStaffName}</p>
+                  {guestPhone && <p>Phone: {guestPhone}</p>}
+                </div>
               </div>
-            </div>
+            </section>
 
             <section
               className="rounded-3xl border p-5"
@@ -633,14 +836,16 @@ export function BillPage() {
                   </p>
                   <p className="text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
                     {bill.paymentStatus === 'PAID'
-                      ? `This bill has been settled${paymentMethod ? ` via ${paymentMethod.toLowerCase()}` : ''}.`
+                      ? `This invoice is settled via ${getPaymentMethodLabel(paymentMethod)}.`
                       : showCheckoutControls
-                        ? 'Choose how you want to pay. The restaurant will confirm the payment and close the session from the billing desk.'
-                        : 'The restaurant will mark this bill as paid after they receive cash or online payment.'}
+                        ? 'Choose your payment method below. The restaurant will verify it and close the bill from their side.'
+                        : paymentPendingVerification
+                          ? 'Your payment request has reached the restaurant. Please keep this screen open while verification completes.'
+                          : 'The restaurant will confirm this bill after they receive cash or online payment.'}
                   </p>
-                  {tipSummary > 0 && (
+                  {(tipSummary > 0 || displayedCheckoutTip > 0) && (
                     <p className="mt-2 text-xs font-black uppercase tracking-[0.14em]" style={{ color: 'var(--brand)' }}>
-                      Tip shared: {formatINR(tipSummary)}
+                      Tip: {formatINR(tipSummary || displayedCheckoutTip)}
                     </p>
                   )}
                 </div>
@@ -680,6 +885,88 @@ export function BillPage() {
                     Bill / Checkout
                   </button>
                 </div>
+
+                {isDineIn && (
+                  <div
+                    className="mt-4 rounded-[28px] border p-4"
+                    style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                          Staff Tip
+                        </p>
+                        <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
+                          Add a tip before payment if you want it included in the final settlement.
+                        </p>
+                      </div>
+                      {checkoutTipAmount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCheckoutTipAmount(0);
+                            setActiveCheckoutTipType(null);
+                          }}
+                          className="text-[10px] font-black uppercase tracking-[0.16em]"
+                          style={{ color: 'var(--brand)' }}
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-4 gap-2">
+                      {[30, 50, 100].map((amount) => (
+                        <button
+                          key={amount}
+                          type="button"
+                          onClick={() => {
+                            setCheckoutTipAmount(amount);
+                            setActiveCheckoutTipType(amount);
+                          }}
+                          className="rounded-2xl border py-3 text-sm font-black transition-all active:scale-95"
+                          style={{
+                            background: activeCheckoutTipType === amount ? 'var(--brand)' : 'var(--surface-3)',
+                            borderColor: activeCheckoutTipType === amount ? 'var(--brand)' : 'var(--border)',
+                            color: activeCheckoutTipType === amount ? 'white' : 'var(--text-1)',
+                          }}
+                        >
+                          {formatINR(amount)}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setActiveCheckoutTipType('custom')}
+                        className="rounded-2xl border py-3 text-sm font-black transition-all active:scale-95"
+                        style={{
+                          background: activeCheckoutTipType === 'custom' ? 'var(--brand)' : 'var(--surface-3)',
+                          borderColor: activeCheckoutTipType === 'custom' ? 'var(--brand)' : 'var(--border)',
+                          color: activeCheckoutTipType === 'custom' ? 'white' : 'var(--text-1)',
+                        }}
+                      >
+                        {activeCheckoutTipType === 'custom' ? 'Custom' : 'Edit'}
+                      </button>
+                    </div>
+
+                    {activeCheckoutTipType === 'custom' && (
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="Enter tip amount"
+                        value={checkoutTipAmount || ''}
+                        onChange={(event) => setCheckoutTipAmount(Math.max(0, Number(event.target.value) || 0))}
+                        className="mt-3 w-full rounded-2xl border px-4 py-3 text-sm font-black outline-none transition-all"
+                        style={{ background: 'var(--surface-3)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
+                      />
+                    )}
+
+                    {displayedCheckoutTip > 0 && (
+                      <p className="mt-3 text-xs font-black uppercase tracking-[0.14em]" style={{ color: 'var(--brand)' }}>
+                        Tip included in checkout: {formatINR(displayedCheckoutTip)}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {paymentMessage && (
                   <div
@@ -797,123 +1084,147 @@ export function BillPage() {
               </section>
             )}
 
-            <section>
-              <h3 className="text-xs font-black uppercase tracking-widest mb-6" style={{ color: 'var(--text-3)' }}>
-                Ordered Items
-              </h3>
-              <div className="space-y-4">
-                {allItems.map((item: any, index: number) => (
-                  <div key={`${item.id}_${index}`} className="flex justify-between items-center gap-3">
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="w-6 h-6 flex items-center justify-center rounded-lg text-[10px] font-black"
-                        style={{ background: 'var(--surface-3)', color: 'var(--text-3)' }}
-                      >
+            <section className="rounded-[32px] border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center justify-between px-5 py-4" style={{ background: 'var(--surface-3)' }}>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>
+                    Invoice Items
+                  </p>
+                  <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
+                    {invoiceLineItems.length} line item{invoiceLineItems.length === 1 ? '' : 's'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>
+                    Table Total
+                  </p>
+                  <p className="mt-1 text-lg font-black" style={{ color: 'var(--text-1)' }}>
+                    {formatINR(totalPayable)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="hidden grid-cols-[minmax(0,1fr)_72px_110px_110px] gap-4 px-5 py-3 text-[10px] font-black uppercase tracking-[0.18em] sm:grid" style={{ color: 'var(--text-3)' }}>
+                <span>Item</span>
+                <span className="text-center">Qty</span>
+                <span className="text-right">Rate</span>
+                <span className="text-right">Amount</span>
+              </div>
+
+              <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                {invoiceLineItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="grid gap-3 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_72px_110px_110px] sm:items-center"
+                    style={{ borderColor: 'var(--border)' }}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-black" style={{ color: 'var(--text-1)' }}>
+                        {item.name}
+                      </p>
+                      {item.detail && (
+                        <p className="mt-1 text-xs font-semibold leading-5" style={{ color: 'var(--text-3)' }}>
+                          {item.detail}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between sm:block sm:text-center">
+                      <span className="text-[10px] font-black uppercase tracking-[0.14em] sm:hidden" style={{ color: 'var(--text-3)' }}>
+                        Qty
+                      </span>
+                      <span className="text-sm font-black" style={{ color: 'var(--text-2)' }}>
                         {item.quantity}
                       </span>
-                      <span className="font-bold text-sm" style={{ color: 'var(--text-2)' }}>
-                        {item.name}
+                    </div>
+                    <div className="flex items-center justify-between sm:block sm:text-right">
+                      <span className="text-[10px] font-black uppercase tracking-[0.14em] sm:hidden" style={{ color: 'var(--text-3)' }}>
+                        Rate
+                      </span>
+                      <span className="text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
+                        {formatINR(item.unitPrice)}
                       </span>
                     </div>
-                    <span className="font-black text-sm" style={{ color: 'var(--text-1)' }}>
-                      {formatINR(item.totalPrice)}
-                    </span>
+                    <div className="flex items-center justify-between sm:block sm:text-right">
+                      <span className="text-[10px] font-black uppercase tracking-[0.14em] sm:hidden" style={{ color: 'var(--text-3)' }}>
+                        Amount
+                      </span>
+                      <span className="text-sm font-black" style={{ color: 'var(--text-1)' }}>
+                        {formatINR(item.totalPrice)}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
             </section>
 
-            <section className="pt-8 border-t border-dashed space-y-3" style={{ borderColor: 'var(--border)' }}>
-              <div className="flex justify-between text-sm font-bold">
-                <span style={{ color: 'var(--text-3)' }}>Subtotal</span>
-                <span style={{ color: 'var(--text-1)' }}>{formatINR(bill.subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-sm font-bold">
-                <span style={{ color: 'var(--text-3)' }}>Tax & GST</span>
-                <span style={{ color: 'var(--text-1)' }}>{formatINR(bill.taxAmount)}</span>
-              </div>
-              {bill.discountAmount > 0 && (
-                <div className="flex justify-between text-sm font-black">
-                  <span className="text-emerald-500">Discount</span>
-                  <span className="text-emerald-500">-{formatINR(bill.discountAmount)}</span>
-                </div>
-              )}
-              <div className="flex justify-between items-center pt-8 mt-2">
-                <span className="text-2xl font-black tracking-tight" style={{ color: 'var(--text-1)' }}>
-                  Total
-                </span>
-                <div className="text-right">
-                  <p className="text-4xl font-black" style={{ color: 'var(--brand)' }}>
-                    {formatINR(totalPayable)}
+            <section className="rounded-[32px] border p-5" style={{ background: 'var(--surface-3)', borderColor: 'var(--border)' }}>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-[1fr_auto] sm:items-end">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>
+                    Settlement Summary
                   </p>
-                  {tipAmount > 0 && (
-                    <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-emerald-500">
-                      Incl. {formatINR(tipAmount)} Tip
-                    </p>
-                  )}
+                  <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
+                    {billPaymentStatus === 'PAID'
+                      ? `Paid on ${formatBillDateTime(bill.paidAt || invoiceIssuedAt, {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}`
+                      : paymentPendingVerification
+                        ? 'Payment submitted and awaiting cashier approval.'
+                        : 'Final amount will be marked paid once the restaurant confirms settlement.'}
+                  </p>
+                </div>
+                <div className="rounded-2xl px-4 py-3 text-center" style={{ background: 'var(--surface)', color: 'var(--text-1)' }}>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                    Payment Mode
+                  </p>
+                  <p className="mt-1 text-sm font-black">{getPaymentMethodLabel(paymentMethod || requestedMethod)}</p>
                 </div>
               </div>
 
-              {isDineIn && !bill.paymentStatus && !showCheckoutControls && (
-                <div className="mt-8 space-y-4">
-                  <div className="flex items-center justify-between px-1">
-                    <h4 className="text-[11px] font-black uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>
-                      Support your waiter
-                    </h4>
-                    {tipAmount > 0 && (
-                      <button 
-                        onClick={() => { setTipAmount(0); setActiveTipType(null); }}
-                        className="text-[10px] font-black uppercase tracking-widest text-red-500"
-                      >
-                        Reset
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[30, 50, 100].map((amount) => (
-                      <button
-                        key={amount}
-                        onClick={() => { setTipAmount(amount); setActiveTipType(amount); }}
-                        className="rounded-2xl border py-3 text-sm font-black transition-all active:scale-95"
-                        style={{
-                          background: activeTipType === amount ? 'var(--brand)' : 'var(--surface-3)',
-                          borderColor: activeTipType === amount ? 'var(--brand)' : 'var(--border)',
-                          color: activeTipType === amount ? 'white' : 'var(--text-1)',
-                        }}
-                      >
-                        {formatINR(amount)}
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => setActiveTipType('custom')}
-                      className="rounded-2xl border py-3 text-sm font-black transition-all active:scale-95"
-                      style={{
-                        background: activeTipType === 'custom' ? 'var(--brand)' : 'var(--surface-3)',
-                        borderColor: activeTipType === 'custom' ? 'var(--brand)' : 'var(--border)',
-                        color: activeTipType === 'custom' ? 'white' : 'var(--text-1)',
-                      }}
-                    >
-                      {activeTipType === 'custom' ? 'Custom' : 'Edit'}
-                    </button>
-                  </div>
-                  {activeTipType === 'custom' && (
-                    <div className="relative fade-in">
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        placeholder="Enter custom tip (e.g. 150)"
-                        value={tipAmount || ''}
-                        onChange={(e) => setTipAmount(Math.max(0, Number(e.target.value)))}
-                        className="w-full rounded-2xl border px-5 py-4 font-black outline-none transition-all focus:ring-2 focus:ring-blue-500/20"
-                        style={{ background: 'var(--surface-3)', borderColor: 'var(--brand-soft)', color: 'var(--text-1)' }}
-                      />
-                      <div className="absolute right-5 top-1/2 -translate-y-1/2 text-xs font-black uppercase tracking-widest text-emerald-500">
-                        Custom Support
-                      </div>
-                    </div>
-                  )}
+              <div className="mt-6 space-y-3">
+                <div className="flex justify-between text-sm font-bold">
+                  <span style={{ color: 'var(--text-3)' }}>Food & beverage subtotal</span>
+                  <span style={{ color: 'var(--text-1)' }}>{formatINR(bill.subtotal)}</span>
                 </div>
-              )}
+                <div className="flex justify-between text-sm font-bold">
+                  <span style={{ color: 'var(--text-3)' }}>GST / tax</span>
+                  <span style={{ color: 'var(--text-1)' }}>{formatINR(bill.taxAmount)}</span>
+                </div>
+                {bill.discountAmount > 0 && (
+                  <div className="flex justify-between text-sm font-black">
+                    <span className="text-emerald-500">Discount</span>
+                    <span className="text-emerald-500">-{formatINR(bill.discountAmount)}</span>
+                  </div>
+                )}
+                {displayedCheckoutTip > 0 && (
+                  <div className="flex justify-between text-sm font-black">
+                    <span style={{ color: 'var(--text-3)' }}>Tip</span>
+                    <span style={{ color: 'var(--text-1)' }}>{formatINR(displayedCheckoutTip)}</span>
+                  </div>
+                )}
+                <div className="flex items-end justify-between border-t pt-5" style={{ borderColor: 'var(--border)' }}>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>
+                      Grand Total
+                    </p>
+                    <p className="mt-2 text-4xl font-black tracking-tight" style={{ color: 'var(--brand)' }}>
+                      {formatINR(totalPayable)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                      Payment Status
+                    </p>
+                    <p className="mt-2 text-sm font-black" style={{ color: billPaymentStatus === 'PAID' ? 'var(--success)' : 'var(--text-1)' }}>
+                      {billPaymentStatus === 'PAID' ? 'Settled' : paymentPendingVerification ? 'Verification in progress' : 'Awaiting settlement'}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </section>
 
             <div className="text-center">
@@ -1213,11 +1524,11 @@ export function BillPage() {
                     <button
                       key={amount}
                       type="button"
-                      onClick={() => setTipAmount(amount)}
+                      onClick={() => setReviewTipAmount(amount)}
                       className="rounded-2xl px-3 py-3 text-sm font-black transition-all active:scale-[0.98]"
                       style={{
-                        background: tipAmount === amount ? 'var(--brand)' : 'var(--surface-3)',
-                        color: tipAmount === amount ? '#fff' : 'var(--text-1)',
+                        background: reviewTipAmount === amount ? 'var(--brand)' : 'var(--surface-3)',
+                        color: reviewTipAmount === amount ? '#fff' : 'var(--text-1)',
                       }}
                     >
                       {amount === 0 ? 'No Tip' : formatINR(amount)}

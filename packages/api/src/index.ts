@@ -17,8 +17,6 @@ import orderRoutes from './routes/order.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import settingsRoutes from './routes/settings.routes';
 import billingRoutes from './routes/billing.routes';
-import paymentRoutes from './routes/payment.routes';
-import * as PaymentController from './controllers/payment.controller';
 import aiRoutes from './routes/ai.routes';
 import notificationRoutes from './routes/notification.routes';
 import customerRoutes from './routes/customer.routes';
@@ -60,12 +58,6 @@ function buildAllowedOrigins() {
 const allowedOrigins = buildAllowedOrigins();
 
 // Trusted origin patterns — used as fallback when CLIENT_URL / CORS_ORIGIN are not set.
-const TRUSTED_ORIGIN_PATTERNS = [
-  /\.vercel\.app$/,
-  /\.railway\.app$/,
-  /\.up\.railway\.app$/,
-];
-
 function isOriginAllowed(origin?: string | null) {
   // 1. Same-origin or server-to-server (no Origin header)
   if (!origin) return true;
@@ -84,15 +76,11 @@ function isOriginAllowed(origin?: string | null) {
     return true;
   }
 
-  // 4. Pattern match (vercel/railway)
-  // Use a simple check to catch if the origin ends with a trusted domain
-  const isTrusted = TRUSTED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin));
-  
-  if (!isTrusted && isProduction) {
-    console.warn(`[CORS_REJECT] Restricted origin attempt: ${origin}. Add to CLIENT_URL if this is expected.`);
+  if (isProduction) {
+    console.warn(`[CORS_REJECT] Restricted origin attempt: ${origin}. Add to ALLOWED_ORIGINS if this is expected.`);
   }
 
-  return isTrusted;
+  return false;
 }
 
 app.disable('x-powered-by');
@@ -151,8 +139,6 @@ const strictAuthLimiter = rateLimit({
 
 app.use('/public', apiLimiter);
 app.use(pinoHttp({ logger }));
-// Removed cors() from here as it's now at the top
-app.post('/payments/webhook', express.raw({ type: 'application/json' }), PaymentController.handleWebhook);
 app.use(express.json({ limit: env.JSON_BODY_LIMIT }));
 app.use(cookieParser());
 
@@ -263,7 +249,6 @@ app.use('/orders', tenantRateLimitMiddleware, orderRoutes);
 app.use('/analytics', tenantRateLimitMiddleware, analyticsRoutes);
 app.use('/settings', tenantRateLimitMiddleware, settingsRoutes);
 app.use('/billing', tenantRateLimitMiddleware, billingRoutes);
-app.use('/payments', paymentRoutes);
 app.use('/ai', aiRoutes);
 app.use('/notifications', notificationRoutes);
 app.use('/customer', customerRoutes);

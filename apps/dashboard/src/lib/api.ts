@@ -29,7 +29,7 @@ function redirectToLogin() {
   }
 }
 
-async function refreshAccessToken() {
+export async function refreshAccessToken() {
   if (!refreshPromise) {
     refreshPromise = refreshClient
       .post('/auth/refresh')

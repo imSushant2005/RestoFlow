@@ -7,6 +7,7 @@ import {
   getLastTableIdForTenant,
   getSessionAccessTokenForTenant,
   setLastTableIdForTenant,
+  setLastVisitedTenantSlug,
   setTableQrSecretForTenant,
   subscribeTenantStorage,
 } from '../lib/tenantStorage';
@@ -55,6 +56,7 @@ export function CustomerShell() {
   useEffect(() => {
     if (tenantSlug) {
       setTenantScope(tenantSlug);
+      setLastVisitedTenantSlug(tenantSlug);
     }
     setStorageState({
       activeSessionId: getActiveSessionForTenant(tenantSlug),

@@ -28,5 +28,6 @@ router.post('/change-password', requireAuth, changePassword);
 router.patch('/profile', requireAuth, updateProfile);
 
 router.get('/me', requireAuth, getMe);
+router.get('/profile', requireAuth, getMe);
 
 export default router;

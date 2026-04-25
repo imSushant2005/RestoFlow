@@ -313,6 +313,7 @@ exports.Prisma.CustomerScalarFieldEnum = {
   phone: 'phone',
   name: 'name',
   email: 'email',
+  passwordHash: 'passwordHash',
   isActive: 'isActive',
   deactivatedAt: 'deactivatedAt',
   anonymizedAt: 'anonymizedAt',
@@ -354,6 +355,94 @@ exports.Prisma.BillScalarFieldEnum = {
   businessAddress: 'businessAddress',
   gstin: 'gstin',
   fssai: 'fssai'
+};
+
+exports.Prisma.SubscriptionScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  plan: 'plan',
+  billingCycle: 'billingCycle',
+  status: 'status',
+  trialStartsAt: 'trialStartsAt',
+  trialEndsAt: 'trialEndsAt',
+  currentPeriodStart: 'currentPeriodStart',
+  currentPeriodEnd: 'currentPeriodEnd',
+  cancelAtPeriodEnd: 'cancelAtPeriodEnd',
+  canceledAt: 'canceledAt',
+  nextRetryAt: 'nextRetryAt',
+  lastPaymentAt: 'lastPaymentAt',
+  lastPaymentAttemptId: 'lastPaymentAttemptId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.PaymentAttemptScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  subscriptionId: 'subscriptionId',
+  invoiceId: 'invoiceId',
+  targetPlan: 'targetPlan',
+  billingCycle: 'billingCycle',
+  status: 'status',
+  paymentMethod: 'paymentMethod',
+  providerReference: 'providerReference',
+  amount: 'amount',
+  currency: 'currency',
+  idempotencyKey: 'idempotencyKey',
+  failureReason: 'failureReason',
+  refundedAt: 'refundedAt',
+  processedAt: 'processedAt',
+  metadata: 'metadata',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.SubscriptionInvoiceScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  subscriptionId: 'subscriptionId',
+  invoiceNumber: 'invoiceNumber',
+  plan: 'plan',
+  billingCycle: 'billingCycle',
+  status: 'status',
+  amount: 'amount',
+  currency: 'currency',
+  issuedAt: 'issuedAt',
+  dueAt: 'dueAt',
+  paidAt: 'paidAt',
+  periodStart: 'periodStart',
+  periodEnd: 'periodEnd',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.BillingLedgerEntryScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  subscriptionId: 'subscriptionId',
+  paymentAttemptId: 'paymentAttemptId',
+  invoiceId: 'invoiceId',
+  entryType: 'entryType',
+  amount: 'amount',
+  currency: 'currency',
+  note: 'note',
+  metadata: 'metadata',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.PlanHistoryScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  subscriptionId: 'subscriptionId',
+  paymentAttemptId: 'paymentAttemptId',
+  fromPlan: 'fromPlan',
+  toPlan: 'toPlan',
+  billingCycle: 'billingCycle',
+  reason: 'reason',
+  effectiveAt: 'effectiveAt',
+  actorUserId: 'actorUserId',
+  note: 'note',
+  createdAt: 'createdAt'
 };
 
 exports.Prisma.OrderScalarFieldEnum = {
@@ -544,6 +633,53 @@ exports.SessionStatus = exports.$Enums.SessionStatus = {
   CANCELLED: 'CANCELLED'
 };
 
+exports.SubscriptionCycle = exports.$Enums.SubscriptionCycle = {
+  MONTHLY: 'MONTHLY',
+  YEARLY: 'YEARLY'
+};
+
+exports.SubscriptionStatus = exports.$Enums.SubscriptionStatus = {
+  TRIALING: 'TRIALING',
+  ACTIVE: 'ACTIVE',
+  PAST_DUE: 'PAST_DUE',
+  CANCELED: 'CANCELED',
+  EXPIRED: 'EXPIRED'
+};
+
+exports.PaymentAttemptStatus = exports.$Enums.PaymentAttemptStatus = {
+  PENDING: 'PENDING',
+  SUCCESS: 'SUCCESS',
+  FAILED: 'FAILED',
+  REFUNDED: 'REFUNDED',
+  CANCELED: 'CANCELED'
+};
+
+exports.SubscriptionInvoiceStatus = exports.$Enums.SubscriptionInvoiceStatus = {
+  PENDING: 'PENDING',
+  PAID: 'PAID',
+  VOID: 'VOID',
+  REFUNDED: 'REFUNDED'
+};
+
+exports.BillingLedgerEntryType = exports.$Enums.BillingLedgerEntryType = {
+  CHARGE: 'CHARGE',
+  REFUND: 'REFUND',
+  CREDIT: 'CREDIT',
+  ADJUSTMENT: 'ADJUSTMENT',
+  PLAN_CHANGE: 'PLAN_CHANGE',
+  RENEWAL: 'RENEWAL'
+};
+
+exports.PlanChangeReason = exports.$Enums.PlanChangeReason = {
+  TRIAL_START: 'TRIAL_START',
+  UPGRADE: 'UPGRADE',
+  DOWNGRADE: 'DOWNGRADE',
+  RENEWAL: 'RENEWAL',
+  REFUND: 'REFUND',
+  CANCELLATION: 'CANCELLATION',
+  ADMIN_ADJUSTMENT: 'ADMIN_ADJUSTMENT'
+};
+
 exports.OrderType = exports.$Enums.OrderType = {
   DINE_IN: 'DINE_IN',
   TAKEAWAY: 'TAKEAWAY',
@@ -581,6 +717,11 @@ exports.Prisma.ModelName = {
   Customer: 'Customer',
   DiningSession: 'DiningSession',
   Bill: 'Bill',
+  Subscription: 'Subscription',
+  PaymentAttempt: 'PaymentAttempt',
+  SubscriptionInvoice: 'SubscriptionInvoice',
+  BillingLedgerEntry: 'BillingLedgerEntry',
+  PlanHistory: 'PlanHistory',
   Order: 'Order',
   OrderItem: 'OrderItem',
   Review: 'Review',

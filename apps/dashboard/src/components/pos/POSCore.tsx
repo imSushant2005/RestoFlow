@@ -37,15 +37,16 @@ export const POS_ANIMATIONS = {
   SHIMMER: {
     initial: { x: '-100%' },
     animate: { x: '100%' },
-    transition: { repeat: Infinity, duration: 2, ease: 'linear' }
-  }
+    transition: { repeat: Infinity, duration: 2, ease: 'linear' },
+  },
 } as const;
 
 export const POS_UI = {
-  GLASS: "bg-slate-900/60 backdrop-blur-2xl border border-white/5",
-  CARD: "bg-slate-900/40 border border-white/5 hover:border-blue-500/30 transition-all",
-  BUTTON_ACCENT: "bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-900/20",
-};
+  GLASS: 'bg-slate-900/60 backdrop-blur-2xl border border-white/5',
+  CARD: 'bg-slate-900/40 border border-white/5 hover:border-blue-500/30 transition-all',
+  BUTTON_ACCENT:
+    'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-900/20',
+} as const;
 
 // --- Helpers ---
 export function readPrice(value: unknown): number {
@@ -53,13 +54,21 @@ export function readPrice(value: unknown): number {
   return Number.isFinite(amount) ? Math.max(0, amount) : 0;
 }
 
-export function calculateLineTotal(basePrice: number, quantity: number, modifiers: AssistedLineModifier[]): number {
+export function calculateLineTotal(
+  basePrice: unknown,
+  quantity: number,
+  modifiers: AssistedLineModifier[],
+): number {
+  const base = readPrice(basePrice);
   const modTotal = modifiers.reduce((sum, m) => sum + readPrice(m.priceAdjustment), 0);
-  return (readPrice(basePrice) + modTotal) * Math.max(1, quantity);
+  return (base + modTotal) * Math.max(1, quantity);
 }
 
 export const generatePosGradient = (seed: string): string => {
-  const hash = Array.from(seed).reduce((acc, char) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
+  const hash = Array.from(seed).reduce(
+    (acc, char) => char.charCodeAt(0) + ((acc << 5) - acc),
+    0,
+  );
   const hue = Math.abs(hash % 360);
   return `linear-gradient(135deg, hsl(${hue}, 60%, 15%), hsl(${(hue + 60) % 360}, 70%, 5%))`;
 };

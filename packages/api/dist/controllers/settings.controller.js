@@ -166,6 +166,12 @@ const updateBusinessSettings = async (req, res) => {
                 error: 'Only the workspace owner can change plan or trial settings.',
             });
         }
+        if (normalizedPlan !== undefined || trialEndsAt !== undefined) {
+            return res.status(409).json({
+                error: 'Plan and trial changes now go through the billing system so every subscription change is recorded safely.',
+                code: 'BILLING_FLOW_REQUIRED',
+            });
+        }
         // Check if slug is taken by another tenant
         if (normalizedSlug) {
             const existing = await prisma_1.prisma.tenant.findUnique({ where: { slug: normalizedSlug } });
@@ -206,9 +212,9 @@ const updateBusinessSettings = async (req, res) => {
                 gstin: gstin === undefined ? undefined : normalizedGstin || null,
                 businessHours: businessHours === undefined ? undefined : businessHours,
                 isActive,
-                plan: normalizedPlan,
-                trialEndsAt: normalizedPlan ? null : trialEndsAt, // Remove trial on manual plan change/upgrade
-                planStartedAt: normalizedPlan ? new Date() : undefined,
+                plan: undefined,
+                trialEndsAt: undefined,
+                planStartedAt: undefined,
             },
             select: {
                 id: true,

@@ -1,60 +1,193 @@
 import { Request, Response } from 'express';
-import { prisma } from '../db/prisma';
-import { getAvailablePlans, getPlanLimits, normalizePlan, parsePlan } from '../config/plans';
-import { withCache } from '../services/cache.service';
+import { z } from 'zod';
+import {
+  cancelTenantSubscription,
+  confirmSubscriptionPaymentAttempt,
+  createSubscriptionPaymentAttempt,
+  failSubscriptionPaymentAttempt,
+  getPlanCatalog,
+  getTenantBillingSnapshot,
+  refundSubscriptionPaymentAttempt,
+  startTrialForTenant,
+} from '../services/subscription-billing.service';
+
+const checkoutSchema = z.object({
+  planId: z.string().trim().min(1),
+  billingCycle: z.enum(['MONTHLY', 'YEARLY']).optional(),
+  idempotencyKey: z.string().trim().min(8).max(120).optional(),
+  hasWaiterService: z.boolean().optional(),
+});
+
+const trialSchema = z.object({
+  planId: z.string().trim().min(1),
+  hasWaiterService: z.boolean().optional(),
+});
+
+const confirmPaymentSchema = z.object({
+  paymentMethod: z.string().trim().min(2).max(80),
+  providerReference: z.string().trim().max(160).optional(),
+  note: z.string().trim().max(500).optional(),
+  idempotencyKey: z.string().trim().min(8).max(120).optional(),
+});
+
+const failPaymentSchema = z.object({
+  reason: z.string().trim().max(500).optional(),
+});
+
+const refundPaymentSchema = z.object({
+  note: z.string().trim().max(500).optional(),
+});
+
+const cancelSubscriptionSchema = z.object({
+  atPeriodEnd: z.boolean().optional(),
+  note: z.string().trim().max(500).optional(),
+});
+
+function respondBillingError(res: Response, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '');
+
+  if (message === 'INVALID_PLAN') return res.status(400).json({ error: 'Invalid plan selected.' });
+  if (message === 'TENANT_NOT_FOUND') return res.status(404).json({ error: 'Workspace not found.' });
+  if (message === 'ATTEMPT_NOT_FOUND') return res.status(404).json({ error: 'Payment attempt not found.' });
+  if (message === 'SUBSCRIPTION_NOT_FOUND') return res.status(404).json({ error: 'Subscription not found.' });
+  if (message === 'SUCCESSFUL_ATTEMPT_CANNOT_BE_FAILED') return res.status(409).json({ error: 'A successful attempt cannot be marked failed.' });
+  if (message === 'ONLY_SUCCESSFUL_ATTEMPTS_CAN_BE_REFUNDED') return res.status(409).json({ error: 'Only successful payments can be refunded.' });
+  if (message === 'ATTEMPT_ALREADY_REFUNDED') return res.status(409).json({ error: 'This payment attempt is already refunded.' });
+
+  return res.status(500).json({ error: 'Billing operation failed.' });
+}
 
 export const getBillingDetails = async (req: Request, res: Response) => {
   try {
-    const billing = await withCache(
-      `tenant:${req.tenantId}:billing`,
-      async () => {
-        const [tenant, itemsCount, tablesCount, staffCount] = await Promise.all([
-          prisma.tenant.findUnique({ where: { id: req.tenantId } }),
-          prisma.menuItem.count({ where: { tenantId: req.tenantId } }),
-          prisma.table.count({ where: { tenantId: req.tenantId } }),
-          prisma.user.count({ where: { tenantId: req.tenantId } }),
-        ]);
-
-        if (!tenant) {
-          throw new Error('TENANT_NOT_FOUND');
-        }
-
-        const normalizedPlan = normalizePlan(tenant.plan);
-
-        return {
-          plan: normalizedPlan,
-          limits: getPlanLimits(normalizedPlan),
-          usage: {
-            items: itemsCount,
-            tables: tablesCount,
-            staff: staffCount,
-          },
-          availablePlans: getAvailablePlans(),
-        };
-      },
-      20,
-    );
-
-    res.json(billing);
+    const snapshot = await getTenantBillingSnapshot(req.tenantId!);
+    return res.json(snapshot);
   } catch (error) {
-    if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
-      return res.status(404).json({ error: 'Tenant not found' });
+    return respondBillingError(res, error);
+  }
+};
+
+export const startTrial = async (req: Request, res: Response) => {
+  try {
+    const payload = trialSchema.parse(req.body);
+    const result = await startTrialForTenant({
+      tenantId: req.tenantId!,
+      actorUserId: req.user?.id,
+      plan: payload.planId,
+      hasWaiterService: payload.hasWaiterService,
+    });
+
+    return res.status(201).json({
+      success: true,
+      plan: result.plan,
+      trialEndsAt: result.trialEndsAt,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
     }
-    res.status(500).json({ error: 'Failed to fetch billing' });
+    return respondBillingError(res, error);
   }
 };
 
 export const createCheckoutSession = async (req: Request, res: Response) => {
   try {
-    const requestedPlan = parsePlan(req.body?.planId);
-    if (!requestedPlan) {
-      return res.status(400).json({ error: 'Invalid plan' });
-    }
-    return res.status(503).json({
-      error: 'Billing checkout is disabled until verified payment settlement is configured.',
-      code: 'BILLING_NOT_CONFIGURED',
+    const payload = checkoutSchema.parse(req.body);
+    const attempt = await createSubscriptionPaymentAttempt({
+      tenantId: req.tenantId!,
+      actorUserId: req.user?.id,
+      plan: payload.planId,
+      billingCycle: payload.billingCycle,
+      idempotencyKey: payload.idempotencyKey,
+      hasWaiterService: payload.hasWaiterService,
+    });
+
+    return res.status(201).json({
+      success: true,
+      paymentAttempt: attempt,
+      planCatalog: getPlanCatalog(),
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create checkout' });
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
+    }
+    return respondBillingError(res, error);
+  }
+};
+
+export const confirmPayment = async (req: Request, res: Response) => {
+  try {
+    const payload = confirmPaymentSchema.parse(req.body);
+    const result = await confirmSubscriptionPaymentAttempt({
+      tenantId: req.tenantId!,
+      attemptId: req.params.attemptId,
+      actorUserId: req.user?.id,
+      paymentMethod: payload.paymentMethod,
+      providerReference: payload.providerReference,
+      note: payload.note,
+      idempotencyKey: payload.idempotencyKey,
+    });
+
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
+    }
+    return respondBillingError(res, error);
+  }
+};
+
+export const failPayment = async (req: Request, res: Response) => {
+  try {
+    const payload = failPaymentSchema.parse(req.body);
+    const attempt = await failSubscriptionPaymentAttempt({
+      tenantId: req.tenantId!,
+      attemptId: req.params.attemptId,
+      reason: payload.reason,
+    });
+
+    return res.json({ success: true, paymentAttempt: attempt });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
+    }
+    return respondBillingError(res, error);
+  }
+};
+
+export const refundPayment = async (req: Request, res: Response) => {
+  try {
+    const payload = refundPaymentSchema.parse(req.body);
+    const attempt = await refundSubscriptionPaymentAttempt({
+      tenantId: req.tenantId!,
+      attemptId: req.params.attemptId,
+      actorUserId: req.user?.id,
+      note: payload.note,
+    });
+
+    return res.json({ success: true, paymentAttempt: attempt });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
+    }
+    return respondBillingError(res, error);
+  }
+};
+
+export const cancelSubscription = async (req: Request, res: Response) => {
+  try {
+    const payload = cancelSubscriptionSchema.parse(req.body);
+    const subscription = await cancelTenantSubscription({
+      tenantId: req.tenantId!,
+      actorUserId: req.user?.id,
+      atPeriodEnd: payload.atPeriodEnd,
+      note: payload.note,
+    });
+
+    return res.json({ success: true, subscription });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
+    }
+    return respondBillingError(res, error);
   }
 };

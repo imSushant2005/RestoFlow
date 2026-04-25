@@ -22,12 +22,12 @@ const VALID_ORDER_STATUSES = new Set([
 const ACTIVE_BOARD_STATUSES = ['NEW', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED'];
 const ASSISTED_FULFILLMENT_MODES = new Set(['SEND_TO_KITCHEN', 'DIRECT_BILL']);
 const ASSISTED_PAYMENT_METHODS = new Set(['cash', 'upi', 'card', 'online']);
-const LIVE_ORDERS_CACHE_TTL_SECONDS = 3;
+const LIVE_ORDERS_CACHE_TTL_SECONDS = 1;
 const ORDER_HISTORY_CACHE_TTL_SECONDS = 15;
 const ROLE_ALLOWED_STATUS_UPDATES = {
     OWNER: new Set(VALID_ORDER_STATUSES),
     MANAGER: new Set(VALID_ORDER_STATUSES),
-    KITCHEN: new Set(['ACCEPTED', 'PREPARING', 'READY']),
+    KITCHEN: new Set(['ACCEPTED', 'PREPARING', 'READY', 'CANCELLED']),
     CASHIER: new Set(VALID_ORDER_STATUSES),
     WAITER: new Set(['SERVED']),
 };
@@ -447,10 +447,18 @@ const updateOrderStatus = async (req, res) => {
         }
         if (normalizedStatus === 'ACCEPTED')
             statusPatch.acceptedAt = transitionAt;
-        if (normalizedStatus === 'PREPARING')
+        if (normalizedStatus === 'PREPARING') {
+            if (existingOrder.status === 'NEW')
+                statusPatch.acceptedAt = transitionAt;
             statusPatch.preparingAt = transitionAt;
-        if (normalizedStatus === 'READY')
+        }
+        if (normalizedStatus === 'READY') {
+            if (existingOrder.status === 'NEW')
+                statusPatch.acceptedAt = transitionAt;
+            if (existingOrder.status === 'NEW' || existingOrder.status === 'ACCEPTED')
+                statusPatch.preparingAt = transitionAt;
             statusPatch.readyAt = transitionAt;
+        }
         if (normalizedStatus === 'SERVED')
             statusPatch.servedAt = transitionAt;
         const attendingStaffName = normalizedStatus === 'SERVED' && existingOrder.diningSessionId && req.user?.id
@@ -505,6 +513,9 @@ const updateOrderStatus = async (req, res) => {
             try {
                 const io = (0, socket_1.getIO)();
                 io.to((0, socket_1.getTenantRoom)(req.tenantId)).emit('order:update', responseOrder);
+                if (existingOrder.diningSessionId) {
+                    io.to((0, socket_1.getSessionRoom)(req.tenantId, existingOrder.diningSessionId)).emit('order:update', responseOrder);
+                }
                 if (normalizedStatus === 'READY') {
                     const pickupPayload = buildWaiterPickupPayload(responseOrder);
                     io.to((0, socket_1.getTenantRoom)(req.tenantId)).emit('waiter:pickup_ready', pickupPayload);

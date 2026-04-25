@@ -55,6 +55,17 @@ type ServerToClientEvents = {
     'session:update': (payload: {
         sessionId: string;
         status: string;
+        tableId?: string | null;
+        tableName?: string;
+        paymentMethod?: string;
+        bill?: {
+            id?: string;
+            invoiceNumber?: string | null;
+            totalAmount?: number;
+            paymentStatus?: string;
+            paymentMethod?: string | null;
+            paidAt?: string | Date | null;
+        };
         updatedAt: string;
     }) => void;
     'session:finished': (payload: {
@@ -82,6 +93,14 @@ type ServerToClientEvents = {
         tableName?: string;
         method: string;
         totalAmount?: number;
+        bill?: {
+            id?: string;
+            invoiceNumber?: string | null;
+            totalAmount?: number;
+            paymentStatus?: string;
+            paymentMethod?: string | null;
+            paidAt?: string | Date | null;
+        };
         submittedAt: string;
     }) => void;
     'session:payment_rejected': (payload: {

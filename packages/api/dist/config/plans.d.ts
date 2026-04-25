@@ -1,9 +1,11 @@
+import type { SignOptions } from 'jsonwebtoken';
 export type PlanLimit = {
     items: number;
     tables: number;
     staff: number;
     price: number;
     name: string;
+    serviceWorkflow: 'TOKEN_COUNTER' | 'HYBRID_CAFE' | 'FULL_DINE_IN';
     hasKDS: boolean;
     hasWaiterRole: boolean;
     hasWaiterApp: boolean;
@@ -13,12 +15,19 @@ export type PlanLimit = {
     maxFloors: number;
     hasFranchiseControls: boolean;
     hasWaiterCalling: 'HIDDEN' | 'TOGGLEABLE' | 'ALWAYS';
+    recommendedDiningMinutes: number;
+    largePartyDiningMinutes: number;
+    emptySessionTimeoutMinutes: number;
+    sessionAccessHours: number;
 };
 export type CanonicalPlan = 'MINI' | 'CAFE' | 'BHOJPRO' | 'PREMIUM';
+export type SessionAccessTokenTtl = Extract<NonNullable<SignOptions['expiresIn']>, string>;
 export declare const PLAN_ALIASES: Record<string, CanonicalPlan>;
 export declare const PLAN_LIMITS: Record<string, PlanLimit>;
 export declare function parsePlan(plan: unknown): CanonicalPlan | null;
 export declare function normalizePlan(plan: unknown): CanonicalPlan;
 export declare function getPlanLimits(plan: unknown): PlanLimit;
 export declare function getAvailablePlans(): Record<CanonicalPlan, PlanLimit>;
+export declare function getSessionAccessTokenTtl(plan: unknown, partySize?: number | null): SessionAccessTokenTtl;
+export declare function getEmptySessionTimeoutMinutes(plan: unknown, partySize?: number | null): number;
 //# sourceMappingURL=plans.d.ts.map

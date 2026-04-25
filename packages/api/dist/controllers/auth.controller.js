@@ -9,6 +9,8 @@ const cache_service_1 = require("../services/cache.service");
 const cache_keys_1 = require("../utils/cache-keys");
 const hash_1 = require("../utils/hash");
 const jwt_1 = require("../utils/jwt");
+const logger_1 = require("../utils/logger");
+const auth_security_service_1 = require("../services/auth-security.service");
 const registerSchema = zod_1.z.object({
     email: zod_1.z.string().email(),
     password: zod_1.z.string().min(6),
@@ -70,6 +72,16 @@ const forgotResetSchema = zod_1.z.object({
     newPassword: zod_1.z.string().min(8),
 });
 const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+function getRefreshCookieOptions() {
+    const isProduction = process.env.NODE_ENV === 'production';
+    return {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: (isProduction ? 'none' : 'lax'),
+        maxAge: REFRESH_TOKEN_MAX_AGE_MS,
+        path: '/',
+    };
+}
 function normalizeEmail(email) {
     return email.trim().toLowerCase();
 }
@@ -93,12 +105,7 @@ function normalizeTenantScopedUsername(raw, tenantSlug) {
     return `${handle}@${slug}.BHOJFLOW`;
 }
 function issueRefreshCookie(res, refreshToken) {
-    res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: REFRESH_TOKEN_MAX_AGE_MS,
-    });
+    res.cookie('refreshToken', refreshToken, getRefreshCookieOptions());
 }
 async function issueSessionForUser(res, user) {
     const tokens = (0, jwt_1.generateTokens)({
@@ -461,12 +468,29 @@ const login = async (req, res) => {
             }), 'login-user-email-fallback');
         }
         if (!user) {
+            await (0, auth_security_service_1.recordFailedAuthAttempt)({
+                req,
+                scope: 'login',
+                identifier: rawIdentifier,
+                reason: 'user_not_found',
+            });
             return res.status(401).json({ error: 'User not found. Please create an account first from the signup page.' });
         }
         const isPasswordValid = await (0, hash_1.verifyPassword)(validatedData.password, user.passwordHash);
         if (!isPasswordValid) {
+            await (0, auth_security_service_1.recordFailedAuthAttempt)({
+                req,
+                scope: 'login',
+                identifier: rawIdentifier,
+                reason: 'invalid_password',
+            });
             return res.status(401).json({ error: 'Invalid credentials' });
         }
+        await (0, auth_security_service_1.clearFailedAuthAttempts)({
+            req,
+            scope: 'login',
+            identifier: rawIdentifier,
+        });
         // Optimization: Run non-critical update in background and parallelize session creation
         const [session] = await Promise.all([
             issueSessionForUser(res, {
@@ -483,8 +507,14 @@ const login = async (req, res) => {
             (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.user.update({
                 where: { id: user.id },
                 data: { lastLoginAt: new Date() },
-            }), `login-last-login:${user.id}`).catch(err => console.error('[NON_CRITICAL_UPDATE_FAILED]:', err))
+            }), `login-last-login:${user.id}`).catch(err => logger_1.logger.warn({ err, userId: user.id }, 'Non-critical lastLoginAt update failed'))
         ]);
+        logger_1.logger.info({
+            userId: user.id,
+            tenantId: user.tenantId,
+            role: user.role,
+            ...(0, auth_security_service_1.getRequestSecurityMeta)(req),
+        }, 'User login succeeded');
         return res.json(session);
     }
     catch (error) {
@@ -494,7 +524,7 @@ const login = async (req, res) => {
                 details: error.issues,
             });
         }
-        console.error('[LOGIN_ERROR_DEBUG]:', error);
+        logger_1.logger.error({ err: error, ...(0, auth_security_service_1.getRequestSecurityMeta)(req) }, 'Login failed unexpectedly');
         return res.status(500).json({ error: 'Internal server error. Please try again later.' });
     }
 };
@@ -755,6 +785,12 @@ const getForgotPasswordQuestion = async (req, res) => {
             select: { securityQuestion: true, mustChangePassword: true },
         });
         if (!user) {
+            await (0, auth_security_service_1.recordFailedAuthAttempt)({
+                req,
+                scope: 'forgot_password',
+                identifier: body.identifier,
+                reason: 'account_not_found',
+            });
             return res.status(404).json({ error: 'Account not found' });
         }
         if (!user.securityQuestion) {
@@ -795,12 +831,29 @@ const resetForgotPassword = async (req, res) => {
             },
         });
         if (!user || !user.securityAnswerHash) {
+            await (0, auth_security_service_1.recordFailedAuthAttempt)({
+                req,
+                scope: 'forgot_password',
+                identifier: body.identifier,
+                reason: 'reset_not_allowed',
+            });
             return res.status(400).json({ error: 'Unable to reset password for this account' });
         }
         const answerMatches = await (0, hash_1.verifyPassword)(body.securityAnswer.toLowerCase(), user.securityAnswerHash);
         if (!answerMatches) {
+            await (0, auth_security_service_1.recordFailedAuthAttempt)({
+                req,
+                scope: 'forgot_password',
+                identifier: body.identifier,
+                reason: 'invalid_security_answer',
+            });
             return res.status(400).json({ error: 'Security answer is incorrect' });
         }
+        await (0, auth_security_service_1.clearFailedAuthAttempts)({
+            req,
+            scope: 'forgot_password',
+            identifier: body.identifier,
+        });
         const isSamePassword = await (0, hash_1.verifyPassword)(body.newPassword, user.passwordHash);
         if (isSamePassword) {
             return res.status(400).json({ error: 'New password must be different from current password' });
@@ -828,6 +881,12 @@ const refresh = async (req, res) => {
     try {
         const refreshToken = req.cookies.refreshToken;
         if (!refreshToken) {
+            await (0, auth_security_service_1.recordFailedAuthAttempt)({
+                req,
+                scope: 'refresh',
+                identifier: 'missing_refresh_token',
+                reason: 'missing_refresh_token',
+            });
             return res.status(401).json({ error: 'No refresh token provided' });
         }
         const decoded = (0, jwt_1.verifyRefreshToken)(refreshToken);
@@ -836,6 +895,12 @@ const refresh = async (req, res) => {
             include: { user: true },
         });
         if (!dbToken || dbToken.user.id !== decoded.id || new Date() > dbToken.expiresAt) {
+            await (0, auth_security_service_1.recordFailedAuthAttempt)({
+                req,
+                scope: 'refresh',
+                identifier: decoded.email || decoded.id,
+                reason: 'invalid_refresh_token',
+            });
             return res.status(401).json({ error: 'Invalid refresh token' });
         }
         const tokens = (0, jwt_1.generateTokens)({
@@ -854,9 +919,20 @@ const refresh = async (req, res) => {
             },
         });
         issueRefreshCookie(res, tokens.refreshToken);
+        await (0, auth_security_service_1.clearFailedAuthAttempts)({
+            req,
+            scope: 'refresh',
+            identifier: dbToken.user.email || dbToken.user.id,
+        });
         return res.json({ accessToken: tokens.accessToken });
     }
     catch (error) {
+        await (0, auth_security_service_1.recordFailedAuthAttempt)({
+            req,
+            scope: 'refresh',
+            identifier: 'refresh_exception',
+            reason: 'refresh_exception',
+        }).catch(() => undefined);
         return res.status(401).json({ error: 'Invalid refresh token' });
     }
 };
@@ -874,7 +950,10 @@ const logout = async (req, res) => {
         console.error('Logout error:', error);
     }
     finally {
-        res.clearCookie('refreshToken');
+        res.clearCookie('refreshToken', {
+            ...getRefreshCookieOptions(),
+            maxAge: undefined,
+        });
         return res.json({ success: true, message: 'Logged out successfully' });
     }
 };

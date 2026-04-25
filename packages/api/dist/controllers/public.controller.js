@@ -48,6 +48,17 @@ const publicOrderSelect = {
         select: {
             id: true,
             sessionStatus: true,
+            partySize: true,
+            bill: {
+                select: {
+                    id: true,
+                    invoiceNumber: true,
+                    totalAmount: true,
+                    paymentStatus: true,
+                    paymentMethod: true,
+                    paidAt: true,
+                },
+            },
             customer: {
                 select: {
                     id: true,
@@ -297,6 +308,7 @@ const createOrder = async (req, res) => {
                     id: true,
                     tableId: true,
                     customerId: true,
+                    partySize: true,
                     sessionStatus: true,
                 },
             }), `public-create-order-session:${tenant.id}:${incomingSessionToken}`)
@@ -338,6 +350,7 @@ const createOrder = async (req, res) => {
                     id: true,
                     tableId: true,
                     customerId: true,
+                    partySize: true,
                     sessionStatus: true,
                 },
             }), `public-create-order-active-table-session:${tenant.id}:${safeTableId}`);
@@ -377,6 +390,7 @@ const createOrder = async (req, res) => {
                             id: true,
                             tableId: true,
                             customerId: true,
+                            partySize: true,
                             sessionStatus: true,
                         },
                     });
@@ -420,6 +434,7 @@ const createOrder = async (req, res) => {
                             id: true,
                             tableId: true,
                             customerId: true,
+                            partySize: true,
                             sessionStatus: true,
                         },
                     });
@@ -493,6 +508,7 @@ const createOrder = async (req, res) => {
                 sessionId: lockedSession.id,
                 customerId: lockedSession.customerId,
                 tableId: lockedSession.tableId || null,
+                expiresIn: (0, plans_1.getSessionAccessTokenTtl)(tenant.plan, lockedSession.partySize),
             }),
         });
         setImmediate(async () => {
@@ -529,6 +545,7 @@ const createOrder = async (req, res) => {
                             sessionId: lockedSession.id,
                             customerId: lockedSession.customerId,
                             tableId: lockedSession.tableId || null,
+                            expiresIn: (0, plans_1.getSessionAccessTokenTtl)(tenant.plan, lockedSession.partySize),
                         }),
                     }, 600).catch((err) => console.error('[IDEMPOTENCY_CACHE_ERROR]', err));
                 }

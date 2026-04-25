@@ -1,0 +1,16 @@
+﻿src/components/pos/BottomNav.tsx(3,31): error TS6133: 'Sparkles' is declared but its value is never read.
+src/components/pos/CartPanel.tsx(4,100): error TS6133: 'MapPin' is declared but its value is never read.
+src/components/pos/CartPanel.tsx(6,44): error TS6133: 'POS_UI' is declared but its value is never read.
+src/components/pos/ModifierSheet.tsx(4,59): error TS6133: 'POS_ANIMATIONS' is declared but its value is never read.
+src/components/pos/ModifierSheet.tsx(4,75): error TS6133: 'POS_UI' is declared but its value is never read.
+src/components/pos/ModifierSheet.tsx(256,16): error TS2304: Cannot find name 'Notebook'.
+src/pages/AssistedOrderingPage.tsx(5,22): error TS6133: 'ReceiptText' is declared but its value is never read.
+src/pages/AssistedOrderingPage.tsx(6,3): error TS6133: 'ChevronRight' is declared but its value is never read.
+src/pages/AssistedOrderingPage.tsx(6,42): error TS6133: 'LayoutGrid' is declared but its value is never read.
+src/pages/AssistedOrderingPage.tsx(6,54): error TS6133: 'Sparkles' is declared but its value is never read.
+src/pages/AssistedOrderingPage.tsx(6,64): error TS6133: 'Plus' is declared but its value is never read.
+src/pages/AssistedOrderingPage.tsx(7,3): error TS6133: 'ChevronDown' is declared but its value is never read.
+src/pages/AssistedOrderingPage.tsx(16,75): error TS6133: 'POS_ANIMATIONS' is declared but its value is never read.
+src/pages/AssistedOrderingPage.tsx(16,91): error TS6133: 'POS_UI' is declared but its value is never read.
+src/pages/AssistedOrderingPage.tsx(159,10): error TS6133: 'result' is declared but its value is never read.
+src/pages/AssistedOrderingPage.tsx(167,10): error TS6133: 'isSidebarOpen' is declared but its value is never read.

@@ -172,16 +172,15 @@ export function Onboarding({ nextPath }: OnboardingProps) {
   const planMutation = useMutation({
     mutationFn: async ({
       plan,
-      trialEndsAt,
       hasWaiterService,
     }: {
       plan: string;
-      trialEndsAt: string;
       hasWaiterService: boolean;
     }) => {
-      return api.patch('/settings/business', { plan, trialEndsAt, hasWaiterService });
+      return api.post('/billing/trials/start', { planId: plan, hasWaiterService });
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
+      await api.patch('/settings/business', { hasWaiterService: variables.hasWaiterService });
       await queryClient.invalidateQueries({ queryKey: ['settings-business'] });
       setStep('done');
     },
@@ -457,12 +456,8 @@ export function Onboarding({ nextPath }: OnboardingProps) {
                       <button
                         disabled={planMutation.isPending}
                         onClick={() => {
-                          const trialEndsAt = new Date();
-                          trialEndsAt.setDate(trialEndsAt.getDate() + 30);
-                          
                           planMutation.mutate({
                             plan: recommendedPlan,
-                            trialEndsAt: trialEndsAt.toISOString(),
                             hasWaiterService,
                           });
                         }}

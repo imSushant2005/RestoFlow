@@ -1,7 +1,7 @@
 import { useState, useMemo, memo } from 'react';
-import { motion } from 'framer-motion';
-import { X, Plus, Minus, CheckCircle2, AlertCircle } from 'lucide-react';
-import { readPrice, calculateLineTotal, AssistedLineItem, POS_ANIMATIONS, POS_UI } from './POSCore';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Plus, Minus, CheckCircle2, AlertCircle, Sparkles, ChefHat, Notebook } from 'lucide-react';
+import { readPrice, calculateLineTotal, AssistedLineItem } from './POSCore';
 import { formatINR } from '../../lib/currency';
 
 interface ModifierSheetProps {
@@ -15,13 +15,18 @@ export const ModifierSheet = memo(({ item, onClose, onAdd }: ModifierSheetProps)
   const [notes, setNotes] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  // 1. Group Normalization
-  const groups = useMemo(() => 
-    Array.isArray(item?.modifierGroups)
-      ? item.modifierGroups.map((g: any) => g?.modifierGroup || g).filter((g: any) => g?.id)
-      : [], [item]);
+  // Normalize modifier groups
+  const groups = useMemo(
+    () =>
+      Array.isArray(item?.modifierGroups)
+        ? item.modifierGroups
+          .map((g: any) => g?.modifierGroup || g)
+          .filter((g: any) => g?.id)
+        : [],
+    [item],
+  );
 
-  // 2. Selection Logic
+  // Pre-select defaults
   const [selectedIds, setSelectedIds] = useState<Record<string, string[]>>(() => {
     const initial: Record<string, string[]> = {};
     groups.forEach((g: any) => {
@@ -34,21 +39,37 @@ export const ModifierSheet = memo(({ item, onClose, onAdd }: ModifierSheetProps)
     return initial;
   });
 
-  const activeModifiers = useMemo<AssistedLineItem['selectedModifiers']>(() =>
-    groups.flatMap((g: any) =>
-      (g.modifiers || [])
-        .filter((m: any) => (selectedIds[g.id] || []).includes(String(m.id)))
-        .map((m: any) => ({
-          id: String(m.id),
-          name: String(m.name),
-          groupName: String(g.name),
-          priceAdjustment: readPrice(m.priceAdjustment),
-        }))
-    ), [groups, selectedIds]);
+  const activeModifiers = useMemo<AssistedLineItem['selectedModifiers']>(
+    () =>
+      groups.flatMap((g: any) =>
+        (g.modifiers || [])
+          .filter((m: any) => (selectedIds[g.id] || []).includes(String(m.id)))
+          .map((m: any) => ({
+            id: String(m.id),
+            name: String(m.name),
+            groupName: String(g.name),
+            priceAdjustment: readPrice(m.priceAdjustment),
+          })),
+      ),
+    [groups, selectedIds],
+  );
 
-  const subtotal = useMemo(() => 
-    calculateLineTotal(item?.price, quantity, activeModifiers), 
-  [item?.price, quantity, activeModifiers]);
+  const subtotal = useMemo(
+    () => calculateLineTotal(item?.price, quantity, activeModifiers),
+    [item?.price, quantity, activeModifiers],
+  );
+
+  // Validate required groups
+  const validationErrors = useMemo(
+    () =>
+      groups
+        .filter((g: any) => {
+          const min = Number(g.minSelections || 0);
+          return min > 0 && (selectedIds[g.id] || []).length < min;
+        })
+        .map((g: any) => g.name),
+    [groups, selectedIds],
+  );
 
   const handleToggle = (g: any, m: any) => {
     const current = selectedIds[g.id] || [];
@@ -56,7 +77,7 @@ export const ModifierSheet = memo(({ item, onClose, onAdd }: ModifierSheetProps)
     const max = Math.max(1, Number(g.maxSelections || 1));
 
     if (current.includes(mid)) {
-      setSelectedIds({ ...selectedIds, [g.id]: current.filter(id => id !== mid) });
+      setSelectedIds({ ...selectedIds, [g.id]: current.filter((id) => id !== mid) });
       return;
     }
 
@@ -66,7 +87,7 @@ export const ModifierSheet = memo(({ item, onClose, onAdd }: ModifierSheetProps)
     }
 
     if (current.length >= max) {
-      setErrorMsg(`Only ${max} choices allowed for ${g.name}`);
+      setErrorMsg(`Limit of ${max} reached for ${g.name}`);
       setTimeout(() => setErrorMsg(''), 2500);
       return;
     }
@@ -75,6 +96,11 @@ export const ModifierSheet = memo(({ item, onClose, onAdd }: ModifierSheetProps)
   };
 
   const handleAdd = () => {
+    if (validationErrors.length > 0) {
+      setErrorMsg(`Required: ${validationErrors.join(', ')}`);
+      setTimeout(() => setErrorMsg(''), 3000);
+      return;
+    }
     onAdd({
       id: `pos_${item.id}_${Date.now()}`,
       menuItemId: String(item.id),
@@ -82,7 +108,7 @@ export const ModifierSheet = memo(({ item, onClose, onAdd }: ModifierSheetProps)
       basePrice: readPrice(item.price),
       quantity,
       notes: notes.trim(),
-      selectedModifierIds: activeModifiers.map(am => am.id),
+      selectedModifierIds: activeModifiers.map((am) => am.id),
       selectedModifiers: activeModifiers,
       lineTotal: subtotal,
     });
@@ -90,148 +116,216 @@ export const ModifierSheet = memo(({ item, onClose, onAdd }: ModifierSheetProps)
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[150] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center p-0 lg:p-6"
+      className="fixed inset-0 z-[150] flex items-end justify-center bg-black/80 backdrop-blur-md sm:items-center p-0 sm:p-6"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <motion.div
-        {...POS_ANIMATIONS.SPRING}
+        layoutId={`item-${item.id}`}
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
-        className="w-full sm:max-w-xl max-h-[95vh] flex flex-col rounded-t-[3rem] sm:rounded-[3rem] bg-slate-900 border border-white/10 shadow-2xl overflow-hidden shadow-blue-500/10"
+        transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+        className="w-full sm:max-w-2xl max-h-[95dvh] flex flex-col rounded-t-[3rem] sm:rounded-[3rem] bg-slate-900 border border-white/10 shadow-3xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header Section */}
-        <div className="relative p-8 lg:p-10 border-b border-white/5 bg-slate-900/50 backdrop-blur-xl">
-           <div className="flex justify-between items-start gap-6">
-              <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-500">Customization</span>
-                <h3 className="text-2xl font-black text-white leading-tight">{item?.name}</h3>
+        <div className="relative px-8 pt-8 pb-6 border-b border-white/5 flex-shrink-0 bg-slate-950/40">
+          <div className="flex justify-between items-start gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <ChefHat size={14} className="text-blue-500" />
+                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-500/80">
+                  Customization Suite
+                </span>
               </div>
-              <motion.button 
-                whileTap={{ scale: 0.9 }}
-                onClick={onClose} 
-                className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-500 hover:text-white transition-colors"
-              >
-                <X size={24} />
-              </motion.button>
-           </div>
-        </div>
-
-        {/* Scrollable Modification Surface */}
-        <div className="flex-1 overflow-y-auto p-8 lg:p-10 space-y-12">
-          {groups.map((g: any) => (
-            <div key={g.id} className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-[11px] font-black text-white uppercase tracking-[0.2em]">{g.name}</h4>
-                  <p className="text-[9px] font-bold text-slate-500 mt-1 uppercase">
-                    Min: {g.minSelections || 0} • Max: {g.maxSelections || 1}
-                  </p>
-                </div>
-                {(selectedIds[g.id] || []).length >= (g.minSelections || 0) && (
-                  <CheckCircle2 size={16} className="text-emerald-500" />
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {(g.modifiers || []).map((m: any) => {
-                  const isSelected = (selectedIds[g.id] || []).includes(String(m.id));
-                  return (
-                    <motion.button
-                      key={m.id}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => handleToggle(g, m)}
-                      className={`relative flex items-center justify-between p-5 rounded-2xl border-2 transition-all overflow-hidden ${
-                        isSelected 
-                          ? 'border-blue-500 bg-blue-500/10' 
-                          : 'border-slate-800 bg-slate-800/20 hover:border-slate-700'
-                      }`}
-                    >
-                      <div className="flex flex-col items-start gap-1">
-                        <span className={`text-[13px] font-black ${isSelected ? 'text-white' : 'text-slate-400'}`}>
-                          {m.name}
-                        </span>
-                        <span className="text-[10px] font-black text-blue-500/80">
-                          {readPrice(m.priceAdjustment) > 0 ? `+${formatINR(m.priceAdjustment)}` : 'Included'}
-                        </span>
-                      </div>
-                      {isSelected && (
-                         <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                            <CheckCircle2 size={14} className="text-white" />
-                         </div>
-                      )}
-                    </motion.button>
-                  );
-                })}
+              <h3 className="text-2xl font-black text-white leading-tight tracking-tight">{item?.name}</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-slate-500 uppercase tracking-widest leading-none">Standard Base:</span>
+                <span className="text-sm font-black text-blue-400">{formatINR(readPrice(item?.price))}</span>
               </div>
             </div>
-          ))}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={onClose}
+              className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all flex-shrink-0 shadow-lg"
+            >
+              <X size={24} />
+            </motion.button>
+          </div>
+        </div>
 
-          {/* Notes Area */}
-          <div className="space-y-4">
-            <h4 className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Kitchen Notes</h4>
-            <div className="relative">
+        {/* Scrollable Modifiers List */}
+        <div className="flex-1 overflow-y-auto px-8 py-8 space-y-10 custom-scrollbar">
+          {groups.map((g: any, gIndex: number) => {
+            const min = Number(g.minSelections || 0);
+            const max = Number(g.maxSelections || 1);
+            const selected = selectedIds[g.id] || [];
+            const isSatisfied = selected.length >= min;
+
+            return (
+              <motion.div
+                key={g.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: gIndex * 0.05 }}
+                className="space-y-5"
+              >
+                <div className="flex items-center justify-between px-1">
+                  <div>
+                    <h4 className="text-[12px] font-black text-white uppercase tracking-[0.25em]">
+                      {g.name}
+                    </h4>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`text-[9px] font-black uppercase tracking-widest ${min > 0 ? 'text-blue-400' : 'text-slate-600'}`}>
+                        {min > 0 ? `Compulsory (${min}+)` : 'Optional'}
+                      </span>
+                      <span className="w-1 h-1 rounded-full bg-slate-800" />
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">
+                        Limit {max}
+                      </span>
+                    </div>
+                  </div>
+                  {isSatisfied && (
+                    <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full shadow-lg shadow-emerald-900/10">
+                      <CheckCircle2 size={13} className="text-emerald-500" />
+                      <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Selected</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {(g.modifiers || []).map((m: any) => {
+                    const isSelected = selected.includes(String(m.id));
+                    const adj = readPrice(m.priceAdjustment);
+                    return (
+                      <motion.button
+                        key={m.id}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handleToggle(g, m)}
+                        className={`group relative flex items-center justify-between p-5 rounded-[1.75rem] border-2 transition-all shadow-lg ${isSelected
+                          ? 'border-blue-500 bg-blue-600/10 shadow-blue-900/20'
+                          : 'border-slate-800 bg-slate-800/20 hover:border-slate-700 hover:bg-slate-800/40'
+                          }`}
+                      >
+                        <div className="flex flex-col items-start gap-1">
+                          <span
+                            className={`text-[15px] font-black transition-colors ${isSelected ? 'text-white' : 'text-slate-400'}`}
+                          >
+                            {m.name}
+                          </span>
+                          <span className={`text-[11px] font-black tracking-tight ${isSelected ? 'text-blue-400' : 'text-slate-600'}`}>
+                            {adj > 0 ? `+${formatINR(adj)}` : 'No Extra Cost'}
+                          </span>
+                        </div>
+                        <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-blue-600 border-blue-400' : 'border-slate-700 bg-slate-900'
+                          }`}>
+                          {isSelected && <CheckCircle2 size={14} className="text-white" />}
+                        </div>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            );
+          })}
+
+          {/* Kitchen Directives Field */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: groups.length * 0.05 }}
+            className="space-y-4"
+          >
+            <h4 className="text-[12px] font-black text-white uppercase tracking-[0.25em] px-1">
+              Kitchen Directives
+            </h4>
+            <div className="relative group">
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Allergy alerts or special requests..."
-                className="w-full bg-slate-950/50 border border-slate-800 rounded-2xl p-6 text-sm text-white placeholder:text-slate-700 focus:outline-none focus:border-blue-500 transition-all font-medium"
+                placeholder="Specify allergy considerations, spice levels, or packaging preferences…"
+                className="w-full bg-slate-950/60 border border-slate-800 rounded-[1.75rem] p-5 text-sm text-white placeholder:text-slate-700 focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/5 transition-all font-black leading-relaxed shadow-lg resize-none"
                 rows={4}
               />
+              <Notebook size={20} className="absolute bottom-5 right-5 text-slate-800 group-focus-within:text-blue-500/30 transition-colors" />
             </div>
-          </div>
+          </motion.div>
         </div>
 
-        {/* Action Bar */}
-        <div className="p-8 lg:p-10 bg-slate-950 border-t border-white/5 space-y-8">
-          <div className="flex items-center justify-between px-2">
-            <div className="flex flex-col">
-              <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest leading-none mb-1">Batch Size</span>
-              <div className="flex items-center gap-6 mt-2">
-                <motion.button 
+        {/* Global Control Bar */}
+        <div className="px-8 py-8 bg-slate-950 border-t border-white/5 space-y-6 flex-shrink-0 shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">
+                Volume Control
+              </span>
+              <div className="flex items-center gap-5 mt-1">
+                <motion.button
                   whileTap={{ scale: 0.8 }}
-                  onClick={() => setQuantity(q => Math.max(1, q - 1))} 
-                  className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-900 border border-white/5 text-slate-500 hover:text-white"
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  className="w-11 h-11 flex items-center justify-center rounded-2xl bg-slate-900 border border-white/5 text-slate-500 hover:text-white hover:bg-slate-800 transition-all shadow-lg"
                 >
-                   <Minus size={18} />
+                  <Minus size={20} />
                 </motion.button>
-                <span className="text-xl font-black text-white tabular-nums w-4 text-center">{quantity}</span>
-                <motion.button 
-                   whileTap={{ scale: 0.8 }}
-                   onClick={() => setQuantity(q => q + 1)} 
-                   className="w-10 h-10 flex items-center justify-center rounded-xl bg-blue-600/10 text-blue-500 border border-blue-500/20"
+                <span className="text-2xl font-black text-white tabular-nums w-8 text-center tracking-tighter">
+                  {quantity}
+                </span>
+                <motion.button
+                  whileTap={{ scale: 0.8 }}
+                  onClick={() => setQuantity((q) => q + 1)}
+                  className="w-11 h-11 flex items-center justify-center rounded-2xl bg-blue-600/10 text-blue-500 border border-blue-500/20 hover:bg-blue-600/20 transition-all shadow-lg"
                 >
-                   <Plus size={18} />
+                  <Plus size={20} />
                 </motion.button>
               </div>
             </div>
-            
-            {errorMsg && (
-              <motion.div 
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="flex items-center gap-2 text-rose-500 bg-rose-500/10 px-4 py-2 rounded-xl border border-rose-500/20"
-              >
-                <AlertCircle size={14} />
-                <span className="text-[10px] font-black uppercase tracking-widest">{errorMsg}</span>
-              </motion.div>
-            )}
+
+            <AnimatePresence>
+              {errorMsg && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="flex items-center gap-3 text-rose-400 bg-rose-500/10 px-4 py-3 rounded-2xl border border-rose-500/20 max-w-[220px] shadow-2xl"
+                >
+                  <AlertCircle size={16} className="flex-shrink-0" />
+                  <span className="text-[10px] font-black uppercase tracking-wider leading-tight">
+                    {errorMsg}
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
+          {/* Staging Confirmation */}
           <motion.button
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: validationErrors.length === 0 ? 1.01 : 1 }}
+            whileTap={{ scale: validationErrors.length === 0 ? 0.98 : 1 }}
             onClick={handleAdd}
-            className={`w-full h-18 rounded-[1.5rem] flex items-center justify-between px-10 font-black text-[13px] uppercase tracking-[0.2em] shadow-2xl ${POS_UI.BUTTON_ACCENT}`}
+            className={`w-full h-16 rounded-[1.75rem] flex items-center justify-between px-8 font-black text-[14px] uppercase tracking-[0.25em] shadow-3xl transition-all ${validationErrors.length === 0
+              ? 'bg-blue-600 text-white shadow-blue-900/30 hover:bg-blue-500'
+              : 'bg-slate-800 text-slate-600 cursor-not-allowed border border-white/5'
+              }`}
           >
-            <span>Confirm Selection</span>
-            <span className="text-lg tracking-tighter">{formatINR(subtotal)}</span>
+            <div className="flex items-center gap-3">
+              <Sparkles size={18} className={validationErrors.length === 0 ? 'animate-pulse' : ''} />
+              <span>Stage Order</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-px h-6 bg-white/10" />
+              <span className="text-xl tracking-tighter text-white">{formatINR(subtotal)}</span>
+            </div>
           </motion.button>
         </div>
       </motion.div>
     </motion.div>
   );
 });
+
+ModifierSheet.displayName = 'ModifierSheet';

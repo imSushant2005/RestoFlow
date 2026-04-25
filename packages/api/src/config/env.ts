@@ -42,6 +42,10 @@ const envSchema = z
     DIRECT_DATABASE_URL: z.string().optional(),
     JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
     JWT_REFRESH_SECRET: z.string().min(16).optional(),
+    STAFF_ACCESS_SECRET: z.string().min(16).optional(),
+    STAFF_REFRESH_SECRET: z.string().min(16).optional(),
+    CUSTOMER_SECRET: z.string().min(16).optional(),
+    SESSION_SECRET: z.string().min(16).optional(),
     REDIS_URL: z
       .string()
       .optional()
@@ -51,8 +55,6 @@ const envSchema = z
         return v.includes('://') ? v : `redis://${v}`;
       }),
     CLOUDINARY_URL: z.string().optional(),
-    RAZORPAY_KEY_ID: z.string().optional(),
-    RAZORPAY_KEY_SECRET: z.string().optional(),
     GEMINI_API_KEY: z.string().optional(),
     TWILIO_ACCOUNT_SID: z.string().optional(),
     TWILIO_AUTH_TOKEN: z.string().optional(),
@@ -63,6 +65,8 @@ const envSchema = z
       .string()
       .optional()
       .default('temporary-insecure-admin-secret-unblocked'),
+    EXPERIMENT_ADMIN_EMAILS: z.string().optional(),
+    ALLOWED_ORIGINS: z.string().optional(),
     CLIENT_URL: z.string().optional(),
     CORS_ORIGIN: z.string().optional(),
     WS_ORIGINS: z.string().optional(),
@@ -160,6 +164,7 @@ if (process.env.NODE_ENV === 'production') {
 
 const allowedOrigins = Array.from(
   new Set([
+    ...csvToList(data.ALLOWED_ORIGINS),
     ...csvToList(data.CLIENT_URL),
     ...csvToList(data.CORS_ORIGIN),
     ...csvToList(data.WS_ORIGINS),
@@ -169,10 +174,12 @@ const allowedOrigins = Array.from(
 export const env = {
   ...data,
   DIRECT_DATABASE_URL: emptyToUndefined(data.DIRECT_DATABASE_URL),
+  STAFF_ACCESS_SECRET: emptyToUndefined(data.STAFF_ACCESS_SECRET),
+  STAFF_REFRESH_SECRET: emptyToUndefined(data.STAFF_REFRESH_SECRET),
+  CUSTOMER_SECRET: emptyToUndefined(data.CUSTOMER_SECRET),
+  SESSION_SECRET: emptyToUndefined(data.SESSION_SECRET),
   REDIS_URL: emptyToUndefined(data.REDIS_URL),
   CLOUDINARY_URL: emptyToUndefined(data.CLOUDINARY_URL),
-  RAZORPAY_KEY_ID: emptyToUndefined(data.RAZORPAY_KEY_ID),
-  RAZORPAY_KEY_SECRET: emptyToUndefined(data.RAZORPAY_KEY_SECRET),
   GEMINI_API_KEY: emptyToUndefined(data.GEMINI_API_KEY),
   TWILIO_ACCOUNT_SID: emptyToUndefined(data.TWILIO_ACCOUNT_SID),
   TWILIO_AUTH_TOKEN: emptyToUndefined(data.TWILIO_AUTH_TOKEN),
@@ -180,6 +187,7 @@ export const env = {
   VAPID_PUBLIC_KEY: emptyToUndefined(data.VAPID_PUBLIC_KEY),
   VAPID_PRIVATE_KEY: emptyToUndefined(data.VAPID_PRIVATE_KEY),
   ADMIN_SECRET_KEY: emptyToUndefined(data.ADMIN_SECRET_KEY),
+  EXPERIMENT_ADMIN_EMAILS: csvToList(data.EXPERIMENT_ADMIN_EMAILS),
   TRUST_PROXY: emptyToUndefined(data.TRUST_PROXY),
   ALLOWED_ORIGINS: allowedOrigins,
 } as const;

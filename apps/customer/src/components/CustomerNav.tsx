@@ -12,7 +12,7 @@ export function CustomerNav() {
 
   const navItems = [
     {
-      label: 'Menu',
+      label: 'Home',
       icon: Utensils,
       path: `/order/${tenantSlug}`,
       active: location.pathname === `/order/${tenantSlug}` || location.pathname.includes('/menu'),

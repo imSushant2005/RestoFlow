@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { ChevronRight, Minus, Plus, X } from 'lucide-react';
 import { formatINR } from '../lib/currency';
-import { getImageUrlCandidates } from '../lib/images';
+import { DEFAULT_MENU_IMAGE, getImageUrlCandidates, pickFirstImageSource } from '../lib/images';
 import { useCartStore } from '../store/cartStore';
 
 type NormalizedModifier = {
@@ -58,7 +58,12 @@ export function ModifierModal({ item, onClose }: any) {
   const safeBasePrice = Number.isFinite(Number(item?.price)) ? Number(item.price) : 0;
   const safeName = item?.name || 'Untitled Item';
   const safeDescription = item?.description || '';
-  const imageUrls = useMemo(() => getImageUrlCandidates(item?.imageUrl || item?.images?.[0] || ''), [item?.imageUrl, item?.images]);
+  const imageUrls = useMemo(() => {
+    const source = pickFirstImageSource(item?.images, item?.imageUrl);
+    const candidates = getImageUrlCandidates(source);
+    if (!source) return [DEFAULT_MENU_IMAGE];
+    return Array.from(new Set([...candidates, DEFAULT_MENU_IMAGE]));
+  }, [item?.imageUrl, item?.images]);
   const safeImageUrl = imageUrls[imageIndex] || '';
   const safeItemId = item?.id || '';
 

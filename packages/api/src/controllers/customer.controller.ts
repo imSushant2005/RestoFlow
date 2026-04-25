@@ -1,12 +1,29 @@
 import { Request, Response } from 'express';
 import { prisma, withPrismaRetry } from '../db/prisma';
-import jwt from 'jsonwebtoken';
-import { env } from '../config/env';
+import { generateCustomerAccessToken } from '../utils/public-access';
+import { hashPassword, verifyPassword } from '../utils/hash';
+import { z } from 'zod';
+
+const customerRegisterSchema = z.object({
+  phone: z.string().trim().min(10).max(15),
+  name: z.string().trim().min(2).max(80),
+  password: z.string().min(6).max(128),
+  email: z.string().trim().email().optional().or(z.literal('')),
+  tenantSlug: z.string().trim().optional(),
+});
+
+const customerPasswordLoginSchema = z.object({
+  phone: z.string().trim().min(10).max(15),
+  password: z.string().min(6).max(128),
+  tenantSlug: z.string().trim().optional(),
+});
+
+const tenantSlugSchema = z.string().trim().regex(/^[a-z0-9-]+$/i, 'Invalid tenant slug');
 
 function resolveScopedTenantSlug(req: Request) {
   const queryTenantSlug =
     typeof req.query.tenantSlug === 'string' && req.query.tenantSlug.trim().length > 0
-      ? req.query.tenantSlug.trim()
+      ? tenantSlugSchema.parse(req.query.tenantSlug.trim())
       : null;
   const tokenTenantSlug = ((req as any).customerTenantSlug as string | null) || null;
 
@@ -74,13 +91,11 @@ export const login = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Tenant not found' });
     }
 
-
-    // Generate JWT
-    const token = jwt.sign(
-      { customerId: customer.id, phone: customer.phone, tenantSlug: tenantSlug?.trim() || null },
-      env.JWT_SECRET,
-      { expiresIn: '30d' }
-    );
+    const token = generateCustomerAccessToken({
+      customerId: customer.id,
+      phone: customer.phone,
+      tenantSlug: tenantSlug?.trim() || null,
+    });
 
 
     res.json({
@@ -99,6 +114,144 @@ export const login = async (req: Request, res: Response) => {
     }
     console.error('Customer login error:', error);
     res.status(500).json({ error: 'Login failed' });
+  }
+};
+
+export const register = async (req: Request, res: Response) => {
+  try {
+    const payload = customerRegisterSchema.parse(req.body);
+    const phone = payload.phone.replace(/\D/g, '');
+    const email = payload.email?.trim() ? payload.email.trim().toLowerCase() : null;
+
+    if (phone.length < 10) {
+      return res.status(400).json({ error: 'Valid phone number is required' });
+    }
+
+    const existingCustomer = await withPrismaRetry(
+      () => prisma.customer.findUnique({ where: { phone } }),
+      `customer-register-find:${phone}`,
+    );
+
+    if (existingCustomer && existingCustomer.passwordHash) {
+      return res.status(409).json({ error: 'Customer account already exists. Please login instead.' });
+    }
+
+    const passwordHash = await hashPassword(payload.password);
+
+    const customer = existingCustomer
+      ? await withPrismaRetry(
+          () =>
+            prisma.customer.update({
+              where: { id: existingCustomer.id },
+              data: {
+                name: payload.name,
+                email,
+                passwordHash,
+                isActive: true,
+                deactivatedAt: null,
+                anonymizedAt: null,
+                lastSeenAt: new Date(),
+              },
+            }),
+          `customer-register-upgrade:${existingCustomer.id}`,
+        )
+      : await withPrismaRetry(
+          () =>
+            prisma.customer.create({
+              data: {
+                phone,
+                name: payload.name,
+                email,
+                passwordHash,
+              },
+            }),
+          `customer-register-create:${phone}`,
+        );
+
+    const token = generateCustomerAccessToken({
+      customerId: customer.id,
+      phone: customer.phone,
+      tenantSlug: payload.tenantSlug?.trim() || null,
+    });
+
+    return res.status(201).json({
+      token,
+      customer: {
+        id: customer.id,
+        phone: customer.phone,
+        name: customer.name,
+        email: customer.email,
+        isActive: customer.isActive,
+        createdAt: customer.createdAt,
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.issues[0]?.message || 'Invalid signup details' });
+    }
+    console.error('Customer register error:', error);
+    return res.status(500).json({ error: 'Signup failed' });
+  }
+};
+
+export const loginWithPassword = async (req: Request, res: Response) => {
+  try {
+    const payload = customerPasswordLoginSchema.parse(req.body);
+    const phone = payload.phone.replace(/\D/g, '');
+
+    const customer = await withPrismaRetry(
+      () =>
+        prisma.customer.findUnique({
+          where: { phone },
+        }),
+      `customer-password-login:${phone}`,
+    );
+
+    if (!customer || !customer.passwordHash) {
+      return res.status(404).json({ error: 'Customer account not found. Please sign up first.' });
+    }
+
+    if (!customer.isActive) {
+      return res.status(403).json({ error: 'This customer account has been deactivated.' });
+    }
+
+    const isValid = await verifyPassword(payload.password, customer.passwordHash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Incorrect phone or password.' });
+    }
+
+    const updatedCustomer = await withPrismaRetry(
+      () =>
+        prisma.customer.update({
+          where: { id: customer.id },
+          data: { lastSeenAt: new Date() },
+        }),
+      `customer-password-login-touch:${customer.id}`,
+    );
+
+    const token = generateCustomerAccessToken({
+      customerId: updatedCustomer.id,
+      phone: updatedCustomer.phone,
+      tenantSlug: payload.tenantSlug?.trim() || null,
+    });
+
+    return res.json({
+      token,
+      customer: {
+        id: updatedCustomer.id,
+        phone: updatedCustomer.phone,
+        name: updatedCustomer.name,
+        email: updatedCustomer.email,
+        isActive: updatedCustomer.isActive,
+        createdAt: updatedCustomer.createdAt,
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.issues[0]?.message || 'Invalid login details' });
+    }
+    console.error('Customer password login error:', error);
+    return res.status(500).json({ error: 'Login failed' });
   }
 };
 
@@ -243,6 +396,9 @@ export const getHistory = async (req: Request, res: Response) => {
     if (error instanceof Error && error.message === 'CUSTOMER_TENANT_SCOPE_MISMATCH') {
       return res.status(403).json({ error: 'Customer token is not valid for this restaurant scope' });
     }
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.issues[0]?.message || 'Invalid tenant scope' });
+    }
     res.status(500).json({ error: 'Failed to fetch history' });
   }
 };
@@ -294,6 +450,9 @@ export const getSessionDetail = async (req: Request, res: Response) => {
     console.error('getSessionDetail error:', error);
     if (error instanceof Error && error.message === 'CUSTOMER_TENANT_SCOPE_MISMATCH') {
       return res.status(403).json({ error: 'Customer token is not valid for this restaurant scope' });
+    }
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.issues[0]?.message || 'Invalid tenant scope' });
     }
     res.status(500).json({ error: 'Failed to fetch session' });
   }

@@ -241,12 +241,7 @@ export function WaiterPage() {
     retry: false,
   });
 
-  const { data: profile } = useQuery({
-    queryKey: ['profile'],
-    queryFn: async () => (await api.get('/auth/profile')).data,
-  });
-
-  const tipsToday = profile?.tipSummary?.totalAmount || 0;
+  const tipsToday = authMe?.user?.tipsSummary?.today?.amount || 0;
 
   const language = getLanguage(authMe?.user?.preferredLanguage);
   const t = COPY[language];

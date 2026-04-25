@@ -1,21 +1,24 @@
-import { Route, Routes } from 'react-router-dom';
 import { useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+import { Route, Routes } from 'react-router-dom';
 import { get, set } from 'idb-keyval';
+import { v4 as uuidv4 } from 'uuid';
 import { NotificationsProvider } from './components/Notifications';
 import { CustomerShell } from './components/CustomerShell';
-import { LoginPage } from './pages/LoginPage';
-import { PartySizePage } from './pages/PartySizePage';
-import { Storefront } from './pages/Storefront';
-import { CustomerLegalPage } from './pages/CustomerLegalPage';
-import { OrderStatus } from './pages/OrderStatus';
-import { SessionTracker } from './pages/SessionTracker';
-import { BillPage } from './pages/BillPage';
-import { HistoryPage } from './pages/HistoryPage';
-import { ProfilePage } from './pages/ProfilePage';
+import { LanguageProvider } from './contexts/LanguageContext';
 import { publicApi } from './lib/api';
 import { clearLegacyCustomerStorage } from './lib/tenantStorage';
-import { LanguageProvider } from './contexts/LanguageContext';
+import { BillPage } from './pages/BillPage';
+import { CustomerLegalPage } from './pages/CustomerLegalPage';
+import { CustomerPortalPage } from './pages/CustomerPortalPage';
+import { HistoryPage } from './pages/HistoryPage';
+import { LoginPage } from './pages/LoginPage';
+import { OrderStatus } from './pages/OrderStatus';
+import { PartySizePage } from './pages/PartySizePage';
+import { ProfilePage } from './pages/ProfilePage';
+import { QrScannerPage } from './pages/QrScannerPage';
+import { RestaurantHome } from './pages/RestaurantHome';
+import { SessionTracker } from './pages/SessionTracker';
+import { Storefront } from './pages/Storefront';
 
 function App() {
   useEffect(() => {
@@ -55,41 +58,36 @@ function App() {
 
   return (
     <LanguageProvider>
-    <div
-      className="min-h-[100dvh] flex flex-col font-sans antialiased"
-      style={{ background: 'var(--bg)', color: 'var(--text-1)' }}
-    >
-      <NotificationsProvider>
-        <main className="relative flex flex-1 flex-col">
-          <Routes>
-            <Route path="/order/:tenantSlug" element={<CustomerShell />}>
-              <Route index element={<Storefront />} />
-              <Route path="status" element={<OrderStatus />} />
-              <Route path="history" element={<HistoryPage />} />
-              <Route path="profile" element={<ProfilePage />} />
-              <Route path="privacy" element={<CustomerLegalPage type="privacy" />} />
-              <Route path="terms" element={<CustomerLegalPage type="terms" />} />
-              <Route path="session/:sessionId" element={<SessionTracker />} />
-              <Route path="session/:sessionId/bill" element={<BillPage />} />
-              <Route path=":tableId" element={<LoginPage />} />
-              <Route path=":tableId/party" element={<PartySizePage />} />
-              <Route path=":tableId/menu" element={<Storefront />} />
-            </Route>
+      <div
+        className="min-h-[100dvh] flex flex-col font-sans antialiased"
+        style={{ background: 'var(--bg)', color: 'var(--text-1)' }}
+      >
+        <NotificationsProvider>
+          <main className="relative flex flex-1 flex-col">
+            <Routes>
+              <Route path="/" element={<CustomerPortalPage />} />
+              <Route path="/scan" element={<QrScannerPage />} />
 
-            <Route
-              path="*"
-              element={
-                <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 px-6 text-center">
-                  <div className="text-5xl">📱</div>
-                  <h2 className="text-xl font-black text-gray-800">Scan a QR code to order</h2>
-                  <p className="text-sm text-gray-400">Ask your server for the table QR code.</p>
-                </div>
-              }
-            />
-          </Routes>
-        </main>
-      </NotificationsProvider>
-    </div>
+              <Route path="/order/:tenantSlug" element={<CustomerShell />}>
+                <Route index element={<RestaurantHome />} />
+                <Route path="menu" element={<Storefront />} />
+                <Route path="status" element={<OrderStatus />} />
+                <Route path="history" element={<HistoryPage />} />
+                <Route path="profile" element={<ProfilePage />} />
+                <Route path="privacy" element={<CustomerLegalPage type="privacy" />} />
+                <Route path="terms" element={<CustomerLegalPage type="terms" />} />
+                <Route path="session/:sessionId" element={<SessionTracker />} />
+                <Route path="session/:sessionId/bill" element={<BillPage />} />
+                <Route path=":tableId" element={<LoginPage />} />
+                <Route path=":tableId/party" element={<PartySizePage />} />
+                <Route path=":tableId/menu" element={<Storefront />} />
+              </Route>
+
+              <Route path="*" element={<CustomerPortalPage />} />
+            </Routes>
+          </main>
+        </NotificationsProvider>
+      </div>
     </LanguageProvider>
   );
 }

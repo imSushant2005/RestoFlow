@@ -1,69 +1,62 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { useCallback, useEffect, useMemo, useState, memo } from 'react';
-import { format } from 'date-fns';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatINR } from '../lib/currency';
-import { CreditCard, ReceiptText, RefreshCw, Signal, XCircle, Zap, ShoppingBag, UtensilsCrossed, Clock, ChevronDown, ChevronUp, GripVertical, CheckCircle, FileText, Trash2, ChevronRight } from 'lucide-react';
+import { TicketCard } from '../components/orders/TicketCard';
+import { PipelineCard } from '../components/orders/PipelineCard';
+import {
+  SessionPaymentMethod,
+  MiniPaymentGateMode,
+  formatStatusLabel,
+  asOrderCode,
+  resolveTicketTotal,
+  toValidTimestamp,
+  isMiniTokenFlowPlan,
+  getTableLabel,
+  matchesOrderSearch,
+  matchesTicketSearch,
+  getMiniSessionPaymentStatus,
+  getMiniSessionPaymentMethod,
+  isMiniAwaitingOnlinePayment,
+  getMiniPaymentGateMode,
+  applyLiveOrderUpdate,
+  getCompactOrderToken,
+  normalizeGuestDisplayName,
+} from '../lib/orders-live-board';
+import { CheckCircle, CreditCard, ReceiptText, RefreshCw, Signal, XCircle, Zap, ChevronRight, Search, Loader2, LayoutGrid, TableProperties, History as HistoryIcon, X, AlertTriangle } from 'lucide-react';
 import { InvoiceModal } from './InvoicesPage';
-import { 
-  DndContext, 
-  DragOverlay, 
-  closestCorners, 
-  PointerSensor, 
-  useSensor, 
-  useSensors, 
-  useDroppable,
-  useDraggable,
-  DragStartEvent,
-  DragEndEvent,
-  defaultDropAnimationSideEffects
-} from '@dnd-kit/core';
+import { KanbanColumn } from '../components/orders/KanbanColumn';
 import { usePlanFeatures } from '../hooks/usePlanFeatures';
-import { CSS } from '@dnd-kit/utilities';
 
 type DashboardRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER';
 type BillWorkflowAction = 'AWAITING_BILL' | 'PAID_CASH' | 'PAID_ONLINE';
-type SessionPaymentMethod = 'cash' | 'online' | 'upi' | 'card' | 'other';
 type SessionActionOptions = {
   shouldClose?: boolean;
   ensureBillFirst?: boolean;
   force?: boolean;
 };
+type MiniPaymentGateState = {
+  id: string;
+  status: string;
+  order: any;
+  mode: MiniPaymentGateMode;
+};
 type PaymentDeskModalState =
   | {
-      kind: 'SETTLE';
-      sessionId: string;
-      tableLabel: string;
-      totalAmount: number;
-      sessionStatus: string;
-      paymentMethod: SessionPaymentMethod;
-    }
+    kind: 'SETTLE';
+    sessionId: string;
+    tableLabel: string;
+    totalAmount: number;
+    sessionStatus: string;
+    paymentMethod: SessionPaymentMethod;
+  }
   | {
-      kind: 'CONFIRM_RECEIPT';
-      sessionId: string;
-      tableLabel: string;
-      totalAmount: number;
-    };
+    kind: 'CONFIRM_RECEIPT';
+    sessionId: string;
+    tableLabel: string;
+    totalAmount: number;
+  };
 const DASHBOARD_PAYMENT_SUBMITTED_EVENT = 'rf:session-payment-submitted';
-
-// Removed TERMINAL_STATUSES
-// --- ISOLATED TIME TICKER (Avoids global order re-renders) ---
-const TimeElapsedBadge = memo(({ createdAtMs, isUrgentThreshold = 15, isUrgentCallback }: any) => {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60000);
-    return () => clearInterval(id);
-  }, []);
-  const elapsedMin = createdAtMs > 0 ? Math.max(0, Math.floor((now - createdAtMs) / 60000)) : 0;
-  const isUrgent = elapsedMin >= isUrgentThreshold;
-
-  useEffect(() => {
-    if (isUrgentCallback) isUrgentCallback(isUrgent);
-  }, [isUrgent, isUrgentCallback]);
-
-  if (elapsedMin <= 0) return null;
-  return <span>({formatElapsedLabel(elapsedMin)})</span>;
-});
 
 function readRestaurantSlugFromStorage() {
   try {
@@ -89,796 +82,6 @@ function resolveRole(rawRole?: string | null): DashboardRole {
   return 'OWNER';
 }
 
-function parseDateValue(value: unknown) {
-  const date = value instanceof Date ? value : new Date(String(value || ''));
-  if (Number.isNaN(date.getTime())) return null;
-  return date;
-}
-
-function formatTimeValue(value: unknown, fallback = '--:--') {
-  const parsed = parseDateValue(value);
-  if (!parsed) return fallback;
-  return format(parsed, 'h:mm a');
-}
-
-function formatStatusLabel(value: unknown) {
-  const normalized = String(value || '').trim();
-  if (!normalized) return 'latest state';
-  return normalized.replace(/_/g, ' ').toLowerCase();
-}
-
-function asOrderCode(value: unknown) {
-  const raw = typeof value === 'string' ? value : String(value || '');
-  if (!raw) return '------';
-  return raw.slice(-6).toUpperCase();
-}
-
-function toAmount(value: unknown) {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : 0;
-}
-
-function resolveTicketTotal(orders: any[] = [], session?: { bill?: { totalAmount?: unknown } | null } | null) {
-  const billTotal = toAmount(session?.bill?.totalAmount);
-  if (billTotal > 0) {
-    return billTotal;
-  }
-  return orders.reduce((sum, order) => sum + toAmount(order?.totalAmount), 0);
-}
-
-function toValidTimestamp(value: unknown) {
-  const parsed = parseDateValue(value);
-  return parsed ? parsed.getTime() : 0;
-}
-
-function normalizeSessionPaymentMethod(value: unknown): SessionPaymentMethod {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'online' || normalized === 'upi' || normalized === 'card' || normalized === 'other') {
-    return normalized;
-  }
-  return 'cash';
-}
-
-function formatElapsedLabel(totalMinutes: number) {
-  const minutes = Math.max(0, Math.floor(totalMinutes));
-  if (minutes < 60) return `${minutes}m`;
-
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  if (hours < 24) {
-    return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
-  }
-
-  const days = Math.floor(hours / 24);
-  const remainingHours = hours % 24;
-  if (remainingHours > 0) return `${days}d ${remainingHours}h`;
-  return `${days}d`;
-}
-
-function getTableLabel(entity: { table?: { name?: string } | null; orderType?: string | null }) {
-  if (entity.table?.name) return `Table ${entity.table.name}`;
-  return String(entity.orderType || '').toUpperCase() === 'TAKEAWAY' ? 'Takeaway Pack' : 'Takeaway';
-}
-
-function getStatusChipClass(status: string) {
-  if (status === 'NEW' || status === 'ACCEPTED') return 'chip-blue';
-  if (status === 'PREPARING') return 'chip-yellow';
-  if (status === 'READY') return 'chip-green';
-  return 'chip-gray';
-}
-
-const LIVE_ORDER_STATUSES = new Set(['NEW', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED']);
-
-function isLiveBoardOrder(order: any) {
-  return LIVE_ORDER_STATUSES.has(String(order?.status || '').toUpperCase());
-}
-
-function mergeLiveOrder(existing: any, incoming: any) {
-  if (!existing) return incoming;
-
-  return {
-    ...existing,
-    ...incoming,
-    table: incoming?.table ?? existing.table,
-    diningSession: incoming?.diningSession
-      ? {
-          ...existing.diningSession,
-          ...incoming.diningSession,
-          bill: incoming.diningSession.bill
-            ? { ...existing.diningSession?.bill, ...incoming.diningSession.bill }
-            : existing.diningSession?.bill,
-        }
-      : existing.diningSession,
-    items: Array.isArray(incoming?.items) ? incoming.items : existing.items,
-  };
-}
-
-function applyLiveOrderUpdate(old: any, incoming: any) {
-  const safe = Array.isArray(old) ? old : [];
-  if (!incoming?.id) return safe;
-
-  const existing = safe.find((order: any) => order.id === incoming.id);
-  if (
-    existing &&
-    typeof existing.version === 'number' &&
-    typeof incoming.version === 'number' &&
-    incoming.version < existing.version
-  ) {
-    return safe;
-  }
-
-  const merged = mergeLiveOrder(existing, incoming);
-  if (!isLiveBoardOrder(merged)) {
-    return safe.filter((order: any) => order.id !== incoming.id);
-  }
-
-  if (!existing) {
-    return [merged, ...safe];
-  }
-
-  return safe.map((order: any) => (order.id === incoming.id ? merged : order));
-}
-
-
-const TicketCard = memo(({
-  ticket,
-  plan,
-  canCloseSession,
-  selectedBillAction,
-  onSelectBillAction,
-  finishPending,
-  paymentPending,
-  onFinishSession,
-  onCompleteSession,
-  onViewInvoice,
-  onOpenSettlementModal,
-}: {
-  ticket: any;
-  plan?: string;
-  canCloseSession: boolean;
-  selectedBillAction: string;
-  onSelectBillAction: (sessionId: string, action: string) => void;
-  finishPending: boolean;
-  paymentPending: boolean;
-  onFinishSession: (sessionId: string, force?: boolean) => void;
-  onCompleteSession: (sessionId: string, paymentMethod: SessionPaymentMethod, options?: SessionActionOptions) => void;
-  onViewInvoice: (ticket: any) => void;
-  onOpenSettlementModal?: (payload: {
-    sessionId: string;
-    tableLabel: string;
-    totalAmount: number;
-    sessionStatus: string;
-    paymentMethod: SessionPaymentMethod;
-  }) => void;
-}) => {
-  const ticketOrders = Array.isArray(ticket?.orders) ? ticket.orders : [];
-  const resolvedTicketTotal = resolveTicketTotal(ticketOrders, ticket?.session);
-  const sessionStatus = String(ticket?.session?.sessionStatus || '').toUpperCase();
-  const sessionPaymentMethod = String(ticket?.session?.bill?.paymentMethod || '').toUpperCase();
-  const sessionPaymentStatus = String(ticket?.session?.bill?.paymentStatus || '').toUpperCase();
-  const normalizedSessionPaymentMethod = normalizeSessionPaymentMethod(ticket?.session?.bill?.paymentMethod);
-  const isCancelled = ticketOrders.length > 0 && ticketOrders.every((o: any) => o?.status === 'CANCELLED');
-  const isClosedSession = ticket.isSession && sessionStatus === 'CLOSED';
-  const createdAtMs = toValidTimestamp(ticket?.createdAt);
-  const elapsedMin = createdAtMs > 0 ? Math.max(0, Math.floor((Date.now() - createdAtMs) / 60000)) : 0;
-  const activeBatches = ticketOrders.filter((order: any) => order?.status !== 'CANCELLED');
-  const outstandingBatches = activeBatches.filter(
-    (order: any) => !['SERVED', 'RECEIVED'].includes(String(order?.status || '').toUpperCase()),
-  );
-  const canCapturePayment = ticket.isSession && canCloseSession && ticket.sessionId && sessionStatus === 'AWAITING_BILL';
-  const canMoveSessionToBilling =
-    ticket.isSession &&
-    canCloseSession &&
-    ticket.sessionId &&
-    sessionStatus !== 'AWAITING_BILL' &&
-    sessionStatus !== 'CLOSED' &&
-    sessionStatus !== 'CANCELLED';
-  const canArchiveSession =
-    ticket.isSession &&
-    canCloseSession &&
-    ticket.sessionId &&
-    (sessionStatus === 'AWAITING_BILL' || sessionPaymentStatus === 'PAID');
-  const canManageSettlementDesk = plan !== 'MINI' && Boolean(onOpenSettlementModal) && (canMoveSessionToBilling || canArchiveSession);
-  const isUrgent = elapsedMin >= 15 && activeBatches.some((o: any) => ['NEW', 'ACCEPTED', 'PREPARING'].includes(String(o.status).toUpperCase()));
-
-  return (
-    <div
-      className={`relative flex flex-col gap-4 rounded-2xl p-4 overflow-hidden transition-all duration-300 ${isCancelled ? 'opacity-60' : ''} ${isUrgent ? 'ring-2 ring-red-500/50 shadow-xl shadow-red-500/20' : ''}`}
-      style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
-    >
-      <div className={`absolute left-0 right-0 top-0 h-1.5 rounded-t-2xl ${isCancelled ? 'bg-red-500/50' : isUrgent ? 'bg-red-500' : 'bg-blue-600'}`} />
-      
-      <div className="flex justify-between items-start mt-2 gap-2">
-        <div className="flex flex-col gap-1 min-w-0 flex-1">
-          <div className="flex items-center gap-2 min-w-0">
-            {ticket.table?.name ? (
-              <UtensilsCrossed size={14} className="text-blue-500 shrink-0" />
-            ) : (
-              <ShoppingBag size={14} className="text-amber-500 shrink-0" />
-            )}
-            <h3 className="text-xl font-black text-[var(--text-1)] tracking-tight leading-none truncate">
-              {getTableLabel(ticket)}
-            </h3>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-[var(--text-3)] uppercase tracking-widest mt-1.5">
-             <span className="shrink-0 text-[var(--text-2)]">{ticket.isSession ? 'Tab' : `#${asOrderCode(ticketOrders?.[0]?.id)}`}</span>
-             <span className="text-[var(--text-3)] opacity-50 shrink-0">|</span>
-             <span className="flex items-center gap-1.5 bg-[var(--surface-3)] px-2 py-0.5 rounded-md border border-[var(--border)] shrink-0 min-w-0 max-w-full">
-               <Clock size={10} className="text-[var(--text-3)] shrink-0" />
-               <span className="truncate">{formatTimeValue(ticket?.createdAt)}</span>
-               {elapsedMin > 0 && (
-                 <span className={`${isUrgent ? 'text-red-500' : 'text-[var(--text-3)]'} whitespace-nowrap`}>
-                   <TimeElapsedBadge createdAtMs={createdAtMs} isUrgentThreshold={15} />
-                 </span>
-               )}
-             </span>
-          </div>
-        </div>
-        <div className="text-right flex flex-col items-end gap-1 shrink-0 max-w-[45%]">
-          <div className="flex items-center gap-2">
-             {ticket.isSession && sessionStatus !== 'CLOSED' && (
-               <button 
-                 onClick={() => {
-                   if (!ticket.sessionId) return;
-                   const msg = ticketOrders.length > 0 
-                     ? "This session has active orders. Force clear and archive it?"
-                     : "Clear and archive this session?";
-                   if (window.confirm(msg)) {
-                     onCompleteSession(ticket.sessionId, normalizeSessionPaymentMethod(ticket.session?.bill?.paymentMethod), {
-                       shouldClose: true,
-                       force: true,
-                       ensureBillFirst: sessionStatus !== 'AWAITING_BILL' && sessionPaymentStatus !== 'PAID',
-                     });
-                   }
-                 }}
-                 className="p-1 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all shrink-0"
-                 title="Force Clear Session"
-               >
-                 <Trash2 size={12} />
-               </button>
-             )}
-            <span className="text-xl font-black text-blue-600 truncate max-w-full">{formatINR(resolvedTicketTotal || 0)}</span>
-          </div>
-          {ticket.isSession && sessionStatus && (
-            <div className="flex flex-col items-end gap-1 w-full">
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border shrink-0 ${
-                sessionStatus === 'CLOSED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 flex-shrink-0' : 
-                sessionStatus === 'AWAITING_BILL' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 flex-shrink-0' : 
-                'bg-[var(--surface-3)] text-[var(--text-3)] border-[var(--border)] flex-shrink-0'
-              }`}>
-                {sessionStatus.replace(/_/g, ' ')}
-              </span>
-              {ticket.session?.bill?.invoiceNumber && (
-                <div className="flex items-center gap-1.5 w-full justify-end min-w-0">
-                  <span className="text-[9px] font-bold text-[var(--text-3)] tracking-tight truncate">
-                    {ticket.session.bill.invoiceNumber}
-                  </span>
-                  <button 
-                    onClick={() => onViewInvoice(ticket)}
-                    className="p-1 rounded flex-shrink-0 bg-[var(--surface-3)] text-[var(--text-2)] hover:bg-slate-200 hover:text-slate-800 transition-colors"
-                  >
-                    <FileText size={10} />
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-3 mt-1">
-        {ticketOrders.map((order: any, idx: number) => (
-          <div key={order.id} className="rounded-xl bg-[var(--surface-3)] border border-[var(--border)] p-3 shadow-inner">
-            <div className="flex justify-between items-center mb-2">
-               <span className="text-[10px] font-black text-slate-500 uppercase">Batch {idx + 1}</span>
-               <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${getStatusChipClass(String(order.status || '').toUpperCase())}`}>
-                 {order.status}
-               </span>
-            </div>
-            <ul className="space-y-1.5 mt-1">
-              {order.items?.map((item: any) => (
-                <li key={item.id} className="flex gap-2.5 items-start">
-                   <span className="bg-white text-blue-600 px-1.5 py-0.5 rounded text-[10px] font-black mt-0.5">{item.quantity}x</span>
-                   <div className="min-w-0 flex-1">
-                     <span className="text-sm font-bold text-slate-200 leading-tight block">{item.menuItem?.name || item.name}</span>
-                     {item.notes && <span className="text-[10px] font-semibold text-slate-500 mt-0.5 block italic">↳ {item.notes}</span>}
-                   </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-
-      {ticket.isSession && (
-        <div className="mt-2 pt-4 border-t border-white/5 space-y-3">
-          {isClosedSession ? (
-             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
-               <div className="flex justify-between items-center mb-1">
-                 <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Settled</p>
-                 <span className="text-[10px] font-black text-emerald-500/50">{sessionPaymentMethod}</span>
-               </div>
-               <p className="text-[11px] font-semibold text-emerald-400/70">
-                 Order completed and archived in history.
-               </p>
-             </div>
-          ) : (
-            <>
-              {!outstandingBatches.length && sessionStatus !== 'AWAITING_BILL' && (
-                <div className="bg-blue-500/5 rounded-xl p-3 text-center border border-blue-500/10">
-                   <p className="text-[11px] font-bold text-blue-400 uppercase tracking-wider">Ready to Bill</p>
-                </div>
-              )}
-              {outstandingBatches.length > 0 && (
-                <div className="bg-amber-500/5 rounded-xl p-3 text-center border border-amber-500/10">
-                   <p className="text-[11px] font-bold text-amber-500 uppercase tracking-wider">
-                     {outstandingBatches.length} batch{outstandingBatches.length > 1 ? 'es' : ''} active
-                   </p>
-                </div>
-              )}
-              {canManageSettlementDesk && ticket.sessionId && outstandingBatches.length === 0 && (
-                <button
-                  onClick={() => {
-                    onOpenSettlementModal?.({
-                      sessionId: ticket.sessionId!,
-                      tableLabel: getTableLabel(ticket),
-                      totalAmount: resolvedTicketTotal,
-                      sessionStatus,
-                      paymentMethod: normalizedSessionPaymentMethod,
-                    });
-                  }}
-                  disabled={finishPending || paymentPending}
-                  className="w-full flex items-center justify-between rounded-xl bg-amber-500 px-5 py-3 text-xs font-black text-white transition-all hover:bg-amber-400 disabled:opacity-50"
-                >
-                  <span className="flex items-center gap-2">
-                    <ReceiptText size={14} />
-                    {sessionStatus === 'AWAITING_BILL' ? 'Payment Desk' : 'Billing & Payment'}
-                  </span>
-                  <ChevronRight size={14} className="opacity-70" />
-                </button>
-              )}
-              {plan !== 'MINI' && outstandingBatches.length > 0 && (
-                <div className="bg-amber-500/5 rounded-xl p-3 text-center border border-amber-500/10">
-                  <p className="text-[11px] font-bold text-amber-500 uppercase tracking-wider">
-                    Serve all active batches before billing
-                  </p>
-                </div>
-              )}
-              {plan === 'MINI' && canCloseSession && ticket.sessionId && (
-                <div className="flex gap-2">
-                  <select
-                    value={selectedBillAction}
-                    onChange={(e) => onSelectBillAction(ticket.sessionId!, e.target.value)}
-                    className="flex-1 rounded-xl bg-slate-900 border border-slate-700 px-3 py-3 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="AWAITING_BILL">Waiting for Bill</option>
-                    <option value="PAID_CASH">Paid Cash</option>
-                    <option value="PAID_ONLINE">Paid Online</option>
-                  </select>
-                  <button
-                    onClick={() => {
-                        if (!ticket.sessionId) return;
-                        if (selectedBillAction === 'AWAITING_BILL') {
-                          if (sessionStatus === 'AWAITING_BILL') return;
-
-                          if (outstandingBatches.length > 0) {
-                            if (!window.confirm(`There are ${outstandingBatches.length} unserved batches. Force generate bill anyway?`)) {
-                              return;
-                            }
-                          } else if (activeBatches.length === 0) {
-                            if (!window.confirm("This session has 0 orders. Close it anyway?")) {
-                              return;
-                            }
-                          }
-                          
-                          onFinishSession(ticket.sessionId, outstandingBatches.length > 0 || activeBatches.length === 0);
-                          return;
-                        }
-                        if (!canCapturePayment) {
-                          window.alert('Generate final bill first.');
-                          return;
-                        }
-                        onCompleteSession(ticket.sessionId, selectedBillAction === 'PAID_ONLINE' ? 'online' : 'cash', {
-                          shouldClose: true,
-                          ensureBillFirst: sessionStatus !== 'AWAITING_BILL' && sessionPaymentStatus !== 'PAID',
-                        });
-                    }}
-                    disabled={finishPending || paymentPending}
-                    className="rounded-xl bg-blue-600 px-5 py-3 text-xs font-black text-white hover:bg-blue-500 transition-all disabled:opacity-50"
-                    title={selectedBillAction === 'AWAITING_BILL' ? 'Generate Bill' : 'Settle & Close'}
-                  >
-                    <ReceiptText size={16} />
-                  </button>
-                </div>
-              )}
-              {plan === 'MINI' && sessionStatus === 'AWAITING_BILL' && (
-                <button
-                  onClick={() => {
-                    if (!ticket.sessionId) return;
-                    const isPaid = ticket.session?.bill?.paymentStatus === 'PAID';
-                    if (!isPaid && !window.confirm("Payment not recorded. Clear and archive this session anyway?")) return;
-                    onCompleteSession(ticket.sessionId, normalizeSessionPaymentMethod(ticket.session?.bill?.paymentMethod), {
-                      shouldClose: true,
-                      force: !isPaid,
-                    });
-                  }}
-                  disabled={paymentPending}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-3 text-xs font-black text-white shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.97]"
-                >
-                  <CheckCircle size={14} />
-                  Clear Session & Archive
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-});
-
-const KanbanColumn = ({ id, label, color, bg, badge, children, pulse, isActive }: any) => {
-  const { isOver, setNodeRef } = useDroppable({ id });
-  
-  return (
-    <div 
-      ref={setNodeRef} 
-      className={`kanban-col flex-shrink-0 transition-all duration-300 min-h-[500px] rounded-3xl ${isOver ? 'ring-2 ring-blue-500/50 bg-blue-500/5' : ''}`}
-      style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
-    >
-      <div className={`kanban-col-header sticky top-0 shadow-sm z-20 rounded-t-3xl backdrop-blur-md ${bg}`}>
-        <div className="flex items-center gap-2.5">
-          {pulse && isActive && (
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
-            </span>
-          )}
-          <span className={`font-black text-[11px] tracking-[0.2em] ${color} uppercase`}>{label}</span>
-        </div>
-        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${badge.className || ''}`}>{badge.count || 0}</span>
-      </div>
-      <div className="kanban-col-body custom-scrollbar flex flex-col gap-4 p-4">
-        {children}
-      </div>
-    </div>
-  );
-};
-
-const PipelineCard = memo(({
-  order,
-  hasKDS,
-  canSetKitchenStages,
-  canSetServiceStages,
-  canCloseSession,
-  isStatusPending,
-  onUpdateStatus,
-  onFinishSession,
-  onCompleteSession,
-  isCompletePending,
-  plan,
-  onOpenSettlementModal,
-}: {
-  order: any;
-  hasKDS: boolean;
-  canSetKitchenStages: boolean;
-  canSetServiceStages: boolean;
-  canCloseSession: boolean;
-  isStatusPending: boolean;
-  onUpdateStatus: (id: string, status: string, cancelReason?: string) => void;
-  onFinishSession?: (sessionId: string, force?: boolean) => void;
-  onCompleteSession?: (sessionId: string, paymentMethod: SessionPaymentMethod, options?: SessionActionOptions) => void;
-  isCompletePending?: boolean;
-  plan?: string;
-  onOpenSettlementModal?: (payload: {
-    sessionId: string;
-    tableLabel: string;
-    totalAmount: number;
-    sessionStatus: string;
-    paymentMethod: SessionPaymentMethod;
-  }) => void;
-}) => {
-  const [isExpanded, setIsExpanded] = useState(order?.status === 'NEW');
-  const currentStatus = String(order?.status || '').toUpperCase();
-  const createdAtMs = toValidTimestamp(order?.createdAt);
-  const elapsedMinutes = createdAtMs > 0 ? Math.max(0, Math.floor((Date.now() - createdAtMs) / 60000)) : 0;
-  const isUrgent = elapsedMinutes >= 15 && ['NEW', 'ACCEPTED', 'PREPARING'].includes(currentStatus);
-  const isSessionOrder = Boolean(order?.diningSessionId);
-  const sessionStatus = String(order?.diningSession?.sessionStatus || '').toUpperCase();
-  const sessionPaymentStatus = String(order?.diningSession?.bill?.paymentStatus || '').toUpperCase();
-  const sessionPaymentMethod = normalizeSessionPaymentMethod(order?.diningSession?.bill?.paymentMethod);
-  const canMoveSessionToBilling =
-    canCloseSession &&
-    isSessionOrder &&
-    sessionStatus !== 'AWAITING_BILL' &&
-    sessionStatus !== 'CLOSED' &&
-    sessionStatus !== 'CANCELLED';
-  const canArchiveSession =
-    canCloseSession &&
-    isSessionOrder &&
-    (sessionStatus === 'AWAITING_BILL' || sessionPaymentStatus === 'PAID');
-  const canManageSettlementDesk = canCloseSession && isSessionOrder && (canMoveSessionToBilling || canArchiveSession);
-  const settlementTableLabel = getTableLabel(order);
-  
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    isDragging
-  } = useDraggable({
-    id: order.id,
-    data: { order },
-    disabled: isStatusPending || isCompletePending || order.status === 'CANCELLED'
-  });
-
-  const style = transform ? {
-    transform: CSS.Translate.toString(transform),
-    zIndex: isDragging ? 50 : undefined,
-    opacity: isDragging ? 0.5 : undefined,
-  } : undefined;
-
-  const stripeClass = order.status === 'NEW' || order.status === 'ACCEPTED' ? 'bg-blue-600' : order.status === 'PREPARING' ? 'bg-amber-500' : order.status === 'READY' ? 'bg-emerald-500' : 'bg-slate-700';
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`relative flex flex-col gap-0 rounded-2xl transition-all duration-300 ${isUrgent ? 'ring-2 ring-red-500 shadow-xl shadow-red-500/20' : ''} ${isDragging ? 'shadow-2xl scale-105 rotate-1' : ''}`}
-      style={{ ...style, background: 'var(--card-bg)', border: '1px solid var(--card-border)', boxShadow: 'var(--card-shadow)' }}
-    >
-      <div className={`absolute left-0 right-0 top-0 h-1 rounded-t-2xl opacity-80 ${stripeClass}`} />
-      
-      {/* Header - Always Visible */}
-      <div 
-        className="flex flex-col gap-3 p-4 cursor-pointer rounded-2xl transition-colors hover:bg-white/5 sm:flex-row sm:items-start sm:justify-between"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex min-w-0 flex-1 items-start gap-3">
-          <div {...attributes} {...listeners} className="p-1 cursor-grab active:cursor-grabbing text-slate-600 hover:text-slate-400 transition-colors">
-            <GripVertical size={16} />
-          </div>
-          <div className="flex flex-col gap-1.5 min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span 
-                className={`inline-flex h-8 max-w-full items-center justify-center truncate rounded-xl px-3 text-sm font-black tracking-tight shadow-lg shadow-blue-500/10 ${
-                  order.orderType === 'TAKEAWAY' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' :
-                  order.orderType === 'ZOMATO' ? 'bg-red-600/20 text-red-400 border border-red-500/30' :
-                  order.orderType === 'SWIGGY' ? 'bg-orange-600/20 text-orange-400 border border-orange-500/30' :
-                  order.orderType === 'ROAMING' ? 'bg-violet-600/20 text-violet-400 border border-violet-500/30' :
-                  'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
-                }`}
-                title={order.orderNumber || `T-${asOrderCode(order?.id)}`}
-              >
-                {order.orderNumber || `T-${asOrderCode(order?.id)}`}
-              </span>
-              {order.orderType === 'ZOMATO' && (
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-red-600/10 text-red-500 uppercase tracking-widest border border-red-500/20">ZOMATO</span>
-              )}
-              {order.orderType === 'SWIGGY' && (
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-orange-600/10 text-orange-500 uppercase tracking-widest border border-orange-500/20">SWIGGY</span>
-              )}
-              {order.orderType === 'ROAMING' && (
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-violet-600/10 text-violet-400 uppercase tracking-widest border border-violet-500/20">ROAMING</span>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              {order.table?.name ? (
-                <div className="flex items-center gap-1">
-                  <UtensilsCrossed size={10} className="text-emerald-500" />
-                  <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest leading-none">Table {order.table.name}</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <ShoppingBag size={10} className="text-blue-400" />
-                  <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest leading-none">
-                    {order.orderType === 'TAKEAWAY'
-                      ? 'Takeaway'
-                      : order.orderType === 'ZOMATO'
-                        ? 'Zomato Delivery'
-                        : order.orderType === 'SWIGGY'
-                          ? 'Swiggy Delivery'
-                          : order.orderType === 'ROAMING'
-                            ? 'Roaming Order'
-                            : 'Quick Order'}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex w-full items-start justify-between gap-3 sm:ml-auto sm:w-auto sm:flex-shrink-0 sm:justify-end">
-          <div className="flex min-w-[72px] flex-col gap-1 text-left sm:items-end sm:text-right">
-            <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase tracking-wide">
-               <Clock size={10} className="text-slate-600" />
-               {formatTimeValue(order?.createdAt)}
-            </div>
-            {isUrgent && (
-              <span className="text-[9px] font-black text-red-500 uppercase tracking-widest animate-pulse">LATE</span>
-            )}
-          </div>
-          <div className="text-slate-500">
-            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </div>
-        </div>
-      </div>
-
-      {/* Body - Accordion Content */}
-      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[1000px] border-t border-white/5 opacity-100' : 'max-h-0 opacity-0'}`}>
-        <div className="p-4 space-y-4">
-          {order.customerName && (
-            <div className="px-3 py-2 rounded-lg bg-slate-800/30 border border-slate-700/50">
-              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Guest</p>
-              <p className="text-sm font-bold text-slate-200">{order.customerName}</p>
-            </div>
-          )}
-
-          <ul className="flex flex-col gap-2.5">
-            {order.items?.map((item: any) => (
-              <li key={item.id} className="flex items-start gap-3">
-                <span className="flex min-w-[24px] items-center justify-center rounded-md bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white shadow-sm mt-0.5">
-                  {item.quantity}x
-                </span>
-                <div className="min-w-0 flex-1">
-                   <span className="block text-sm font-bold leading-tight text-slate-100 tracking-wide">
-                     {item.menuItem?.name || item.name}
-                   </span>
-                   {item.notes && (
-                     <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-white/5 p-1.5 border border-white/5">
-                        <span className="text-[10px] text-blue-400 leading-none mt-0.5 font-black">↳</span>
-                        <span className="flex-1 text-[10px] font-bold text-slate-400 leading-snug italic">{item.notes}</span>
-                     </div>
-                   )}
-                </div>
-              </li>
-            ))}
-          </ul>
-
-          {order.specialInstructions && (
-            <div className="rounded-xl bg-orange-500/10 p-3 border border-orange-500/20">
-              <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-1">Kitchen Note</p>
-              <p className="text-xs font-semibold text-orange-300/80 leading-snug">{order.specialInstructions}</p>
-            </div>
-          )}
-
-          <div className="pt-2">
-            <div className="flex flex-col gap-2.5">
-              {currentStatus === 'NEW' && canSetKitchenStages && (
-                <div className="grid grid-cols-5 gap-2">
-                    <button
-                      onClick={(e) => { 
-                        e.stopPropagation(); 
-                        onUpdateStatus(order.id, (plan !== 'MINI' && !hasKDS) ? 'READY' : 'ACCEPTED'); 
-                      }}
-                      disabled={isStatusPending}
-                      className={`col-span-3 rounded-xl py-3 text-xs font-black text-white transition-all active:scale-[0.97] disabled:opacity-50 ${plan === 'MINI' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20' : 'bg-blue-600 hover:bg-blue-500'}`}
-                    >
-                      {plan === 'MINI' ? 'Settle & Accept' : 'Accept'}
-                    </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'CANCELLED', 'Rejected'); }}
-                    disabled={isStatusPending}
-                    className="col-span-2 rounded-xl border border-red-500/30 hover:bg-red-500/10 py-3 text-xs font-bold text-red-500 transition-all active:scale-[0.97]"
-                  >
-                    Reject
-                  </button>
-                </div>
-              )}
-              {currentStatus === 'ACCEPTED' && canSetKitchenStages && (
-                <button
-                   onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'PREPARING'); }}
-                   disabled={isStatusPending}
-                   className="w-full rounded-xl bg-amber-500 hover:bg-amber-600 py-3 text-xs font-black text-white transition-all active:scale-[0.97]"
-                >
-                  Start Preparing
-                </button>
-              )}
-              {currentStatus === 'PREPARING' && canSetKitchenStages && (
-                <button
-                   onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'READY'); }}
-                   disabled={isStatusPending}
-                   className="w-full rounded-xl bg-orange-500 hover:bg-orange-600 py-3 text-xs font-black text-white transition-all active:scale-[0.97]"
-                >
-                  Mark Ready
-                </button>
-              )}
-              {currentStatus === 'READY' && canSetServiceStages && (
-                <button
-                   onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'SERVED'); }}
-                   disabled={isStatusPending}
-                   className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 py-3 text-xs font-black text-white transition-all active:scale-[0.97]"
-                >
-                  Mark Served
-                </button>
-              )}
-              {currentStatus === 'SERVED' && !isSessionOrder && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUpdateStatus(order.id, 'RECEIVED');
-                  }}
-                  disabled={isStatusPending}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-700 hover:bg-slate-600 py-3 text-xs font-black text-white transition-all active:scale-[0.97]"
-                >
-                  <CheckCircle size={14} />
-                  Complete Pickup
-                </button>
-              )}
-              {currentStatus === 'SERVED' && isSessionOrder && canManageSettlementDesk && onOpenSettlementModal && plan !== 'MINI' && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!order.diningSessionId) return;
-                    onOpenSettlementModal({
-                      sessionId: order.diningSessionId,
-                      tableLabel: settlementTableLabel,
-                      totalAmount: resolveTicketTotal([order], order?.diningSession),
-                      sessionStatus,
-                      paymentMethod: sessionPaymentMethod,
-                    });
-                  }}
-                  disabled={isStatusPending || isCompletePending}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 py-3 text-xs font-black text-white shadow-lg shadow-amber-500/20 transition-all active:scale-[0.97]"
-                >
-                  <ReceiptText size={14} />
-                  {sessionStatus === 'AWAITING_BILL' ? 'Payment Desk' : 'Billing & Payment'}
-                </button>
-              )}
-              {currentStatus === 'SERVED' && isSessionOrder && canMoveSessionToBilling && onFinishSession && plan === 'MINI' && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const isPaid = order.diningSession?.bill?.paymentStatus === 'PAID';
-                    if (plan === 'MINI' && !isPaid) {
-                      onUpdateStatus(order.id, 'COMPLETE_SETTLE');
-                    } else if (order.diningSessionId) {
-                      onFinishSession(order.diningSessionId);
-                    }
-                  }}
-                  disabled={isStatusPending || isCompletePending}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 py-3 text-xs font-black text-white shadow-lg shadow-amber-500/20 transition-all active:scale-[0.97]"
-                >
-                  <ReceiptText size={14} />
-                  Move to Billing
-                </button>
-              )}
-              {currentStatus === 'SERVED' && isSessionOrder && canArchiveSession && onCompleteSession && plan === 'MINI' && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const isPaid = sessionPaymentStatus === 'PAID';
-                    if (plan === 'MINI' && !isPaid) {
-                      onUpdateStatus(order.id, 'COMPLETE_SETTLE');
-                      return;
-                    }
-                    if (order.diningSessionId) {
-                      onCompleteSession(order.diningSessionId, sessionPaymentMethod, {
-                        shouldClose: true,
-                        ensureBillFirst: sessionStatus !== 'AWAITING_BILL' && sessionPaymentStatus !== 'PAID',
-                      });
-                    }
-                  }}
-                  disabled={isStatusPending || isCompletePending}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-3 text-xs font-black text-white shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.97]"
-                >
-                  <CheckCircle size={14} />
-                  {sessionPaymentStatus === 'PAID' ? 'Archive Session' : 'Record Payment & Archive'}
-                </button>
-              )}
-              {currentStatus === 'SERVED' && isSessionOrder && !canCloseSession && (
-                <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Cashier will close this session from billing
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-});
 
 export function Orders({ role }: { role?: string }) {
   const queryClient = useQueryClient();
@@ -900,12 +103,17 @@ export function Orders({ role }: { role?: string }) {
   const canSetServiceStages = ['OWNER', 'MANAGER', 'CASHIER', 'WAITER'].includes(effectiveRole);
   const canToggleBusyMode = effectiveRole === 'OWNER' || effectiveRole === 'MANAGER';
   const canBulkClose = canCloseSession;
+  const isMiniTokenFlow = isMiniTokenFlowPlan(plan);
   const [activeTab, setActiveTab] = useState<'PIPELINE' | 'SESSIONS' | 'HISTORY'>('PIPELINE');
   const [busyMode, setBusyMode] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [pendingMiniSettle, setPendingMiniSettle] = useState<{ id: string; status: string; order: any } | null>(null);
+  const [pendingMiniSettle, setPendingMiniSettle] = useState<MiniPaymentGateState | null>(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
-  
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const promptedPaymentSessionsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
@@ -959,12 +167,37 @@ export function Orders({ role }: { role?: string }) {
       const res = await api.get('/orders');
       return res.data;
     },
-    staleTime: 1000,
-    refetchInterval: 1000 * 5,
+    staleTime: 5_000,
+    refetchInterval: 15_000,
     retry: 2,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
+    refetchIntervalInBackground: false,
   });
+
+  useEffect(() => {
+    if (!canCloseSession || paymentDeskModal?.kind === 'CONFIRM_RECEIPT' || isMiniTokenFlow) return;
+
+    const pendingPaymentOrder = liveOrders.find((order: any) => {
+      const paymentStatus = String(order?.diningSession?.bill?.paymentStatus || '').toUpperCase();
+      return order?.diningSessionId && paymentStatus === 'PENDING_VERIFICATION';
+    });
+
+    if (!pendingPaymentOrder?.diningSessionId) return;
+    if (promptedPaymentSessionsRef.current.has(pendingPaymentOrder.diningSessionId)) return;
+
+    promptedPaymentSessionsRef.current.add(pendingPaymentOrder.diningSessionId);
+    setPaymentDeskModal({
+      kind: 'CONFIRM_RECEIPT',
+      sessionId: pendingPaymentOrder.diningSessionId,
+      tableLabel: getTableLabel(pendingPaymentOrder),
+      totalAmount: Number(pendingPaymentOrder?.diningSession?.bill?.totalAmount || pendingPaymentOrder?.totalAmount || 0),
+    });
+    setLocalToast({
+      message: 'Customer marked payment done. Verify the account before confirming.',
+      type: 'info',
+    });
+  }, [canCloseSession, isMiniTokenFlow, liveOrders, paymentDeskModal?.kind]);
 
   const { data: historyResponse } = useQuery<any>({
     queryKey: ['order-history'],
@@ -992,10 +225,12 @@ export function Orders({ role }: { role?: string }) {
         if (!old) return [];
         return old.map((order: any) => {
           if (order.id === newUpdate.id) {
-            // C-8: Don't increment version optimistically. 
-            // Rely on the server truth (via socket or refetch) to update the version.
-            // This prevents race conditions where local version gets ahead of server truth.
-            return { ...order, status: newUpdate.status };
+            return {
+              ...order,
+              status: newUpdate.status,
+              __pendingStatus: String(newUpdate.status || '').toUpperCase(),
+              __pendingStatusAt: Date.now(),
+            };
           }
           return order;
         });
@@ -1074,7 +309,8 @@ export function Orders({ role }: { role?: string }) {
       if (!slug) {
         throw new Error('Tenant slug missing. Complete Business Profile setup first.');
       }
-      return api.post(`/public/${slug}/sessions/${sessionId}/complete`, { paymentMethod, shouldClose, force });
+      const res = await api.post(`/public/${slug}/sessions/${sessionId}/complete`, { paymentMethod, shouldClose, force });
+      return res.data;
     },
     onSuccess: refreshOperationalData,
   });
@@ -1100,7 +336,6 @@ export function Orders({ role }: { role?: string }) {
     },
   });
 
-  const [activeDragOrder, setActiveDragOrder] = useState<any>(null);
   const [billSelections, setBillSelections] = useState<Record<string, BillWorkflowAction>>({});
 
   const openSessionSettlementDesk = useCallback(
@@ -1130,7 +365,7 @@ export function Orders({ role }: { role?: string }) {
   );
 
   useEffect(() => {
-    if (!canCloseSession) return undefined;
+    if (!canCloseSession || isMiniTokenFlow) return undefined;
 
     const handlePaymentSubmitted = (event: Event) => {
       if (!(event instanceof CustomEvent)) return;
@@ -1138,11 +373,13 @@ export function Orders({ role }: { role?: string }) {
       const sessionId = typeof payload?.sessionId === 'string' ? payload.sessionId : '';
       if (!sessionId) return;
 
+      if (promptedPaymentSessionsRef.current.has(sessionId)) return;
+      promptedPaymentSessionsRef.current.add(sessionId);
       setPaymentDeskModal({
         kind: 'CONFIRM_RECEIPT',
         sessionId,
         tableLabel: payload?.tableName ? `Table ${payload.tableName}` : 'Live session',
-        totalAmount: Number(payload?.totalAmount || 0),
+        totalAmount: Number(payload?.totalAmount ?? payload?.bill?.totalAmount ?? 0),
       });
     };
 
@@ -1151,15 +388,7 @@ export function Orders({ role }: { role?: string }) {
     return () => {
       window.removeEventListener(DASHBOARD_PAYMENT_SUBMITTED_EVENT, handlePaymentSubmitted);
     };
-  }, [canCloseSession]);
-  
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
+  }, [canCloseSession, isMiniTokenFlow]);
 
   const historyTickets = useMemo(() => {
     const historyOrders = historyResponse?.data || [];
@@ -1266,44 +495,141 @@ export function Orders({ role }: { role?: string }) {
   }, [completeSessionMutation, finishSessionMutation]);
 
   const handleUpdateStatus = useCallback((id: string, status: string, cancelReason?: string) => {
-    const order = liveOrders.find((o: any) => o.id === id);
+    const order = liveOrders.find((o: any) => o.id === id) || liveOrders.find((o: any) => o.diningSessionId === id);
     if (!order) return;
 
-    // Intercept Settle for Mini Plan to ask for Payment Method
-    const isPaid = order.diningSession?.bill?.paymentStatus === 'PAID';
-    const isSettleRequired = (status === 'READY' || status === 'SERVED' || status === 'COMPLETE_SETTLE');
-    if (plan === 'MINI' && !isPaid && isSettleRequired && order.diningSessionId) {
-      setPendingMiniSettle({ id, status, order });
+    const isPaid = getMiniSessionPaymentStatus(order) === 'PAID';
+    const isSettleRequired = status === 'PREPARING' || status === 'READY' || status === 'SERVED' || status === 'COMPLETE_SETTLE';
+    if (isMiniTokenFlow && !isPaid && isSettleRequired && order.diningSessionId) {
+      if (isMiniAwaitingOnlinePayment(order)) {
+        setLocalToast({
+          message: 'Customer chose UPI. Wait for payment submission before the kitchen starts.',
+          type: 'info',
+        });
+        return;
+      }
+      setPendingMiniSettle({ id, status, order, mode: getMiniPaymentGateMode(order) });
       return;
     }
 
-    statusMutation.mutate({ 
-      id, 
-      status, 
-      cancelReason, 
-      expectedVersion: order?.version || 0 
+    statusMutation.mutate({
+      id,
+      status,
+      cancelReason,
+      expectedVersion: order?.version || 0
     });
-  }, [liveOrders, statusMutation, plan]);
+  }, [isMiniTokenFlow, liveOrders, statusMutation]);
+
+  const handleToggleExpandedOrder = useCallback((orderId: string) => {
+    setExpandedOrderId((current) => (current === orderId ? null : orderId));
+  }, []);
 
   const pipelineColumns = useMemo(() => {
-    const cols = [
-      { id: 'col-new', label: 'NEW ORDERS', color: 'text-blue-700', bg: 'bg-blue-50/50', badge: 'bg-blue-100 text-blue-800', filter: (o: any) => o.status === 'NEW', pulse: true },
-      { id: 'col-kitchen', label: 'IN KITCHEN', color: 'text-amber-700', bg: 'bg-amber-50/50', badge: 'bg-amber-100 text-amber-800', filter: (o: any) => o.status === 'ACCEPTED' || o.status === 'PREPARING', pulse: false },
-      { id: 'col-ready', label: 'READY TO SERVE', color: 'text-emerald-700', bg: 'bg-emerald-50/50', badge: 'bg-emerald-100 text-emerald-800', filter: (o: any) => o.status === 'READY', pulse: false },
-      { id: 'col-served', label: 'SERVED', color: 'text-slate-500', bg: 'bg-slate-100/50', badge: 'bg-slate-200 text-slate-600', filter: (o: any) => o.status === 'SERVED', pulse: false },
+    const isMiniTokenFlow = isMiniTokenFlowPlan(plan);
+    return [
+      {
+        id: 'col-new',
+        label: isMiniTokenFlow ? 'New Tokens' : 'New',
+        hint: isMiniTokenFlow ? 'confirm + collect' : 'needs action',
+        color: 'text-blue-700',
+        bg: 'bg-blue-50/50',
+        badge: 'bg-blue-100 text-blue-800',
+        filter: (o: any) => o.status === 'NEW',
+        pulse: true,
+      },
+      {
+        id: 'col-preparing',
+        label: isMiniTokenFlow ? 'Paid / Preparing' : 'Preparing',
+        hint: isMiniTokenFlow ? 'token paid, making now' : features.hasKDS ? 'kitchen active' : 'in progress',
+        color: 'text-amber-700',
+        bg: 'bg-amber-50/50',
+        badge: 'bg-amber-100 text-amber-800',
+        filter: (o: any) => o.status === 'ACCEPTED' || o.status === 'PREPARING',
+        pulse: false,
+      },
+      {
+        id: 'col-ready',
+        label: isMiniTokenFlow ? 'Ready for Pickup' : 'Ready',
+        hint: isMiniTokenFlow ? 'call the token' : 'serve next',
+        color: 'text-emerald-700',
+        bg: 'bg-emerald-50/50',
+        badge: 'bg-emerald-100 text-emerald-800',
+        filter: (o: any) => o.status === 'READY',
+        pulse: false,
+      },
+      {
+        id: 'col-served',
+        label: isMiniTokenFlow ? 'Completed' : 'Served',
+        hint: isMiniTokenFlow ? 'handover done' : 'bill or close',
+        color: 'text-slate-500',
+        bg: 'bg-slate-100/50',
+        badge: 'bg-slate-200 text-slate-600',
+        filter: (o: any) => o.status === 'SERVED',
+        pulse: false,
+      },
     ];
-
-    if (!features.hasKDS) {
-      return cols.filter(c => c.id !== 'col-kitchen');
-    }
-    return cols;
-  }, [features.hasKDS]);
+  }, [features.hasKDS, plan]);
 
   const sortedLiveOrders = useMemo(() => {
-    return [...liveOrders].sort((a: any, b: any) => 
+    return [...liveOrders].sort((a: any, b: any) =>
       new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
   }, [liveOrders]);
+
+  const filteredLiveOrders = useMemo(
+    () => sortedLiveOrders.filter((order: any) => matchesOrderSearch(order, searchQuery)),
+    [searchQuery, sortedLiveOrders],
+  );
+
+  const liveOrderDisplayIdentityById = useMemo(() => {
+    const groupedByName = new Map<string, any[]>();
+
+    sortedLiveOrders.forEach((order: any) => {
+      const guestName = normalizeGuestDisplayName(order?.customerName || order?.diningSession?.customer?.name);
+      const key = guestName.toLowerCase();
+      const bucket = groupedByName.get(key) || [];
+      bucket.push(order);
+      groupedByName.set(key, bucket);
+    });
+
+    const identities = new Map<string, string>();
+    groupedByName.forEach((orders) => {
+      orders.forEach((order: any, index: number) => {
+        const guestName = normalizeGuestDisplayName(order?.customerName || order?.diningSession?.customer?.name);
+        const shortToken = getCompactOrderToken(order?.orderNumber, order?.id);
+        const prefix = orders.length > 1 ? `${index + 1}-` : '';
+        identities.set(order.id, `${prefix}${guestName}#${shortToken}`);
+      });
+    });
+
+    return identities;
+  }, [sortedLiveOrders]);
+
+  const liveOrderSummaryById = useMemo(() => {
+    const summaries = new Map<string, string>();
+
+    sortedLiveOrders.forEach((order: any) => {
+      const summary = (Array.isArray(order?.items) ? order.items : [])
+        .map((item: any) => {
+          const name = String(item?.menuItem?.name || item?.name || '').trim();
+          const quantity = Number(item?.quantity || 0);
+          if (!name) return '';
+          return quantity > 1 ? `${quantity}x ${name}` : name;
+        })
+        .filter(Boolean)
+        .slice(0, 4)
+        .join(', ');
+
+      summaries.set(order.id, summary || 'No items');
+    });
+
+    return summaries;
+  }, [sortedLiveOrders]);
+
+  const filteredHistoryTickets = useMemo(
+    () => historyTickets.filter((ticket: any) => matchesTicketSearch(ticket, searchQuery)),
+    [historyTickets, searchQuery],
+  );
 
   const settlePendingMiniOrder = useCallback(async (paymentMethod: SessionPaymentMethod) => {
     if (!pendingMiniSettle) return;
@@ -1314,11 +640,37 @@ export function Orders({ role }: { role?: string }) {
     const shouldClose = status === 'COMPLETE_SETTLE';
 
     try {
-      await completeSessionMutation.mutateAsync({
+      const settledSession = await completeSessionMutation.mutateAsync({
         sessionId: order.diningSessionId,
         paymentMethod,
         shouldClose,
         force: false,
+      });
+
+      queryClient.setQueryData(['live-orders'], (old: any[] | undefined) => {
+        if (!Array.isArray(old)) return old;
+
+        if (shouldClose) {
+          return old.filter((liveOrder) => liveOrder?.diningSessionId !== order.diningSessionId);
+        }
+
+        return old.map((liveOrder: any) => {
+          if (liveOrder?.diningSessionId !== order.diningSessionId) return liveOrder;
+
+          return {
+            ...liveOrder,
+            diningSession: {
+              ...liveOrder.diningSession,
+              sessionStatus: settledSession?.sessionStatus || liveOrder.diningSession?.sessionStatus,
+              bill: {
+                ...liveOrder.diningSession?.bill,
+                ...settledSession?.bill,
+                paymentStatus: 'PAID',
+                paymentMethod,
+              },
+            },
+          };
+        });
       });
 
       if (!shouldClose) {
@@ -1345,6 +697,125 @@ export function Orders({ role }: { role?: string }) {
     }
   }, [completeSessionMutation, pendingMiniSettle, refreshOperationalData, statusMutation]);
 
+  const resolvePendingMiniVerification = useCallback(async (paymentReceived: boolean) => {
+    if (!pendingMiniSettle) return;
+
+    const { id, status, order } = pendingMiniSettle;
+    const sessionId = order?.diningSessionId;
+    const paymentMethod = getMiniSessionPaymentMethod(order);
+    const shouldClose = status === 'COMPLETE_SETTLE';
+    setPendingMiniSettle(null);
+
+    if (!sessionId) return;
+
+    if (!paymentReceived) {
+      try {
+        const rejectionMessage =
+          paymentMethod === 'online'
+            ? 'Payment is not visible yet. Please show your UPI transaction at the counter.'
+            : 'Cash has not been received yet. Please pay at the counter.';
+
+        await rejectSessionPaymentMutation.mutateAsync({
+          sessionId,
+          message: rejectionMessage,
+        });
+
+        queryClient.setQueryData(['live-orders'], (old: any[] | undefined) => {
+          if (!Array.isArray(old)) return old;
+          return old.map((liveOrder: any) => {
+            if (liveOrder?.diningSessionId !== sessionId) return liveOrder;
+            return {
+              ...liveOrder,
+              diningSession: {
+                ...liveOrder.diningSession,
+                bill: {
+                  ...liveOrder.diningSession?.bill,
+                  paymentStatus: 'UNPAID',
+                },
+              },
+            };
+          });
+        });
+
+        setLocalToast({
+          message:
+            paymentMethod === 'online'
+              ? 'Asked the customer to show their UPI transaction at the counter.'
+              : 'Cash is still pending. Ask the customer to pay at the counter.',
+          type: 'info',
+        });
+      } catch (error: any) {
+        setLocalToast({
+          message: error?.response?.data?.error || error?.message || 'Could not send the payment check response.',
+          type: 'error',
+        });
+      }
+      return;
+    }
+
+    try {
+      const settledSession = await completeSessionMutation.mutateAsync({
+        sessionId,
+        paymentMethod,
+        shouldClose,
+        force: false,
+      });
+
+      queryClient.setQueryData(['live-orders'], (old: any[] | undefined) => {
+        if (!Array.isArray(old)) return old;
+
+        if (shouldClose) {
+          return old.filter((liveOrder) => liveOrder?.diningSessionId !== sessionId);
+        }
+
+        return old.map((liveOrder: any) => {
+          if (liveOrder?.diningSessionId !== sessionId) return liveOrder;
+
+          return {
+            ...liveOrder,
+            diningSession: {
+              ...liveOrder.diningSession,
+              sessionStatus: settledSession?.sessionStatus || liveOrder.diningSession?.sessionStatus,
+              bill: {
+                ...liveOrder.diningSession?.bill,
+                ...settledSession?.bill,
+                paymentStatus: 'PAID',
+                paymentMethod,
+              },
+            },
+          };
+        });
+      });
+
+      if (!shouldClose) {
+        statusMutation.mutate({
+          id,
+          status,
+          expectedVersion: order.version || 0,
+        });
+      } else {
+        refreshOperationalData();
+      }
+
+      setLocalToast({
+        message:
+          paymentMethod === 'online'
+            ? shouldClose
+              ? 'UPI verified and token completed.'
+              : `UPI verified and token moved to ${formatStatusLabel(status)}.`
+            : shouldClose
+              ? 'Cash verified and token completed.'
+              : `Cash verified and token moved to ${formatStatusLabel(status)}.`,
+        type: 'success',
+      });
+    } catch (error: any) {
+      setLocalToast({
+        message: error?.response?.data?.error || error?.message || 'Could not verify payment for this token.',
+        type: 'error',
+      });
+    }
+  }, [completeSessionMutation, pendingMiniSettle, queryClient, refreshOperationalData, rejectSessionPaymentMutation, statusMutation]);
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
@@ -1368,7 +839,7 @@ export function Orders({ role }: { role?: string }) {
 
 
   const groupedLive = Object.values(
-    liveOrders.reduce((acc: any, order: any) => {
+    filteredLiveOrders.reduce((acc: any, order: any) => {
       const fallbackOrderId = asOrderCode(order?.id);
       const groupId = order?.diningSessionId || `single_${fallbackOrderId}`;
       if (!acc[groupId]) {
@@ -1393,171 +864,81 @@ export function Orders({ role }: { role?: string }) {
   ).sort((a: any, b: any) => toValidTimestamp(b?.createdAt) - toValidTimestamp(a?.createdAt));
 
 
-  const connectionTone = {
-    label: 'Synced',
-    className: 'bg-blue-100 text-blue-700 border-blue-200',
-  };
-  const overviewTimestamp = format(new Date(), 'MMM d, yyyy | h:mm a');
   const readyOrders = liveOrders.filter((order: any) => order.status === 'READY');
 
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    setActiveDragOrder(active.data.current?.order);
-  };
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveDragOrder(null);
-
-    if (!over) return;
-
-    const orderId = active.id as string;
-    const order = active.data.current?.order;
-    if (!order) return;
-
-    const targetStatusMap: Record<string, string> = {
-      'col-new': 'NEW',
-      'col-kitchen': 'ACCEPTED',
-      'col-ready': 'READY',
-      'col-served': 'SERVED',
-    };
-
-    let targetColId = over.id as string;
-    
-    // If we dropped on top of another card, find its container
-    if (!targetStatusMap[targetColId]) {
-      const overOrder = liveOrders.find((o: any) => o.id === targetColId);
-      if (overOrder) {
-        if (overOrder.status === 'NEW') targetColId = 'col-new';
-        else if (['ACCEPTED', 'PREPARING'].includes(overOrder.status)) targetColId = 'col-kitchen';
-        else if (overOrder.status === 'READY') targetColId = 'col-ready';
-        else if (overOrder.status === 'SERVED') targetColId = 'col-served';
-      }
-    }
-
-    const newStatus = targetStatusMap[targetColId];
-
-    if (newStatus && newStatus !== order.status) {
-      // Intercept Drag for Mini Plan to ask for Payment Method
-      // ONLY IF NOT ALREADY PAID
-      const isPaid = order.diningSession?.bill?.paymentStatus === 'PAID';
-      const isSettleRequired = (newStatus === 'READY' || newStatus === 'SERVED' || newStatus === 'COMPLETE_SETTLE');
-      if (plan === 'MINI' && !isPaid && isSettleRequired && order.diningSessionId) {
-        setPendingMiniSettle({ id: orderId, status: newStatus, order });
-        return;
-      }
-      
-      statusMutation.mutate({ 
-        id: orderId, 
-        status: newStatus, 
-        expectedVersion: order.version || 0 
-      });
-    }
-  };
+  const searchPlaceholder =
+    activeTab === 'PIPELINE'
+      ? 'Search token, table, guest, phone, or item'
+      : activeTab === 'SESSIONS'
+        ? 'Search table, guest, invoice, or token'
+        : 'Search history by invoice, token, or guest';
 
   return (
     <>
-      <div className="flex h-full min-h-0 flex-col p-3 sm:p-5 lg:p-8 relative">
+      {/* Toast */}
+      <div className="pointer-events-none fixed bottom-6 left-1/2 z-[300] -translate-x-1/2">
+        {localToast && (
+          <div className={`flex items-center gap-3 rounded-2xl border border-white/10 px-5 py-3 shadow-2xl backdrop-blur-md text-sm font-bold text-white ${localToast.type === 'error' ? 'bg-rose-600/90' : localToast.type === 'info' ? 'bg-blue-600/90' : 'bg-emerald-600/90'}`}>
+            {localToast.type === 'error' && <AlertTriangle size={15} />}
+            {localToast.type === 'success' && <CheckCircle size={15} />}
+            {localToast.type === 'info' && <Signal size={15} />}
+            {localToast.message}
+          </div>
+        )}
+      </div>
+
+      {/* Payment Desk Modal */}
       {paymentDeskModal && (
-        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[210] flex items-end justify-center p-4 sm:items-center">
           <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={() => setPaymentDeskModal(null)} />
-          <div className="relative w-full max-w-md overflow-hidden rounded-[2rem] border border-white/10 bg-[#0F1115] p-6 shadow-2xl">
+          <div className="relative w-full max-w-md overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900 p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-400">
-                  {paymentDeskModal.kind === 'SETTLE'
-                    ? 'Billing Desk'
-                    : 'Payment Verification'}
+                <p className="text-[9px] font-black uppercase tracking-[0.22em] text-blue-400">
+                  {paymentDeskModal.kind === 'SETTLE' ? 'Billing Desk' : 'Payment Verification'}
                 </p>
-                <h2 className="mt-2 text-2xl font-black tracking-tight text-white">
-                  {paymentDeskModal.tableLabel}
-                </h2>
-                <p className="mt-2 text-sm font-bold text-slate-400">
-                  Total {formatINR(paymentDeskModal.totalAmount || 0)}
-                </p>
+                <h2 className="mt-1.5 text-xl font-black tracking-tight text-white">{paymentDeskModal.tableLabel}</h2>
+                <p className="mt-1 text-sm font-bold text-slate-400">Total {formatINR(paymentDeskModal.totalAmount || 0)}</p>
               </div>
-              <button
-                onClick={() => setPaymentDeskModal(null)}
-                className="rounded-full bg-white/5 p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                <XCircle size={18} />
+              <button onClick={() => setPaymentDeskModal(null)} className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-slate-400 hover:text-white transition-colors">
+                <X size={18} />
               </button>
             </div>
 
             {paymentDeskModal.kind === 'SETTLE' && (
-              <div className="mt-6 space-y-3">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-xs font-bold text-slate-300">
+              <div className="mt-5 space-y-3">
+                <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
+                  <p className="text-xs font-semibold leading-relaxed text-slate-300">
                     {paymentDeskModal.sessionStatus === 'AWAITING_BILL'
-                      ? 'The final bill is already prepared. Choose how the restaurant received the payment.'
-                      : 'Service is done. Move this table into billing first so the guest can see the final bill and choose cash or online checkout.'}
+                      ? 'The final bill is ready. Choose how payment was received.'
+                      : 'Service is done. Move to billing so the guest can see the final bill.'}
                   </p>
                 </div>
-
                 {paymentDeskModal.sessionStatus !== 'AWAITING_BILL' && (
-                  <button
-                    onClick={() => {
-                      handleFinishSession(paymentDeskModal.sessionId);
-                      setPaymentDeskModal(null);
-                    }}
-                    className="flex h-14 w-full items-center justify-between rounded-2xl bg-amber-500 px-5 text-sm font-black text-white transition-all hover:bg-amber-400"
-                  >
-                    <span className="flex items-center gap-3">
-                      <ReceiptText size={18} />
-                      Move to Billing
-                    </span>
+                  <button onClick={() => { handleFinishSession(paymentDeskModal.sessionId); setPaymentDeskModal(null); }} className="flex h-14 w-full items-center justify-between rounded-2xl bg-amber-500 px-5 text-sm font-black text-white hover:bg-amber-400 transition-all">
+                    <span className="flex items-center gap-3"><ReceiptText size={18} />Move to Billing</span>
                     <ChevronRight size={16} className="opacity-70" />
                   </button>
                 )}
-
                 {paymentDeskModal.sessionStatus === 'AWAITING_BILL' && (
                   <>
-                    <button
-                      onClick={() => {
-                        void handleCompleteSession(paymentDeskModal.sessionId, 'cash', {
-                          shouldClose: true,
-                          ensureBillFirst: false,
-                        });
-                        setPaymentDeskModal(null);
-                      }}
-                      className="flex h-14 w-full items-center justify-between rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white transition-all hover:bg-emerald-500"
-                    >
-                      <span className="flex items-center gap-3">
-                        <ReceiptText size={18} />
-                        Cash Received & Checkout
-                      </span>
+                    <button onClick={() => { void handleCompleteSession(paymentDeskModal.sessionId, 'cash', { shouldClose: true, ensureBillFirst: false }); setPaymentDeskModal(null); }} className="flex h-14 w-full items-center justify-between rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white hover:bg-emerald-500 transition-all">
+                      <span className="flex items-center gap-3"><ReceiptText size={18} />Cash Received &amp; Checkout</span>
                       <ChevronRight size={16} className="opacity-70" />
                     </button>
-
                     <button
                       onClick={() => {
-                        if (!businessSettings?.upiId) {
-                          setLocalToast({
-                            message: 'Save the restaurant UPI ID in Settings before sending online checkout links.',
-                            type: 'error',
-                          });
-                          return;
-                        }
-                        void sendPaymentLinkMutation.mutateAsync({
-                          sessionId: paymentDeskModal.sessionId,
-                        }).then(() => {
-                          setLocalToast({
-                            message: 'Exact-amount UPI checkout link sent to the customer.',
-                            type: 'success',
-                          });
-                          setPaymentDeskModal(null);
-                        }).catch((error: any) => {
-                          setLocalToast({
-                            message: error?.response?.data?.error || error?.message || 'Could not send the online checkout link.',
-                            type: 'error',
-                          });
-                        });
+                        if (!businessSettings?.upiId) { setLocalToast({ message: 'Save the UPI ID in Settings first.', type: 'error' }); return; }
+                        void sendPaymentLinkMutation.mutateAsync({ sessionId: paymentDeskModal.sessionId })
+                          .then(() => { setLocalToast({ message: 'UPI checkout link sent.', type: 'success' }); setPaymentDeskModal(null); })
+                          .catch((err: any) => setLocalToast({ message: err?.response?.data?.error || 'Could not send checkout link.', type: 'error' }));
                       }}
                       disabled={sendPaymentLinkMutation.isPending}
-                      className="flex h-14 w-full items-center justify-between rounded-2xl bg-blue-600 px-5 text-sm font-black text-white transition-all hover:bg-blue-500 disabled:opacity-60"
+                      className="flex h-14 w-full items-center justify-between rounded-2xl bg-blue-600 px-5 text-sm font-black text-white hover:bg-blue-500 disabled:opacity-60 transition-all"
                     >
                       <span className="flex items-center gap-3">
-                        <CreditCard size={18} />
+                        {sendPaymentLinkMutation.isPending ? <Loader2 size={18} className="animate-spin" /> : <CreditCard size={18} />}
                         Send Online Checkout Link
                       </span>
                       <ChevronRight size={16} className="opacity-70" />
@@ -1568,56 +949,26 @@ export function Orders({ role }: { role?: string }) {
             )}
 
             {paymentDeskModal.kind === 'CONFIRM_RECEIPT' && (
-              <div className="mt-6 space-y-3">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-sm font-bold text-slate-200">
-                    Did you receive {formatINR(paymentDeskModal.totalAmount || 0)} in the restaurant account?
-                  </p>
-                  <p className="mt-2 text-xs font-semibold text-slate-400">
-                    Confirm only after checking the UPI or bank app.
-                  </p>
+              <div className="mt-5 space-y-3">
+                <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
+                  <p className="text-sm font-bold text-slate-200">Did you receive {formatINR(paymentDeskModal.totalAmount || 0)} in the restaurant account?</p>
+                  <p className="mt-2 text-xs font-semibold text-slate-400">Confirm only after checking the UPI or bank app.</p>
                 </div>
-
-                <button
-                  onClick={() => {
-                    void handleCompleteSession(paymentDeskModal.sessionId, 'online', {
-                      shouldClose: true,
-                      ensureBillFirst: true,
-                    });
-                    setPaymentDeskModal(null);
-                  }}
-                  className="flex h-14 w-full items-center justify-between rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white transition-all hover:bg-emerald-500"
-                >
-                  <span className="flex items-center gap-3">
-                    <CheckCircle size={18} />
-                    Yes, Payment Received
-                  </span>
+                <button onClick={() => { void handleCompleteSession(paymentDeskModal.sessionId, 'online', { shouldClose: true, ensureBillFirst: true }); setPaymentDeskModal(null); }} className="flex h-14 w-full items-center justify-between rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white hover:bg-emerald-500 transition-all">
+                  <span className="flex items-center gap-3"><CheckCircle size={18} />Yes, Payment Received</span>
                   <ChevronRight size={16} className="opacity-70" />
                 </button>
-
                 <button
                   onClick={() => {
-                    void rejectSessionPaymentMutation.mutateAsync({
-                      sessionId: paymentDeskModal.sessionId,
-                      message: 'Payment is not visible yet. Please show it to the desk manager.',
-                    }).then(() => {
-                      setLocalToast({
-                        message: 'Guest asked to show the payment to the desk manager.',
-                        type: 'info',
-                      });
-                      setPaymentDeskModal(null);
-                    }).catch((error: any) => {
-                      setLocalToast({
-                        message: error?.response?.data?.error || error?.message || 'Could not send the payment check response.',
-                        type: 'error',
-                      });
-                    });
+                    void rejectSessionPaymentMutation.mutateAsync({ sessionId: paymentDeskModal.sessionId, message: 'Payment not visible. Please show it to the desk manager.' })
+                      .then(() => { promptedPaymentSessionsRef.current.delete(paymentDeskModal.sessionId); setLocalToast({ message: 'Guest asked to show payment.', type: 'info' }); setPaymentDeskModal(null); })
+                      .catch((err: any) => setLocalToast({ message: err?.response?.data?.error || 'Could not send response.', type: 'error' }));
                   }}
                   disabled={rejectSessionPaymentMutation.isPending}
-                  className="flex h-14 w-full items-center justify-between rounded-2xl bg-white/5 px-5 text-sm font-black text-white transition-all hover:bg-white/10 disabled:opacity-60"
+                  className="flex h-14 w-full items-center justify-between rounded-2xl bg-white/5 px-5 text-sm font-black text-white hover:bg-white/10 disabled:opacity-60 transition-all"
                 >
                   <span className="flex items-center gap-3">
-                    <RefreshCw size={18} />
+                    {rejectSessionPaymentMutation.isPending ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
                     Not Yet
                   </span>
                   <ChevronRight size={16} className="opacity-70" />
@@ -1627,371 +978,342 @@ export function Orders({ role }: { role?: string }) {
           </div>
         </div>
       )}
+
+      {/* Mini Settle Modal */}
       {pendingMiniSettle && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setPendingMiniSettle(null)} />
-          <div className="relative w-full max-w-sm rounded-[2.5rem] bg-[#0F1115] p-8 shadow-2xl border border-white/5 animate-in zoom-in-95 duration-300">
-             <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 rounded-3xl bg-blue-600/20 flex items-center justify-center mb-6 border border-blue-500/30">
-                  <CreditCard className="text-blue-500" size={32} />
-                </div>
-                <h2 className="text-xl font-black text-white tracking-tight">Settle & Accept</h2>
-                <p className="mt-2 text-sm text-slate-400 font-bold">
-                  How should we record the payment for <span className="text-blue-400">Token {pendingMiniSettle.order.orderNumber || asOrderCode(pendingMiniSettle.order.id)}</span>?
-                </p>
-                <div className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 text-emerald-400 text-sm font-black tracking-widest uppercase">
-                  Total {formatINR(pendingMiniSettle.order.totalAmount)}
-                </div>
-             </div>
-
-             <div className="mt-8 grid grid-cols-1 gap-3">
-                <button
-                  onClick={() => {
-                    void settlePendingMiniOrder('cash');
-                  }}
-                  disabled={completeSessionMutation.isPending}
-                  className="group flex items-center justify-between w-full h-16 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black transition-all active:scale-95 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
-                >
-                  <div className="flex items-center gap-4">
-                    <ReceiptText size={20} className="group-hover:scale-110 transition-transform" />
-                    <span>CASH PAYMENT</span>
+        <div className="fixed inset-0 z-[200] flex items-end justify-center p-4 sm:items-center">
+          <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={() => setPendingMiniSettle(null)} />
+          <div className="relative w-full max-w-sm rounded-[2rem] border border-white/5 bg-slate-900 p-7 shadow-2xl">
+            {pendingMiniSettle.mode === 'verify' ? (
+              <>
+                <div className="flex flex-col items-center text-center">
+                  <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-500/30 bg-blue-600/20">
+                    <CheckCircle className="text-blue-400" size={28} />
                   </div>
-                  <Zap size={16} className="opacity-50" />
-                </button>
-
-                <button
-                  onClick={() => {
-                    void settlePendingMiniOrder('online');
-                  }}
-                  disabled={completeSessionMutation.isPending}
-                  className="group flex items-center justify-between w-full h-16 px-6 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black transition-all active:scale-95 shadow-lg shadow-blue-500/20 disabled:opacity-50"
-                >
-                  <div className="flex items-center gap-4">
-                    <Signal size={20} className="group-hover:scale-110 transition-transform" />
-                    <span>ONLINE / UPI</span>
+                  <h2 className="text-xl font-black text-white tracking-tight">Verify / Accept Token</h2>
+                  <p className="mt-2 text-sm font-semibold text-slate-400">
+                    Token <span className="text-blue-400">{pendingMiniSettle.order.orderNumber || asOrderCode(pendingMiniSettle.order.id)}</span> stays in New until you confirm.
+                  </p>
+                  <div className="mt-3 flex items-center gap-2 rounded-xl bg-white/5 px-4 py-2 text-sm font-black uppercase tracking-widest text-emerald-400">
+                    Total {formatINR(pendingMiniSettle.order.totalAmount)}
                   </div>
-                  <RefreshCw size={16} className="opacity-50" />
-                </button>
-
-                <button
-                  onClick={() => setPendingMiniSettle(null)}
-                  className="mt-2 w-full h-12 text-sm font-bold text-slate-500 hover:text-slate-300 transition-all"
-                >
-                  Cancel & Rollback
-                </button>
-             </div>
+                  <p className="mt-3 text-xs font-semibold leading-relaxed text-slate-500">
+                    {getMiniSessionPaymentMethod(pendingMiniSettle.order) === 'online' ? 'Check the UPI app before accepting.' : 'Ask counter staff if cash was received.'}
+                  </p>
+                </div>
+                <div className="mt-6 space-y-3">
+                  <button onClick={() => { void resolvePendingMiniVerification(true); }} disabled={completeSessionMutation.isPending || rejectSessionPaymentMutation.isPending} className="flex h-14 w-full items-center justify-between rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white hover:bg-emerald-500 disabled:opacity-50 transition-all">
+                    <span className="flex items-center gap-3"><CheckCircle size={18} />YES, ACCEPT TOKEN</span><ChevronRight size={16} className="opacity-60" />
+                  </button>
+                  <button onClick={() => { void resolvePendingMiniVerification(false); }} disabled={completeSessionMutation.isPending || rejectSessionPaymentMutation.isPending} className="flex h-14 w-full items-center justify-between rounded-2xl bg-white/5 px-5 text-sm font-black text-white hover:bg-white/10 disabled:opacity-50 transition-all">
+                    <span className="flex items-center gap-3"><RefreshCw size={18} />{getMiniSessionPaymentMethod(pendingMiniSettle.order) === 'online' ? 'ASK TO SHOW UPI' : 'TAKE CASH FIRST'}</span><ChevronRight size={16} className="opacity-60" />
+                  </button>
+                  <button onClick={() => setPendingMiniSettle(null)} className="h-11 w-full text-sm font-bold text-slate-500 hover:text-slate-300 transition-colors">Close</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col items-center text-center">
+                  <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-500/30 bg-blue-600/20">
+                    <CreditCard className="text-blue-400" size={28} />
+                  </div>
+                  <h2 className="text-xl font-black text-white tracking-tight">Record Counter Payment</h2>
+                  <p className="mt-2 text-sm font-semibold text-slate-400">
+                    Payment for <span className="text-blue-400">Token {pendingMiniSettle.order.orderNumber || asOrderCode(pendingMiniSettle.order.id)}</span>
+                  </p>
+                  <div className="mt-3 flex items-center gap-2 rounded-xl bg-white/5 px-4 py-2 text-sm font-black uppercase tracking-widest text-emerald-400">
+                    Total {formatINR(pendingMiniSettle.order.totalAmount)}
+                  </div>
+                </div>
+                <div className="mt-6 space-y-3">
+                  <button onClick={() => { void settlePendingMiniOrder('cash'); }} disabled={completeSessionMutation.isPending} className="flex h-14 w-full items-center justify-between rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white hover:bg-emerald-500 disabled:opacity-50 transition-all">
+                    <span className="flex items-center gap-3"><ReceiptText size={18} />CASH AT COUNTER</span><Zap size={16} className="opacity-50" />
+                  </button>
+                  <button onClick={() => { void settlePendingMiniOrder('online'); }} disabled={completeSessionMutation.isPending} className="flex h-14 w-full items-center justify-between rounded-2xl bg-blue-600 px-5 text-sm font-black text-white hover:bg-blue-500 disabled:opacity-50 transition-all">
+                    <span className="flex items-center gap-3"><Signal size={18} />UPI / ONLINE</span><RefreshCw size={16} className="opacity-50" />
+                  </button>
+                  <button onClick={() => setPendingMiniSettle(null)} className="h-11 w-full text-sm font-bold text-slate-500 hover:text-slate-300 transition-colors">Cancel</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
-      {localToast && (
-        <div 
-          className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl border backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300"
-          style={{ 
-            background:
-              localToast.type === 'error'
-                ? 'rgba(239, 68, 68, 0.9)'
-                : localToast.type === 'info'
-                  ? 'rgba(37, 99, 235, 0.9)'
-                  : 'rgba(16, 185, 129, 0.9)',
-            borderColor: 'rgba(255,255,255,0.1)'
-          }}
-        >
-          <p className="text-white font-bold text-sm">{localToast.message}</p>
-        </div>
-      )}
-      <div className="mb-4 flex flex-col gap-3 lg:mb-6">
-        <div
-          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border p-2"
-          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${connectionTone.className}`}>
-              <Signal size={12} />
-              {connectionTone.label}
-            </span>
-            <span className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--text-3)' }}>
-              {overviewTimestamp}
-            </span>
-            {busyMode && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/20 px-3 py-1 text-xs font-black text-rose-600">
-                <Zap size={12} /> Busy Mode
+
+      {/* Main Container */}
+      <div className="flex h-full min-h-0 flex-col gap-4 p-3 sm:p-5 lg:p-6">
+
+        {/* Command Bar */}
+        <div className="flex flex-col gap-2.5">
+
+          {/* Row 1: Header + actions */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] border border-white/5 bg-slate-900/80 px-4 py-3.5 lg:px-6">
+            <div className="flex items-center gap-3 min-w-0">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.22em] text-blue-400">Live Board</p>
+                <h1 className="text-lg font-black tracking-tight text-white leading-tight">Orders</h1>
+              </div>
+              <div className="hidden items-center gap-2 sm:flex">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-[10px] font-black text-blue-400">
+                  <Signal size={10} /> Synced
+                </span>
+                {busyMode && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2.5 py-1 text-[10px] font-black text-rose-400">
+                    <Zap size={10} /> Busy
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setIsSearchOpen((v) => !v)}
+                className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all ${isSearchOpen || searchQuery.trim() ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30' : 'border border-white/10 bg-white/5 text-slate-400 hover:text-white'}`}
+              >
+                <Search size={15} />
+              </button>
+              <button onClick={refreshOperationalData} className="flex h-9 items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 text-[11px] font-black text-slate-400 hover:text-white transition-colors">
+                <RefreshCw size={13} /> Sync
+              </button>
+              {canToggleBusyMode && (
+                <button onClick={() => setBusyMode(!busyMode)} className={`flex h-9 items-center gap-1.5 rounded-xl px-3 text-[11px] font-black transition-all ${busyMode ? 'bg-rose-500 text-white shadow-lg shadow-rose-900/30' : 'border border-white/10 bg-white/5 text-slate-400 hover:text-white'}`}>
+                  <Zap size={13} /> {busyMode ? 'Busy ON' : 'Busy'}
+                </button>
+              )}
+              {canBulkClose && (
+                <button
+                  onClick={() => { if (readyOrders.length === 0) return; if (confirm('Mark every READY order as served?')) readyOrders.forEach((order: any) => statusMutation.mutate({ id: order.id, status: 'SERVED' })); }}
+                  disabled={readyOrders.length === 0}
+                  className="flex h-9 items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 text-[11px] font-black text-slate-400 hover:text-white transition-colors disabled:opacity-30"
+                >
+                  <XCircle size={13} /> Serve Ready
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Row 2: Search */}
+          {isSearchOpen && (
+            <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-slate-900/60 px-4 py-3">
+              <div className="relative flex-1">
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  autoFocus
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="h-10 w-full rounded-xl border border-white/10 bg-slate-950/60 pl-10 pr-4 text-sm font-semibold text-white outline-none transition focus:border-blue-500/50"
+                />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 whitespace-nowrap">
+                {activeTab === 'PIPELINE' ? `${filteredLiveOrders.length} live` : activeTab === 'SESSIONS' ? `${groupedLive.length} sessions` : `${filteredHistoryTickets.length} history`}
               </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              onClick={refreshOperationalData}
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold"
-              style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', color: 'var(--text-2)' }}
-            >
-              <RefreshCw size={12} /> Sync
-            </button>
-            {canToggleBusyMode && (
-              <button
-                onClick={() => setBusyMode(!busyMode)}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all ${busyMode ? 'bg-red-500 text-white shadow-lg shadow-red-500/30' : ''}`}
-                style={busyMode ? undefined : { background: 'var(--surface-3)', color: 'var(--text-2)' }}
-              >
-                <Zap size={14} /> {busyMode ? 'Busy ON' : 'Busy Mode'}
-              </button>
-            )}
-            {canBulkClose && (
-              <button
-                onClick={() => {
-                  if (readyOrders.length === 0) return;
-                  if (confirm('Mark every READY order as served?')) {
-                    readyOrders.forEach((order: any) => statusMutation.mutate({ id: order.id, status: 'SERVED' }));
-                  }
-                }}
-                disabled={readyOrders.length === 0}
-                className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all disabled:opacity-40"
-                style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}
-              >
-                <XCircle size={14} /> Serve Ready
-              </button>
-            )}
-          </div>
-        </div>
-        <div
-          className="flex w-full max-w-full overflow-x-auto rounded-xl p-1.5 sm:p-2"
-          style={{ background: 'var(--surface-3)', border: '1px solid var(--border)' }}
-        >
-          <button
-            onClick={() => setActiveTab('PIPELINE')}
-            className="px-4 py-2 rounded-lg text-sm font-bold transition-all focus-visible:outline-none sm:px-6"
-            style={activeTab === 'PIPELINE' ? { background: 'var(--card-bg)', color: 'var(--brand)', boxShadow: 'var(--card-shadow)' } : { color: 'var(--text-3)' }}
-          >
-            Order Pipeline
-          </button>
-          {canViewSessions && (
-            <button
-              onClick={() => setActiveTab('SESSIONS')}
-              className="px-4 py-2 rounded-lg text-sm font-bold transition-all focus-visible:outline-none sm:px-6"
-              style={activeTab === 'SESSIONS' ? { background: 'var(--card-bg)', color: 'var(--brand)', boxShadow: 'var(--card-shadow)' } : { color: 'var(--text-3)' }}
-            >
-              Table Sessions
-            </button>
-          )}
-          {canViewHistory && (
-            <button
-              onClick={() => setActiveTab('HISTORY')}
-              className="px-4 py-2 rounded-lg text-sm font-bold transition-all focus-visible:outline-none sm:px-6"
-              style={activeTab === 'HISTORY' ? { background: 'var(--card-bg)', color: 'var(--brand)', boxShadow: 'var(--card-shadow)' } : { color: 'var(--text-3)' }}
-            >
-              Order History
-            </button>
-          )}
-        </div>
-      </div>
-
-      {activeTab === 'PIPELINE' ? (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          {(isOffline || isLiveOrdersError) && (
-            <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm rounded-3xl m-4">
-               <div className="bg-red-500/20 border border-red-500 text-red-50 font-bold px-8 py-6 rounded-[2rem] flex items-center gap-4 shadow-2xl animate-in zoom-in-95 duration-300">
-                 <Signal size={32} className="text-red-400 animate-pulse" />
-                 <div>
-                   <p className="text-xl font-black tracking-tight">{isOffline ? 'No Internet Connection' : 'Database Connection Lost'}</p>
-                   <p className="text-sm text-red-200 mt-1 opacity-80 font-bold">
-                     {isOffline 
-                       ? 'Please check your router or cellular data.' 
-                       : 'BHOJFLOW is currently unable to reach the database. Retrying...'}
-                   </p>
-                 </div>
-               </div>
+              {searchQuery.trim() && (
+                <button onClick={() => setSearchQuery('')} className="text-[10px] font-black text-slate-500 hover:text-white uppercase transition-colors">Clear</button>
+              )}
             </div>
           )}
-          <div
-            className={`flex flex-1 flex-col gap-4 overflow-y-auto custom-scrollbar p-3 sm:p-4 lg:h-full lg:flex-row lg:gap-6 lg:overflow-x-auto lg:overflow-y-hidden lg:p-6 relative ${(isOffline || isLiveOrdersError) ? 'opacity-40 pointer-events-none' : ''}`}
-            style={{ background: 'var(--kanban-bg)' }}
-          >
-            {pipelineColumns.map(({ id, label, color, bg, badge, filter, pulse }) => {
-              const colOrders = sortedLiveOrders.filter(filter);
-              let colOrdersRender = colOrders;
 
-              if (id === 'col-served') {
-                const uniqueSessions = new Set<string>();
-                const grouped = [] as any[];
-                
-                colOrders.forEach((o: any) => {
-                  if (o.diningSessionId) {
-                    if (!uniqueSessions.has(o.diningSessionId)) {
-                      const sessionOrders = colOrders.filter((co: any) => co.diningSessionId === o.diningSessionId);
-                      const composite = { ...o };
-                      composite.isGrouped = sessionOrders.length > 1;
-                      if (composite.isGrouped) {
-                        composite.id = o.diningSessionId;
-                        composite.items = sessionOrders.flatMap((so: any) => so.items || []);
-                        const uniqueOrderNumbers = [...new Set(sessionOrders.map((so: any) => so.orderNumber || `T-${asOrderCode(so.id)}`))];
-                        composite.orderNumber = uniqueOrderNumbers.join(', ');
+          {/* Row 3: Tabs */}
+          <div className="flex gap-2 overflow-x-auto pb-0.5">
+            {([
+              { id: 'PIPELINE' as const, label: 'Order Pipeline', icon: LayoutGrid, count: filteredLiveOrders.length, show: true },
+              { id: 'SESSIONS' as const, label: 'Table Sessions', icon: TableProperties, count: groupedLive.length, show: canViewSessions },
+              { id: 'HISTORY' as const, label: 'History', icon: HistoryIcon, count: filteredHistoryTickets.length, show: canViewHistory },
+            ]).filter((t) => t.show).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex shrink-0 items-center gap-2 rounded-2xl px-4 py-2.5 text-[12px] font-black transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30' : 'border border-white/5 bg-slate-900/60 text-slate-400 hover:text-white'}`}
+              >
+                <tab.icon size={14} />
+                {tab.label}
+                <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-white/5 text-slate-600'}`}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="relative min-h-0 flex-1">
+
+          {activeTab === 'PIPELINE' ? (
+            <>
+              {(isOffline || isLiveOrdersError) && (
+                <div className="absolute inset-0 z-[100] flex items-center justify-center rounded-3xl bg-black/60 backdrop-blur-sm">
+                  <div className="flex items-center gap-4 rounded-[2rem] border border-rose-500/30 bg-rose-500/15 px-8 py-6 shadow-2xl">
+                    <Signal size={28} className="text-rose-400 animate-pulse" />
+                    <div>
+                      <p className="text-base font-black text-white">{isOffline ? 'No Internet Connection' : 'Database Connection Lost'}</p>
+                      <p className="mt-1 text-xs font-semibold text-rose-200">{isOffline ? 'Check your network.' : 'Retrying automatically...'}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div
+                className={`flex min-h-0 flex-1 flex-col gap-4 rounded-[2rem] border border-white/5 bg-slate-950/60 p-3 sm:p-4 lg:h-[calc(100dvh-17rem)] lg:flex-row lg:gap-5 lg:overflow-x-auto lg:overflow-y-hidden lg:p-5 ${isOffline || isLiveOrdersError ? 'pointer-events-none opacity-40' : ''}`}
+                style={{ background: 'var(--kanban-bg)' }}
+              >
+                {pipelineColumns.map(({ id, label, color, bg, badge, filter, pulse, hint }) => {
+                  const colOrders = filteredLiveOrders.filter(filter);
+                  let colOrdersRender = colOrders;
+
+                  if (id === 'col-served') {
+                    const uniqueSessions = new Set<string>();
+                    const grouped = [] as any[];
+                    colOrders.forEach((o: any) => {
+                      if (o.diningSessionId) {
+                        if (!uniqueSessions.has(o.diningSessionId)) {
+                          const sessionOrders = colOrders.filter((co: any) => co.diningSessionId === o.diningSessionId);
+                          const composite = { ...o };
+                          composite.isGrouped = sessionOrders.length > 1;
+                          if (composite.isGrouped) {
+                            composite.id = o.diningSessionId;
+                            composite.sourceOrderId = o.id;
+                            composite.items = sessionOrders.flatMap((so: any) => so.items || []);
+                            const uniqueOrderNumbers = [...new Set(sessionOrders.map((so: any) => so.orderNumber || `T-${asOrderCode(so.id)}`))];
+                            composite.orderNumber = uniqueOrderNumbers.join(', ');
+                          }
+                          uniqueSessions.add(o.diningSessionId);
+                          grouped.push(composite);
+                        }
+                      } else {
+                        grouped.push(o);
                       }
-                      uniqueSessions.add(o.diningSessionId);
-                      grouped.push(composite);
-                    }
-                  } else {
-                    grouped.push(o);
+                    });
+                    colOrdersRender = grouped;
                   }
-                });
-                colOrdersRender = grouped;
-              }
 
-              return (
-                <KanbanColumn 
-                  key={id} 
-                  id={id} 
-                  label={label} 
-                  color={color} 
-                  bg={bg} 
-                  badge={{ count: colOrders.length, className: badge }}
-                  pulse={pulse}
-                  isActive={activeTab === 'PIPELINE'}
-                >
-                  {colOrdersRender.map((order: any) => (
-                    <PipelineCard
-                      key={order.id}
-                      order={order}
-                      hasKDS={features.hasKDS}
-                      canSetKitchenStages={canSetKitchenStages}
-                      canSetServiceStages={canSetServiceStages}
+                  return (
+                    <KanbanColumn key={id} label={label} color={color} bg={bg} badge={{ count: colOrders.length, className: badge }} pulse={pulse} isActive={activeTab === 'PIPELINE'} hint={hint}>
+                      {colOrdersRender.map((order: any) => (
+                        <PipelineCard
+                          key={order.id}
+                          order={order}
+                          displayIdentity={liveOrderDisplayIdentityById.get(order.sourceOrderId || order.id)}
+                          orderSummary={liveOrderSummaryById.get(order.sourceOrderId || order.id)}
+                          expanded={expandedOrderId === String(order.id)}
+                          hasKDS={features.hasKDS}
+                          canSetKitchenStages={canSetKitchenStages}
+                          canSetServiceStages={canSetServiceStages}
+                          canCloseSession={canCloseSession}
+                          isStatusPending={statusMutation.isPending && (statusMutation.variables?.id === order.id || statusMutation.variables?.id === order.sourceOrderId)}
+                          onUpdateStatus={handleUpdateStatus}
+                          onFinishSession={handleFinishSession}
+                          onCompleteSession={handleCompleteSession}
+                          onToggleExpanded={handleToggleExpandedOrder}
+                          onOpenSettlementModal={openSessionSettlementDesk}
+                          isCompletePending={completeSessionMutation.isPending && completeSessionMutation.variables?.sessionId === order.diningSessionId}
+                          plan={plan}
+                        />
+                      ))}
+                      {colOrdersRender.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-12 text-center opacity-30">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Empty</p>
+                        </div>
+                      )}
+                    </KanbanColumn>
+                  );
+                })}
+              </div>
+            </>
+
+          ) : activeTab === 'SESSIONS' ? (
+            <div
+              className="flex-1 overflow-y-auto custom-scrollbar p-3 rounded-3xl sm:p-4 lg:p-6"
+              style={{ background: 'var(--kanban-bg)', border: '1px solid var(--border)' }}
+            >
+              {groupedLive.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24 gap-5 text-center">
+                  <div className="h-16 w-16 rounded-2xl border border-white/5 bg-slate-900/60 flex items-center justify-center">
+                    <TableProperties size={28} className="text-slate-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">No Active Sessions</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-600">Scan a QR code or place a test order to begin.</p>
+                  </div>
+                  <button onClick={openTestOrder} className="rounded-2xl bg-blue-600 px-5 py-2.5 text-xs font-black text-white hover:bg-blue-500 transition-colors">
+                    Create Test Order
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-start">
+                  {groupedLive.map((ticket: any) => (
+                    <TicketCard
+                      key={ticket.id}
+                      ticket={ticket}
+                      plan={plan}
                       canCloseSession={canCloseSession}
-                      isStatusPending={statusMutation.isPending && statusMutation.variables?.id === order.id}
-                      onUpdateStatus={handleUpdateStatus}
+                      selectedBillAction={ticket.sessionId ? billSelections[ticket.sessionId] || 'AWAITING_BILL' : 'AWAITING_BILL'}
+                      onSelectBillAction={handleSelectBillAction}
+                      finishPending={finishSessionMutation.isPending && finishSessionMutation.variables?.sessionId === ticket.sessionId}
+                      paymentPending={completeSessionMutation.isPending && completeSessionMutation.variables?.sessionId === ticket.sessionId}
                       onFinishSession={handleFinishSession}
                       onCompleteSession={handleCompleteSession}
                       onOpenSettlementModal={openSessionSettlementDesk}
-                      isCompletePending={completeSessionMutation.isPending && completeSessionMutation.variables?.sessionId === order.diningSessionId}
-                      plan={plan}
+                      onViewInvoice={(t) => {
+                        const sessionBill = t.session?.bill || t.diningSession?.bill;
+                        setSelectedInvoice({ ...t, items: (t.orders || []).flatMap((o: any) => o.items || []), diningSession: { bill: sessionBill } });
+                      }}
                     />
                   ))}
-                  {colOrdersRender.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-10 text-center px-4 opacity-40">
-                      <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">No orders</p>
-                    </div>
-                  )}
-                </KanbanColumn>
-              );
-            })}
-          </div>
-          
-          <DragOverlay dropAnimation={{
-            sideEffects: defaultDropAnimationSideEffects({
-              styles: {
-                active: {
-                  opacity: '0.5',
-                },
-              },
-            }),
-          }}>
-            {activeDragOrder ? (
-              <div className="w-[300px] pointer-events-none opacity-90 scale-105 rotate-2">
-                <PipelineCard
-                  order={activeDragOrder}
-                  hasKDS={features.hasKDS}
-                  canSetKitchenStages={false}
-                  canSetServiceStages={false}
-                  canCloseSession={false}
-                  isStatusPending={false}
-                  onUpdateStatus={() => {}}
-                />
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      ) : activeTab === 'SESSIONS' ? (
-        <div
-          className="flex-1 overflow-y-auto custom-scrollbar p-3 rounded-3xl sm:p-4 lg:p-6"
-          style={{ background: 'var(--kanban-bg)', border: '1px solid var(--border)' }}
-        >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-6 items-start">
-            {groupedLive.map((ticket: any) => (
-              <TicketCard 
-                key={ticket.id} 
-                ticket={ticket}
-                plan={plan}
-                canCloseSession={canCloseSession}
-                selectedBillAction={ticket.sessionId ? billSelections[ticket.sessionId] || 'AWAITING_BILL' : 'AWAITING_BILL'}
-                onSelectBillAction={handleSelectBillAction}
-                finishPending={finishSessionMutation.isPending && finishSessionMutation.variables?.sessionId === ticket.sessionId}
-                paymentPending={completeSessionMutation.isPending && completeSessionMutation.variables?.sessionId === ticket.sessionId}
-                onFinishSession={handleFinishSession}
-                onCompleteSession={handleCompleteSession}
-                onOpenSettlementModal={openSessionSettlementDesk}
-                onViewInvoice={(t) => {
-                  const sessionBill = t.session?.bill || t.diningSession?.bill;
-                  setSelectedInvoice({
-                    ...t,
-                    items: (t.orders || []).flatMap((o: any) => o.items || []),
-                    diningSession: { bill: sessionBill }
-                  });
-                }}
-              />
-            ))}
-            {groupedLive.length === 0 && (
-              <div className="col-span-full flex flex-col items-center justify-center mt-20">
-                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-4">
-                  <span className="text-2xl font-black text-slate-500">Table</span>
                 </div>
-                <p className="text-gray-600 font-bold text-lg">No active sessions</p>
-                <p className="text-gray-400 text-sm mt-1">Start by scanning a QR or placing a test order.</p>
-                <button
-                  onClick={openTestOrder}
-                  className="mt-3 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold"
-                >
-                  Create Test Order
-                </button>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+
+          ) : (
+            <div
+              className="flex-1 overflow-y-auto custom-scrollbar p-3 rounded-3xl sm:p-4 lg:p-6"
+              style={{ background: 'var(--kanban-bg)', border: '1px solid var(--border)' }}
+            >
+              {filteredHistoryTickets.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+                  <div className="h-14 w-14 rounded-2xl border border-white/5 bg-slate-900/60 flex items-center justify-center">
+                    <HistoryIcon size={24} className="text-slate-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">
+                      {searchQuery.trim() ? 'No results found' : 'No history today'}
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-slate-600">
+                      {searchQuery.trim() ? 'Try token, invoice, guest name, or phone.' : 'History resets daily.'}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-start">
+                  {filteredHistoryTickets.map((ticket: any) => (
+                    <TicketCard
+                      key={`history_${ticket.id}`}
+                      ticket={ticket}
+                      plan={plan}
+                      canCloseSession={canCloseSession}
+                      selectedBillAction={ticket.sessionId ? billSelections[ticket.sessionId] || 'AWAITING_BILL' : 'AWAITING_BILL'}
+                      onSelectBillAction={handleSelectBillAction}
+                      finishPending={false}
+                      paymentPending={false}
+                      onFinishSession={handleFinishSession}
+                      onCompleteSession={handleCompleteSession}
+                      onOpenSettlementModal={openSessionSettlementDesk}
+                      onViewInvoice={(t) => {
+                        const sessionBill = t.session?.bill || t.diningSession?.bill;
+                        setSelectedInvoice({ ...t, items: (t.orders || []).flatMap((o: any) => o.items || []), diningSession: { bill: sessionBill } });
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      ) : (
-        <div
-          className="flex-1 overflow-y-auto custom-scrollbar p-3 rounded-3xl sm:p-4 lg:p-6"
-          style={{ background: 'var(--kanban-bg)', border: '1px solid var(--border)' }}
-        >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-6 items-start">
-            {historyTickets.map((ticket: any) => (
-              <TicketCard 
-                key={`history_${ticket.id}`} 
-                ticket={ticket}
-                plan={plan}
-                canCloseSession={canCloseSession}
-                selectedBillAction={ticket.sessionId ? billSelections[ticket.sessionId] || 'AWAITING_BILL' : 'AWAITING_BILL'}
-                onSelectBillAction={handleSelectBillAction}
-                finishPending={false}
-                paymentPending={false}
-                onFinishSession={handleFinishSession}
-                onCompleteSession={handleCompleteSession}
-                onOpenSettlementModal={openSessionSettlementDesk}
-                onViewInvoice={(t) => {
-                  const sessionBill = t.session?.bill || t.diningSession?.bill;
-                  setSelectedInvoice({
-                    ...t,
-                    items: (t.orders || []).flatMap((o: any) => o.items || []),
-                    diningSession: { bill: sessionBill }
-                  });
-                }}
-              />
-            ))}
-            {historyTickets.length === 0 && (
-              <div className="col-span-full text-center mt-20">
-                <p className="text-gray-500 font-semibold">No completed orders recorded today</p>
-                <p className="text-gray-400 text-sm mt-1">History now resets daily and shows only the current day.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+      </div>
 
       {selectedInvoice && (
         <InvoiceModal
           order={selectedInvoice}
           businessName={businessSettings?.businessName || 'Your Venue'}
+          businessAddress={businessSettings?.address || ''}
           businessPhone={businessSettings?.phone || '-'}
           businessGstin={businessSettings?.gstin || '-'}
           taxRate={Number(businessSettings?.taxRate || 5)}

@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import {
+  CheckCircle2,
+  CreditCard,
+  ChevronRight,
   LayoutDashboard,
   Plus,
   Receipt,
@@ -22,7 +25,16 @@ import {
   getCustomerStatusMeta,
 } from '../lib/orderPresentation';
 import { useCartStore } from '../store/cartStore';
-import { getActiveSessionForTenant, getSessionAccessTokenForTenant, setLastTableIdForTenant } from '../lib/tenantStorage';
+import {
+  clearCustomerContextForTenant,
+  clearPendingMiniPaymentForTenant,
+  getActiveSessionForTenant,
+  getPendingMiniPaymentForTenant,
+  getSessionAccessTokenForTenant,
+  getTenantStorageItem,
+  setLastTableIdForTenant,
+  setPendingMiniPaymentForTenant,
+} from '../lib/tenantStorage';
 
 type SocketStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline';
 
@@ -49,6 +61,20 @@ function withSessionMetrics(next: any) {
     runningTotal,
     itemCount,
   };
+}
+
+function speakTrackerReadyUpdate(message: string) {
+  if (typeof window === 'undefined' || typeof window.speechSynthesis === 'undefined') return;
+
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(message);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    // Ignore unsupported browsers/devices.
+  }
 }
 
 function TimerDisplay({ order }: { order: any }) {
@@ -95,9 +121,9 @@ function TimerDisplay({ order }: { order: any }) {
   if (finalTime) {
     return (
       <div className="rounded-3xl border border-dashed p-6 text-center shadow-sm" style={{ background: 'var(--surface-3)', borderColor: 'var(--brand)' }}>
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 mb-2">Order Status</p>
+        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Service timing</p>
         <p className="text-xl font-black" style={{ color: 'var(--text-1)' }}>
-          Order arrived in <span style={{ color: 'var(--brand)' }}>{finalTime}</span>
+          Completed in <span style={{ color: 'var(--brand)' }}>{finalTime}</span>
         </p>
       </div>
     );
@@ -111,13 +137,13 @@ function TimerDisplay({ order }: { order: any }) {
   return (
     <div className="rounded-3xl border border-dashed p-6 text-center shadow-sm transition-all" style={{ background: isOverdue ? 'rgba(239, 68, 68, 0.05)' : 'var(--surface-3)', borderColor: isOverdue ? 'rgba(239, 68, 68, 0.4)' : 'var(--brand)' }}>
       <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 mb-2">
-        {isOverdue ? 'Slightly Delayed' : 'Estimated Arrival'}
+        {isOverdue ? 'Kitchen update' : 'Estimated ready time'}
       </p>
       
       {isOverdue ? (
         <div className="space-y-2">
           <p className="line-clamp-2 px-4 text-sm font-bold leading-relaxed" style={{ color: 'var(--text-1)' }}>
-             We are sorry for this delay, we are enhancing our capability to serve you faster.
+            Your order is taking a little longer than planned. The kitchen is still working on it.
           </p>
           <p className="text-[11px] font-black uppercase tracking-widest text-red-500">Items coming soon</p>
         </div>
@@ -144,18 +170,39 @@ export function SessionTracker() {
   const { tenantSlug, sessionId: routeSessionId } = useParams();
   const navigate = useNavigate();
   const addItem = useCartStore((state) => state.addItem);
+  const clearCart = useCartStore((state) => state.clearCart);
+  const tenantPlan = useCartStore((state) => state.tenantPlan);
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [finishing, setFinishing] = useState(false);
   const [socketStatus, setSocketStatus] = useState<SocketStatus>('connecting');
+  const [miniPendingPayment, setMiniPendingPayment] = useState(() => getPendingMiniPaymentForTenant(tenantSlug));
+  const [submittingMiniPayment, setSubmittingMiniPayment] = useState(false);
+  const [miniVerificationNow, setMiniVerificationNow] = useState(() => Date.now());
 
   const refreshTimerRef = useRef<number | null>(null);
   const lastFetchStartedAtRef = useRef(0);
   const fetchInFlightRef = useRef(false);
+  const orderStatusMapRef = useRef<Record<string, string>>({});
   const sessionId =
     routeSessionId || getActiveSessionForTenant(tenantSlug);
   const sessionAccessToken = getSessionAccessTokenForTenant(tenantSlug);
   const tableId = session?.tableId;
+  const isMiniTokenFlow = String(tenantPlan || '').toUpperCase() === 'MINI';
+  const isCounterEntry = getTenantStorageItem(tenantSlug, 'entry_mode') === 'counter';
+
+  const persistMiniPendingPayment = useCallback(
+    (next: ReturnType<typeof getPendingMiniPaymentForTenant>) => {
+      setMiniPendingPayment(next);
+      if (!tenantSlug) return;
+      if (next) {
+        setPendingMiniPaymentForTenant(tenantSlug, next);
+      } else {
+        clearPendingMiniPaymentForTenant(tenantSlug);
+      }
+    },
+    [tenantSlug],
+  );
 
   const fetchSession = useCallback(async () => {
     if (!sessionId || !tenantSlug) {
@@ -219,6 +266,10 @@ export function SessionTracker() {
   }, [fetchSession]);
 
   useEffect(() => {
+    setMiniPendingPayment(getPendingMiniPaymentForTenant(tenantSlug));
+  }, [tenantSlug]);
+
+  useEffect(() => {
     if (tenantSlug && session?.tableId) {
       setLastTableIdForTenant(tenantSlug, session.tableId);
     }
@@ -258,10 +309,33 @@ export function SessionTracker() {
       upsertOrder(order);
     });
 
-    socket.on('session:update', (payload: { sessionId?: string; status?: string }) => {
+    socket.on('session:payment_link', (payload: any) => {
+      if (!payload?.sessionId || payload.sessionId !== sessionId || !isMiniTokenFlow) return;
+      persistMiniPendingPayment({
+        sessionId,
+        method: 'online',
+        state: 'OPEN_LINK',
+        paymentLink: {
+          amount: Number(payload.amount || 0),
+          upiId: String(payload.upiId || ''),
+          upiUri: String(payload.upiUri || ''),
+        },
+        submittedAt: null,
+      });
+    });
+
+    socket.on('session:update', (payload: { sessionId?: string; status?: string; bill?: any }) => {
       if (!payload?.sessionId || payload.sessionId !== sessionId) return;
-      setSession((prev: any) => (prev ? { ...prev, sessionStatus: payload.status || prev.sessionStatus } : prev));
-      scheduleRefresh(220);
+      setSession((prev: any) =>
+        prev
+          ? withSessionMetrics({
+              ...prev,
+              sessionStatus: payload.status || prev.sessionStatus,
+              bill: payload.bill ? { ...prev.bill, ...payload.bill } : prev.bill,
+            })
+          : prev,
+      );
+      scheduleRefresh(payload.bill ? 140 : 220);
     });
 
     socket.on('session:finished', (payload: { sessionId?: string; totalAmount?: number }) => {
@@ -279,15 +353,16 @@ export function SessionTracker() {
       navigate(`/order/${tenantSlug}/session/${sessionId}/bill`);
     });
 
-    socket.on('session:settled', (payload: { sessionId?: string; status?: string; totalAmount?: number }) => {
+    socket.on('session:settled', (payload: { sessionId?: string; status?: string; totalAmount?: number; bill?: any }) => {
       if (!payload?.sessionId || payload.sessionId !== sessionId) return;
       setSession((prev: any) =>
         prev
-          ? {
+          ? withSessionMetrics({
               ...prev,
               sessionStatus: payload.status || prev.sessionStatus,
               runningTotal: Number(payload.totalAmount || prev.runningTotal || 0),
-            }
+              bill: payload.bill ? { ...prev.bill, ...payload.bill } : prev.bill,
+            })
           : prev,
       );
       scheduleRefresh(160);
@@ -296,11 +371,34 @@ export function SessionTracker() {
       }
     });
 
-    socket.on('session:completed', (payload: { sessionId?: string }) => {
+    socket.on('session:completed', (payload: { sessionId?: string; bill?: any }) => {
       if (!payload?.sessionId || payload.sessionId !== sessionId) return;
-      setSession((prev: any) => (prev ? { ...prev, sessionStatus: 'CLOSED' } : prev));
+      setSession((prev: any) =>
+        prev
+          ? withSessionMetrics({
+              ...prev,
+              sessionStatus: 'CLOSED',
+              bill: payload.bill ? { ...prev.bill, ...payload.bill } : prev.bill,
+            })
+          : prev,
+      );
       scheduleRefresh(120);
       navigate(`/order/${tenantSlug}/session/${sessionId}/bill`);
+    });
+
+    socket.on('session:payment_rejected', (payload: any) => {
+      if (!payload?.sessionId || payload.sessionId !== sessionId || !isMiniTokenFlow) return;
+      persistMiniPendingPayment({
+        sessionId,
+        method: String(payload?.method || '').toLowerCase() === 'cash' ? 'cash' : 'online',
+        state: 'REJECTED',
+        paymentLink: miniPendingPayment?.paymentLink || null,
+        submittedAt: null,
+        message:
+          typeof payload?.message === 'string' && payload.message.trim().length > 0
+            ? payload.message.trim()
+            : 'Payment is not visible yet. Please show the token and payment at the counter.',
+      });
     });
 
     return () => {
@@ -310,13 +408,120 @@ export function SessionTracker() {
       }
       socket.disconnect();
     };
-  }, [navigate, scheduleRefresh, sessionAccessToken, sessionId, tenantSlug, upsertOrder]);
+  }, [isMiniTokenFlow, miniPendingPayment?.paymentLink, navigate, persistMiniPendingPayment, scheduleRefresh, sessionAccessToken, sessionId, tenantSlug, upsertOrder]);
 
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!tenantSlug || !sessionId || !isMiniTokenFlow) return;
+    if (!miniPendingPayment || miniPendingPayment.sessionId !== sessionId) return;
+    if (miniPendingPayment.method !== 'online' || miniPendingPayment.state !== 'OPEN_LINK' || !miniPendingPayment.paymentLink?.upiUri) {
+      return;
+    }
+
+    const paymentStatus = String(session?.bill?.paymentStatus || '').toUpperCase();
+    if (paymentStatus === 'PENDING_VERIFICATION' || paymentStatus === 'PAID') return;
+
+    persistMiniPendingPayment({
+      ...miniPendingPayment,
+      state: 'AWAITING_RETURN',
+    });
+
+    const timeoutId = window.setTimeout(() => {
+      window.location.assign(miniPendingPayment.paymentLink!.upiUri);
+    }, 180);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isMiniTokenFlow, miniPendingPayment, persistMiniPendingPayment, session?.bill?.paymentStatus, sessionId, tenantSlug]);
+
+  const submitMiniOnlinePayment = useCallback(async () => {
+    if (!tenantSlug || !sessionId || submittingMiniPayment) return;
+
+    setSubmittingMiniPayment(true);
+    try {
+      await publicApi.post(`/${tenantSlug}/sessions/${sessionId}/payment-submitted`);
+      persistMiniPendingPayment({
+        sessionId,
+        method: 'online',
+        state: 'PENDING_VENDOR',
+        paymentLink: miniPendingPayment?.paymentLink || null,
+        submittedAt: Date.now(),
+      });
+    } catch (err) {
+      console.error('[MINI_PAYMENT_SUBMIT_ERROR]', err);
+    } finally {
+      setSubmittingMiniPayment(false);
+    }
+  }, [miniPendingPayment?.paymentLink, persistMiniPendingPayment, sessionId, submittingMiniPayment, tenantSlug]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!isMiniTokenFlow || !miniPendingPayment || miniPendingPayment.sessionId !== sessionId) return;
+      if (miniPendingPayment.method !== 'online' || miniPendingPayment.state !== 'AWAITING_RETURN') return;
+
+      const paymentStatus = String(session?.bill?.paymentStatus || '').toUpperCase();
+      if (paymentStatus === 'PENDING_VERIFICATION' || paymentStatus === 'PAID') return;
+
+      void submitMiniOnlinePayment();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isMiniTokenFlow, miniPendingPayment, session?.bill?.paymentStatus, sessionId, submitMiniOnlinePayment]);
+
+  useEffect(() => {
+    if (!miniPendingPayment?.submittedAt) return;
+    const intervalId = window.setInterval(() => setMiniVerificationNow(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, [miniPendingPayment?.submittedAt]);
+
+  useEffect(() => {
+    const paymentStatus = String(session?.bill?.paymentStatus || '').toUpperCase();
+    const sessionStatus = String(session?.sessionStatus || '').toUpperCase();
+    if (!isMiniTokenFlow) return;
+    if (!miniPendingPayment || miniPendingPayment.sessionId !== sessionId) return;
+    if (paymentStatus === 'PAID' || sessionStatus === 'CLOSED' || sessionStatus === 'CANCELLED') {
+      persistMiniPendingPayment(null);
+    }
+  }, [isMiniTokenFlow, miniPendingPayment, persistMiniPendingPayment, session?.bill?.paymentStatus, session?.sessionStatus, sessionId]);
+
+  useEffect(() => {
+    const orders = Array.isArray(session?.orders) ? session.orders : [];
+    if (orders.length === 0) return;
+
+    orders.forEach((order: any) => {
+      if (!order?.id) return;
+
+      const nextStatus = String(order.status || '').toUpperCase();
+      const previousStatus = orderStatusMapRef.current[order.id];
+      orderStatusMapRef.current[order.id] = nextStatus;
+
+      if (nextStatus !== 'READY' || previousStatus === 'READY') return;
+
+      const readyMessage =
+        String(order?.orderType || '').toUpperCase() === 'TAKEAWAY'
+          ? 'Order is ready to pick.'
+          : 'Order is ready.';
+      speakTrackerReadyUpdate(readyMessage);
+    });
+  }, [session?.orders]);
 
   const handleFinish = async () => {
     if (!sessionId || !tenantSlug) return;
     setError(null);
+
+    const paymentStatus = String(session?.bill?.paymentStatus || '').toUpperCase();
+    if (paymentStatus === 'PAID') {
+      navigate(`/order/${tenantSlug}/session/${sessionId}/bill`);
+      return;
+    }
+
+    if (isMiniTokenFlow) {
+      setError('Payment is still waiting for counter verification. The bill opens after the vendor confirms it.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     
     if (!window.confirm('Request the final bill now? This will lock the table for billing and notify the staff.')) return;
 
@@ -332,6 +537,16 @@ export function SessionTracker() {
       navigate(`/order/${tenantSlug}/session/${sessionId}/bill`);
     } catch (err: any) {
       const msg = err?.response?.data?.error || err?.message || 'Failed to finish session';
+      if (
+        session?.bill &&
+        (
+          String(msg).toLowerCase().includes('already closed') ||
+          String(msg).toLowerCase().includes('no longer open')
+        )
+      ) {
+        navigate(`/order/${tenantSlug}/session/${sessionId}/bill`);
+        return;
+      }
       setError(msg);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
@@ -407,8 +622,37 @@ export function SessionTracker() {
 
   const isAwaitingBill = session.sessionStatus === 'AWAITING_BILL';
   const isClosed = ['CLOSED', 'CANCELLED'].includes(session.sessionStatus);
+  const billPaymentStatus = String(session?.bill?.paymentStatus || '').toUpperCase();
+  const hasPaidBill = billPaymentStatus === 'PAID';
+  const paymentMethodLabel = String(session?.bill?.paymentMethod || miniPendingPayment?.method || '').toUpperCase();
+  const shouldLockMiniAddMore =
+    isMiniTokenFlow &&
+    (Boolean(paymentMethodLabel) || billPaymentStatus === 'PENDING_VERIFICATION' || billPaymentStatus === 'PAID');
+  const shouldDisableMiniBillAction = isMiniTokenFlow && !hasPaidBill && !isAwaitingBill;
+  const miniVerificationRemainingSeconds =
+    miniPendingPayment?.submittedAt && billPaymentStatus !== 'PAID'
+      ? Math.max(0, 120 - Math.floor((miniVerificationNow - miniPendingPayment.submittedAt) / 1000))
+      : null;
+  const miniVerificationProgress =
+    miniVerificationRemainingSeconds !== null
+      ? Math.min(100, Math.max(6, ((120 - miniVerificationRemainingSeconds) / 120) * 100))
+      : 0;
+  const miniBillButtonLabel = hasPaidBill
+    ? 'View Bill'
+    : shouldDisableMiniBillAction
+      ? billPaymentStatus === 'PENDING_VERIFICATION'
+        ? 'Verification Pending'
+        : paymentMethodLabel
+          ? `${paymentMethodLabel} Pending`
+          : 'Payment Pending'
+      : 'Bill';
+  const sortedOrders = [...(session.orders || [])].sort(
+    (a: any, b: any) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime(),
+  );
+  const latestOrder = sortedOrders.length > 0 ? sortedOrders[sortedOrders.length - 1] : null;
+  const activeOrderCount = sortedOrders.filter((order: any) => !['SERVED', 'RECEIVED'].includes(String(order?.status || '').toUpperCase())).length;
   const customerThemeVars = buildCustomerThemeVars(session?.tenant);
-  const maxOrderRank = (session?.orders || []).reduce(
+  const maxOrderRank = sortedOrders.reduce(
     (max: number, order: any) => Math.max(max, getOrderRank(order?.status)),
     0,
   );
@@ -488,11 +732,95 @@ export function SessionTracker() {
           </div>
 
           <div className="space-y-5">
-            <TimerDisplay order={(session?.orders || []).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]} />
+            <TimerDisplay order={latestOrder} />
+
+            {isMiniTokenFlow && (miniPendingPayment || paymentMethodLabel || billPaymentStatus === 'PAID') && !isClosed && (
+              <div
+                className="rounded-3xl border p-5 shadow-sm"
+                style={{ background: 'var(--surface-3)', borderColor: 'var(--border)' }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>
+                      Counter payment
+                    </p>
+                    <p className="mt-2 text-base font-black" style={{ color: 'var(--text-1)' }}>
+                      {billPaymentStatus === 'PAID'
+                        ? 'Payment verified. The order can move through preparation now.'
+                        : billPaymentStatus === 'PENDING_VERIFICATION'
+                          ? 'Waiting for the vendor to verify your payment.'
+                          : miniPendingPayment?.method === 'online'
+                            ? 'Complete the UPI payment and come back here.'
+                            : 'The counter will verify your payment before preparation starts.'}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold leading-relaxed" style={{ color: 'var(--text-2)' }}>
+                      {miniPendingPayment?.state === 'REJECTED'
+                        ? miniPendingPayment.message || 'Please show your payment at the counter with this token.'
+                        : paymentMethodLabel
+                          ? `${paymentMethodLabel} selected for this token.`
+                          : 'This token stays in the new column until payment is verified.'}
+                    </p>
+                  </div>
+                  <div
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                    style={{ background: 'var(--surface)', color: billPaymentStatus === 'PAID' ? 'var(--success)' : 'var(--brand)' }}
+                  >
+                    {billPaymentStatus === 'PAID' ? <CheckCircle2 size={22} /> : <CreditCard size={22} />}
+                  </div>
+                </div>
+
+                {miniVerificationRemainingSeconds !== null && billPaymentStatus !== 'PAID' && (
+                  <div className="mt-4 rounded-2xl border border-blue-500/20 bg-blue-500/8 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-500">Verification window</p>
+                    <p className="mt-2 text-2xl font-black text-blue-500">
+                      {Math.floor(miniVerificationRemainingSeconds / 60)}:
+                      {String(miniVerificationRemainingSeconds % 60).padStart(2, '0')}
+                    </p>
+                    <div className="mt-3 h-2 overflow-hidden rounded-full" style={{ background: 'var(--surface)' }}>
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{ width: `${miniVerificationProgress}%`, background: 'var(--brand)' }}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs font-semibold text-blue-400/80">
+                      Show this screen, your token number, and the payment if the vendor asks at the counter.
+                    </p>
+                  </div>
+                )}
+
+                {miniPendingPayment?.method === 'online' && miniPendingPayment?.paymentLink?.upiUri && billPaymentStatus !== 'PAID' && billPaymentStatus !== 'PENDING_VERIFICATION' && (
+                  <button
+                    onClick={() => {
+                      persistMiniPendingPayment({
+                        ...miniPendingPayment,
+                        state: 'AWAITING_RETURN',
+                      });
+                      window.location.assign(miniPendingPayment.paymentLink!.upiUri);
+                    }}
+                    className="mt-4 inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black text-white"
+                    style={{ background: 'var(--brand)' }}
+                  >
+                    <CreditCard size={16} />
+                    Open UPI App
+                  </button>
+                )}
+
+                {sortedOrders[0]?.orderNumber && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]" style={{ background: 'var(--surface)', color: 'var(--text-3)' }}>
+                      Token
+                    </span>
+                    <span className="rounded-full px-3 py-1 text-sm font-black" style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>
+                      {sortedOrders.map((order: any) => order.orderNumber || order.id?.slice(-6).toUpperCase()).filter(Boolean).join(', ')}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
             
             <div className="space-y-2">
               <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
-                Order Progress
+                Service progress
               </p>
               <p className="text-sm font-black" style={{ color: 'var(--text-1)' }}>
                 {processSummary}
@@ -534,6 +862,26 @@ export function SessionTracker() {
                 );
               })}
             </div>
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              {[
+                { label: 'Open batches', value: String(activeOrderCount) },
+                { label: 'Dishes', value: String(session.itemCount || 0) },
+                { label: 'Running bill', value: formatINR(session.runningTotal || 0) },
+              ].map((metric) => (
+                <div
+                  key={metric.label}
+                  className="rounded-2xl border p-3 text-left"
+                  style={{ background: 'var(--surface-3)', borderColor: 'var(--border)' }}
+                >
+                  <p className="text-[9px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-3)' }}>
+                    {metric.label}
+                  </p>
+                  <p className="mt-1 text-sm font-black leading-tight" style={{ color: 'var(--text-1)' }}>
+                    {metric.value}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -564,17 +912,65 @@ export function SessionTracker() {
                 ? session?.tenant?.hasWaiterService
                   ? 'Your final bill is ready. A waiter will bring the bill and confirm payment before this session moves into history.'
                   : 'Your final bill is ready. Please go to the billing counter or open the bill page to complete payment.'
-                : 'This is a live session. You can keep adding items until you tap Bill to request the final settlement.'}
+                : hasPaidBill
+                  ? 'Payment is already received. We will keep showing live kitchen and pickup updates here until the order is completed.'
+                : shouldDisableMiniBillAction
+                  ? 'This token is waiting for counter verification. We will unlock the bill after the vendor confirms the payment.'
+                  : 'This is a live session. You can keep adding items until you tap Bill to request the final settlement.'}
             </p>
           </div>
         )}
 
+        {(isAwaitingBill || isClosed) && (
+          <div
+            className="rounded-3xl border p-5 shadow-sm"
+            style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+          >
+            <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>
+              Billing status
+            </p>
+            <p className="mt-2 text-base font-black" style={{ color: 'var(--text-1)' }}>
+              {isClosed ? 'Service closed and bill settled.' : 'Service closed. Final bill is ready for payment.'}
+            </p>
+            <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
+              {isClosed
+                ? 'You can open the final invoice or check your session history anytime.'
+                : 'Open the bill page to complete payment or show this session to the billing desk.'}
+            </p>
+          </div>
+        )}
+
+        {isCounterEntry && !session?.tableId && (
+          <button
+            onClick={() => {
+              clearCart();
+              clearCustomerContextForTenant(tenantSlug);
+              navigate(`/order/${tenantSlug}?mode=counter&source=staff`, { replace: true });
+            }}
+            className="flex w-full items-center justify-between rounded-3xl border px-5 py-4 text-left shadow-sm transition-all hover:translate-y-[-1px]"
+            style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+          >
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--text-3)' }}>
+                Counter flow
+              </p>
+              <p className="mt-1 text-base font-black" style={{ color: 'var(--text-1)' }}>
+                Start next guest
+              </p>
+              <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--text-2)' }}>
+                Clears this shared device and opens a fresh counter order for the next customer.
+              </p>
+            </div>
+            <ChevronRight size={18} style={{ color: 'var(--text-3)' }} />
+          </button>
+        )}
+
         <div className="space-y-4">
           <h3 className="text-lg font-black px-1" style={{ color: 'var(--text-1)' }}>
-            Live Timeline
+            Service Timeline
           </h3>
 
-          {session.orders?.length === 0 && (
+          {sortedOrders.length === 0 && (
             <div className="py-20 text-center rounded-3xl border-2 border-dashed" style={{ borderColor: 'var(--border)' }}>
               <UtensilsCrossed size={40} className="mx-auto mb-4 opacity-20" />
               <p className="font-bold" style={{ color: 'var(--text-3)' }}>
@@ -583,9 +979,10 @@ export function SessionTracker() {
             </div>
           )}
 
-          {session.orders?.map((order: any, index: number) => {
+          {sortedOrders.map((order: any, index: number) => {
             const status = getCustomerStatusMeta(order.status, order.orderType);
             const StatusIcon = status.icon;
+            const orderRank = getOrderRank(order.status);
 
             return (
               <div
@@ -620,6 +1017,23 @@ export function SessionTracker() {
                 </div>
 
                 <div className="mb-6 space-y-3">
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {CUSTOMER_PROGRESS_STEPS.map((step) => {
+                      const complete = orderRank >= step.rank;
+                      return (
+                        <div
+                          key={`${order.id}_${step.key}`}
+                          className="rounded-full px-2 py-1 text-center text-[9px] font-black uppercase tracking-[0.12em]"
+                          style={{
+                            background: complete ? 'var(--brand-soft)' : 'var(--surface-3)',
+                            color: complete ? 'var(--brand)' : 'var(--text-3)',
+                          }}
+                        >
+                          {step.label}
+                        </div>
+                      );
+                    })}
+                  </div>
                   {order.items?.map((item: any) => (
                     <div key={item.id} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -638,6 +1052,14 @@ export function SessionTracker() {
                       </span>
                     </div>
                   ))}
+                  {order.specialInstructions ? (
+                    <div
+                      className="rounded-2xl border px-4 py-3 text-sm font-semibold"
+                      style={{ background: 'var(--surface-3)', borderColor: 'var(--border)', color: 'var(--text-2)' }}
+                    >
+                      Kitchen note: {order.specialInstructions}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="border-t pt-4 flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
@@ -670,28 +1092,30 @@ export function SessionTracker() {
       {!isClosed && !isAwaitingBill && (
         <div className="fixed left-0 right-0 z-[60] p-6 pointer-events-none" style={{ bottom: 'var(--customer-action-bottom)' }}>
           <div className="mx-auto flex max-w-md gap-3 pointer-events-auto">
+            {!shouldLockMiniAddMore && (
+              <button
+                onClick={() => {
+                  if (tableId && tableId !== 'undefined') navigate(`/order/${tenantSlug}/${tableId}/menu`);
+                  else navigate(`/order/${tenantSlug}`);
+                }}
+                className="flex-1 rounded-3xl py-4 font-black text-white shadow-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                style={{ background: 'var(--brand)' }}
+              >
+                <Plus size={18} strokeWidth={3} />
+                Add More
+              </button>
+            )}
             <button
-              onClick={() => {
-                if (tableId && tableId !== 'undefined') navigate(`/order/${tenantSlug}/${tableId}/menu`);
-                else navigate(`/order/${tenantSlug}`);
-              }}
-              className="flex-1 rounded-3xl py-4 font-black text-white shadow-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-              style={{ background: 'var(--brand)' }}
-            >
-              <Plus size={18} strokeWidth={3} />
-              Add More
-            </button>
-            <button
-              onClick={handleFinish}
-              disabled={finishing}
-              className="flex-1 rounded-3xl bg-[#1a1c23] py-4 font-black text-white shadow-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+              onClick={hasPaidBill ? () => navigate(`/order/${tenantSlug}/session/${sessionId}/bill`) : handleFinish}
+              disabled={finishing || shouldDisableMiniBillAction}
+              className={`${shouldLockMiniAddMore ? 'w-full' : 'flex-1'} rounded-3xl bg-[#1a1c23] py-4 font-black text-white shadow-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50`}
             >
               {finishing ? (
                 <div className="h-5 w-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
               ) : (
                 <>
                   <Receipt size={18} />
-                  Bill
+                  {miniBillButtonLabel}
                 </>
               )}
             </button>

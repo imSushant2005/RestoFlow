@@ -398,6 +398,32 @@ body.dashboard-nav-open #root {
   background: var(--kanban-col-bg);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
+
+@media (min-width: 1024px) {
+  .kanban-col {
+    flex: 1 1 0;
+    width: auto;
+    max-width: none;
+  }
+
+  .kanban-live-board {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: stretch;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .kanban-live-board .kanban-col {
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .kanban-live-board .kanban-col-body {
+    max-height: none;
+  }
+}
 .kanban-col-drop-active {
   border-color: rgba(59, 130, 246, 0.55);
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2), 0 20px 45px rgba(15, 23, 42, 0.28);

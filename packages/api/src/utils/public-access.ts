@@ -1,8 +1,11 @@
 import { Request } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
+import type { SessionAccessTokenTtl } from '../config/plans';
 
-const SESSION_ACCESS_TOKEN_TTL = '18h';
+const DEFAULT_SESSION_ACCESS_TOKEN_TTL: SessionAccessTokenTtl = '18h';
+const customerAccessSecret = env.CUSTOMER_SECRET || env.JWT_SECRET;
+const sessionAccessSecret = env.SESSION_SECRET || env.JWT_SECRET;
 
 type SessionAccessTokenClaims = {
   tokenType: 'session_access';
@@ -38,6 +41,7 @@ export function generateSessionAccessToken(payload: {
   sessionId: string;
   customerId: string;
   tableId?: string | null;
+  expiresIn?: SessionAccessTokenTtl;
 }) {
   const claims: SessionAccessTokenClaims = {
     tokenType: 'session_access',
@@ -48,11 +52,13 @@ export function generateSessionAccessToken(payload: {
     tableId: payload.tableId ?? null,
   };
 
-  return jwt.sign(claims, env.JWT_SECRET, { expiresIn: SESSION_ACCESS_TOKEN_TTL });
+  return jwt.sign(claims, sessionAccessSecret, {
+    expiresIn: payload.expiresIn ?? DEFAULT_SESSION_ACCESS_TOKEN_TTL,
+  });
 }
 
 export function verifySessionAccessToken(token: string): SessionAccessTokenClaims {
-  const decoded = jwt.verify(token, env.JWT_SECRET) as Partial<SessionAccessTokenClaims>;
+  const decoded = jwt.verify(token, sessionAccessSecret) as Partial<SessionAccessTokenClaims>;
   if (
     decoded?.tokenType !== 'session_access' ||
     decoded?.version !== 1 ||
@@ -91,20 +97,25 @@ export function readTableQrSecret(req: Request) {
   );
 }
 
-export function verifyCustomerAccessTokenFromRequest(req: Request): CustomerAccessClaims | null {
-  const authHeader = readStringHeader(req.header('authorization'));
-  if (!authHeader?.startsWith('Bearer ')) return null;
+export function generateCustomerAccessToken(
+  payload: CustomerAccessClaims,
+  expiresIn: string | number = '30d',
+) {
+  return jwt.sign(
+    {
+      customerId: payload.customerId,
+      phone: payload.phone,
+      tenantSlug: payload.tenantSlug ?? null,
+    },
+    customerAccessSecret,
+    { expiresIn: expiresIn as any },
+  );
+}
 
-  const token = authHeader.slice('Bearer '.length).trim();
-  let decoded: Partial<CustomerAccessClaims>;
-  try {
-    decoded = jwt.verify(token, env.JWT_SECRET) as Partial<CustomerAccessClaims>;
-  } catch {
-    return null;
-  }
-
+export function verifyCustomerAccessToken(token: string): CustomerAccessClaims {
+  const decoded = jwt.verify(token, customerAccessSecret) as Partial<CustomerAccessClaims>;
   if (typeof decoded?.customerId !== 'string' || typeof decoded?.phone !== 'string') {
-    return null;
+    throw new Error('INVALID_CUSTOMER_ACCESS_TOKEN');
   }
 
   return {
@@ -112,6 +123,18 @@ export function verifyCustomerAccessTokenFromRequest(req: Request): CustomerAcce
     phone: decoded.phone,
     tenantSlug: typeof decoded.tenantSlug === 'string' ? decoded.tenantSlug : decoded.tenantSlug ?? null,
   };
+}
+
+export function verifyCustomerAccessTokenFromRequest(req: Request): CustomerAccessClaims | null {
+  const authHeader = readStringHeader(req.header('authorization'));
+  if (!authHeader?.startsWith('Bearer ')) return null;
+
+  const token = authHeader.slice('Bearer '.length).trim();
+  try {
+    return verifyCustomerAccessToken(token);
+  } catch {
+    return null;
+  }
 }
 
 export function authorizeSessionAccess(

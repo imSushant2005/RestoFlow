@@ -6,6 +6,7 @@ import { getIO, getSessionRoom, getTenantRoom } from '../socket';
 import { deleteCache, getRedisClient } from './cache.service';
 import { cacheKeys } from '../utils/cache-keys';
 import { logger } from '../utils/logger';
+import { getEmptySessionTimeoutMinutes, getPlanLimits } from '../config/plans';
 import {
   recordSessionCleanupComplete,
   recordSessionCleanupFailure,
@@ -70,8 +71,8 @@ async function acquireCleanupLease() {
 }
 
 /**
- * Automatically cancels only zero-order sessions that have been open for
- * more than 6 hours.
+ * Automatically cancels only zero-order sessions that have stayed open past
+ * the plan-aware idle threshold.
  *
  * Sessions with any non-cancelled orders are never auto-closed here.
  * They require explicit operator action through the billing flow.
@@ -90,18 +91,29 @@ export async function cleanupStaleSessions(expectedStartedAtMs?: number) {
   let skipped = 0;
 
   try {
-    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    const minimumTimeoutMinutes = Math.min(
+      ...(['MINI', 'CAFE', 'BHOJPRO', 'PREMIUM'] as const).map((plan) =>
+        getPlanLimits(plan).emptySessionTimeoutMinutes,
+      ),
+    );
+    const oldestCandidateOpenedAt = new Date(Date.now() - minimumTimeoutMinutes * 60 * 1000);
 
     const staleSessions = await prisma.diningSession.findMany({
       where: {
         sessionStatus: { notIn: ['CLOSED', 'CANCELLED'] },
-        openedAt: { lt: sixHoursAgo },
+        openedAt: { lt: oldestCandidateOpenedAt },
       },
       select: {
         id: true,
         tenantId: true,
         tableId: true,
         openedAt: true,
+        partySize: true,
+        tenant: {
+          select: {
+            plan: true,
+          },
+        },
       },
       orderBy: { openedAt: 'asc' },
       take: 250,
@@ -126,7 +138,13 @@ export async function cleanupStaleSessions(expectedStartedAtMs?: number) {
               tenantId: true,
               tableId: true,
               openedAt: true,
+              partySize: true,
               sessionStatus: true,
+              tenant: {
+                select: {
+                  plan: true,
+                },
+              },
               _count: {
                 select: {
                   orders: {
@@ -139,6 +157,17 @@ export async function cleanupStaleSessions(expectedStartedAtMs?: number) {
 
           if (!lockedSession || ['CLOSED', 'CANCELLED'].includes(lockedSession.sessionStatus)) {
             return { action: 'noop' as const };
+          }
+
+          const idleTimeoutMinutes = getEmptySessionTimeoutMinutes(
+            lockedSession.tenant?.plan,
+            lockedSession.partySize,
+          );
+          const sessionAgeMs = Date.now() - lockedSession.openedAt.getTime();
+          if (sessionAgeMs < idleTimeoutMinutes * 60 * 1000) {
+            return {
+              action: 'not_due' as const,
+            };
           }
 
           if (lockedSession._count.orders > 0) {
@@ -183,6 +212,10 @@ export async function cleanupStaleSessions(expectedStartedAtMs?: number) {
             { sessionId: session.id, tenantId: session.tenantId, orderCount: outcome.orderCount, ageHours },
             `[SESSION_CLEANUP] SKIPPED ${session.id} - live order appeared during cleanup lock.`,
           );
+          continue;
+        }
+
+        if (outcome.action === 'not_due' || outcome.action === 'noop') {
           continue;
         }
 

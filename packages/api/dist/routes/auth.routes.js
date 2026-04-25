@@ -15,5 +15,6 @@ router.post('/change-password/first-login', auth_middleware_1.requireAuth, auth_
 router.post('/change-password', auth_middleware_1.requireAuth, auth_controller_1.changePassword);
 router.patch('/profile', auth_middleware_1.requireAuth, auth_controller_1.updateProfile);
 router.get('/me', auth_middleware_1.requireAuth, auth_controller_1.getMe);
+router.get('/profile', auth_middleware_1.requireAuth, auth_controller_1.getMe);
 exports.default = router;
 //# sourceMappingURL=auth.routes.js.map

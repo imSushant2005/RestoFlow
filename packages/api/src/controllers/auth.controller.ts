@@ -7,6 +7,12 @@ import { deleteCache, withCache } from '../services/cache.service';
 import { cacheKeys } from '../utils/cache-keys';
 import { hashPassword, verifyPassword } from '../utils/hash';
 import { generateTokens, verifyRefreshToken } from '../utils/jwt';
+import { logger } from '../utils/logger';
+import {
+  clearFailedAuthAttempts,
+  getRequestSecurityMeta,
+  recordFailedAuthAttempt,
+} from '../services/auth-security.service';
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -79,6 +85,18 @@ const forgotResetSchema = z.object({
 
 const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
+function getRefreshCookieOptions() {
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: (isProduction ? 'none' : 'lax') as 'none' | 'lax',
+    maxAge: REFRESH_TOKEN_MAX_AGE_MS,
+    path: '/',
+  };
+}
+
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -107,12 +125,7 @@ function normalizeTenantScopedUsername(raw: string, tenantSlug: string) {
 }
 
 function issueRefreshCookie(res: Response, refreshToken: string) {
-  res.cookie('refreshToken', refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: REFRESH_TOKEN_MAX_AGE_MS,
-  });
+  res.cookie('refreshToken', refreshToken, getRefreshCookieOptions());
 }
 
 async function issueSessionForUser(res: Response, user: {
@@ -592,13 +605,31 @@ export const login = async (req: Request, res: Response) => {
     }
 
     if (!user) {
+      await recordFailedAuthAttempt({
+        req,
+        scope: 'login',
+        identifier: rawIdentifier,
+        reason: 'user_not_found',
+      });
       return res.status(401).json({ error: 'User not found. Please create an account first from the signup page.' });
     }
 
     const isPasswordValid = await verifyPassword(validatedData.password, user.passwordHash);
     if (!isPasswordValid) {
+      await recordFailedAuthAttempt({
+        req,
+        scope: 'login',
+        identifier: rawIdentifier,
+        reason: 'invalid_password',
+      });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    await clearFailedAuthAttempts({
+      req,
+      scope: 'login',
+      identifier: rawIdentifier,
+    });
 
     // Optimization: Run non-critical update in background and parallelize session creation
     const [session] = await Promise.all([
@@ -620,8 +651,18 @@ export const login = async (req: Request, res: Response) => {
             data: { lastLoginAt: new Date() },
           }),
         `login-last-login:${user.id}`,
-      ).catch(err => console.error('[NON_CRITICAL_UPDATE_FAILED]:', err))
+      ).catch(err => logger.warn({ err, userId: user.id }, 'Non-critical lastLoginAt update failed'))
     ]);
+
+    logger.info(
+      {
+        userId: user.id,
+        tenantId: user.tenantId,
+        role: user.role,
+        ...getRequestSecurityMeta(req),
+      },
+      'User login succeeded',
+    );
 
     return res.json(session);
 
@@ -632,7 +673,7 @@ export const login = async (req: Request, res: Response) => {
         details: error.issues,
       });
     }
-    console.error('[LOGIN_ERROR_DEBUG]:', error);
+    logger.error({ err: error, ...getRequestSecurityMeta(req) }, 'Login failed unexpectedly');
     return res.status(500).json({ error: 'Internal server error. Please try again later.' });
   }
 };
@@ -941,6 +982,12 @@ export const getForgotPasswordQuestion = async (req: Request, res: Response) => 
     });
 
     if (!user) {
+      await recordFailedAuthAttempt({
+        req,
+        scope: 'forgot_password',
+        identifier: body.identifier,
+        reason: 'account_not_found',
+      });
       return res.status(404).json({ error: 'Account not found' });
     }
 
@@ -984,13 +1031,31 @@ export const resetForgotPassword = async (req: Request, res: Response) => {
     });
 
     if (!user || !user.securityAnswerHash) {
+      await recordFailedAuthAttempt({
+        req,
+        scope: 'forgot_password',
+        identifier: body.identifier,
+        reason: 'reset_not_allowed',
+      });
       return res.status(400).json({ error: 'Unable to reset password for this account' });
     }
 
     const answerMatches = await verifyPassword(body.securityAnswer.toLowerCase(), user.securityAnswerHash);
     if (!answerMatches) {
+      await recordFailedAuthAttempt({
+        req,
+        scope: 'forgot_password',
+        identifier: body.identifier,
+        reason: 'invalid_security_answer',
+      });
       return res.status(400).json({ error: 'Security answer is incorrect' });
     }
+
+    await clearFailedAuthAttempts({
+      req,
+      scope: 'forgot_password',
+      identifier: body.identifier,
+    });
 
     const isSamePassword = await verifyPassword(body.newPassword, user.passwordHash);
     if (isSamePassword) {
@@ -1021,6 +1086,12 @@ export const refresh = async (req: Request, res: Response) => {
     const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
+      await recordFailedAuthAttempt({
+        req,
+        scope: 'refresh',
+        identifier: 'missing_refresh_token',
+        reason: 'missing_refresh_token',
+      });
       return res.status(401).json({ error: 'No refresh token provided' });
     }
 
@@ -1032,6 +1103,12 @@ export const refresh = async (req: Request, res: Response) => {
     });
 
     if (!dbToken || dbToken.user.id !== decoded.id || new Date() > dbToken.expiresAt) {
+      await recordFailedAuthAttempt({
+        req,
+        scope: 'refresh',
+        identifier: decoded.email || decoded.id,
+        reason: 'invalid_refresh_token',
+      });
       return res.status(401).json({ error: 'Invalid refresh token' });
     }
 
@@ -1054,9 +1131,20 @@ export const refresh = async (req: Request, res: Response) => {
     });
 
     issueRefreshCookie(res, tokens.refreshToken);
+    await clearFailedAuthAttempts({
+      req,
+      scope: 'refresh',
+      identifier: dbToken.user.email || dbToken.user.id,
+    });
 
     return res.json({ accessToken: tokens.accessToken });
   } catch (error) {
+    await recordFailedAuthAttempt({
+      req,
+      scope: 'refresh',
+      identifier: 'refresh_exception',
+      reason: 'refresh_exception',
+    }).catch(() => undefined);
     return res.status(401).json({ error: 'Invalid refresh token' });
   }
 };
@@ -1073,7 +1161,10 @@ export const logout = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Logout error:', error);
   } finally {
-    res.clearCookie('refreshToken');
+    res.clearCookie('refreshToken', {
+      ...getRefreshCookieOptions(),
+      maxAge: undefined,
+    });
     return res.json({ success: true, message: 'Logged out successfully' });
   }
 };

@@ -68,16 +68,38 @@ export function HistoryPage() {
   );
 
   const fetchHistory = useCallback(async () => {
+    if (!tenantSlug) {
+      setSessions([]);
+      setLoading(false);
+      return;
+    }
+
+    if (!token) {
+      if (activeSessionId) {
+        try {
+          const { data } = await publicApi.get(`/${tenantSlug}/sessions/${activeSessionId}`);
+          setSessions([data]);
+        } catch {
+          setSessions([]);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        setSessions([]);
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const headers = { Authorization: `Bearer ${token}` };
       const { data } = await api.get('/customer/history', {
         params: { tenantSlug },
         headers,
       });
       setSessions(data);
     } catch {
-      // If we are a guest, we might not have 'history' access, 
-      // but we still want to show the current active visit if it exists.
+      // If the account lookup fails, we still try to show the active visit when possible.
       if (activeSessionId) {
         try {
           const { data } = await publicApi.get(`/${tenantSlug}/sessions/${activeSessionId}`);

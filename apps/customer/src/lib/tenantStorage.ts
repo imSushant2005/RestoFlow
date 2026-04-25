@@ -11,6 +11,21 @@ const LEGACY_KEYS = {
 
 const TENANT_STORAGE_EVENT = 'rf:tenant-storage-updated';
 
+export type PendingMiniPaymentState = 'OPEN_LINK' | 'AWAITING_RETURN' | 'PENDING_VENDOR' | 'REJECTED';
+
+export interface PendingMiniPayment {
+  sessionId: string;
+  method: 'cash' | 'online';
+  state: PendingMiniPaymentState;
+  paymentLink?: {
+    amount: number;
+    upiId: string;
+    upiUri: string;
+  } | null;
+  submittedAt?: number | null;
+  message?: string | null;
+}
+
 function emitTenantStorageUpdate(tenantSlug: string | null | undefined, key: string, value: string | null) {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(
@@ -27,6 +42,15 @@ function emitTenantStorageUpdate(tenantSlug: string | null | undefined, key: str
 function scopedKey(tenantSlug: string | null | undefined, key: string) {
   const scope = tenantSlug && tenantSlug.trim().length > 0 ? tenantSlug.trim() : 'global';
   return `rf_${scope}_${key}`;
+}
+
+function getScopedOrGlobalItem(tenantSlug: string | null | undefined, key: string) {
+  const scoped = localStorage.getItem(scopedKey(tenantSlug, key));
+  if (scoped != null) return scoped;
+  if (tenantSlug && tenantSlug.trim().length > 0) {
+    return localStorage.getItem(scopedKey(undefined, key));
+  }
+  return null;
 }
 
 export function getTenantStorageItem(tenantSlug: string | null | undefined, key: string) {
@@ -52,11 +76,28 @@ export function setActiveSessionForTenant(tenantSlug: string | null | undefined,
 }
 
 export function getCustomerTokenForTenant(tenantSlug: string | null | undefined) {
-  return getTenantStorageItem(tenantSlug, 'customer_token');
+  return getScopedOrGlobalItem(tenantSlug, 'customer_token');
 }
 
 export function getSessionAccessTokenForTenant(tenantSlug: string | null | undefined) {
   return getTenantStorageItem(tenantSlug, 'session_access_token');
+}
+
+export function getCustomerNameForTenant(tenantSlug: string | null | undefined) {
+  return getScopedOrGlobalItem(tenantSlug, 'customer_name');
+}
+
+export function getCustomerPhoneForTenant(tenantSlug: string | null | undefined) {
+  return getScopedOrGlobalItem(tenantSlug, 'customer_phone');
+}
+
+export function setLastVisitedTenantSlug(tenantSlug: string | null | undefined) {
+  if (!tenantSlug) return;
+  localStorage.setItem('rf_last_tenant_slug', tenantSlug.trim());
+}
+
+export function getLastVisitedTenantSlug() {
+  return localStorage.getItem('rf_last_tenant_slug');
 }
 
 export function setSessionAccessForTenant(
@@ -86,6 +127,32 @@ export function getLastTableIdForTenant(tenantSlug: string | null | undefined) {
 
 export function setLastTableIdForTenant(tenantSlug: string | null | undefined, tableId: string) {
   setTenantStorageItem(tenantSlug, 'last_table_id', tableId);
+}
+
+export function getPendingMiniPaymentForTenant(tenantSlug: string | null | undefined): PendingMiniPayment | null {
+  const raw = getTenantStorageItem(tenantSlug, 'mini_pending_payment');
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.sessionId !== 'string' || typeof parsed.method !== 'string') {
+      return null;
+    }
+    return parsed as PendingMiniPayment;
+  } catch {
+    return null;
+  }
+}
+
+export function setPendingMiniPaymentForTenant(
+  tenantSlug: string | null | undefined,
+  payload: PendingMiniPayment,
+) {
+  setTenantStorageItem(tenantSlug, 'mini_pending_payment', JSON.stringify(payload));
+}
+
+export function clearPendingMiniPaymentForTenant(tenantSlug: string | null | undefined) {
+  removeTenantStorageItem(tenantSlug, 'mini_pending_payment');
 }
 
 export function subscribeTenantStorage(listener: (event: CustomEvent<{ tenantSlug: string; key: string; value: string | null }>) => void) {
@@ -125,6 +192,7 @@ export function clearCustomerContextForTenant(tenantSlug: string | null | undefi
   removeTenantStorageItem(tenantSlug, 'session_access_token');
   removeTenantStorageItem(tenantSlug, 'guest_handshake_token');
   removeTenantStorageItem(tenantSlug, 'table_qr_secret');
+  removeTenantStorageItem(tenantSlug, 'mini_pending_payment');
 }
 
 export function clearLegacyCustomerStorage() {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { ChevronRight, Clock3, Plus, Minus, Sparkles, Zap } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { formatINR } from '../lib/currency';
-import { getImageUrlCandidates } from '../lib/images';
+import { DEFAULT_MENU_IMAGE, getImageUrlCandidates, pickFirstImageSource } from '../lib/images';
 
 type MenuItemCardProps = {
   item: any;
@@ -15,10 +15,12 @@ export function MenuItemCard({ item, index = 0, onOpen, onQuickAdd }: MenuItemCa
   const [imageError, setImageError] = useState(false);
   const [imageIndex, setImageIndex] = useState(0);
 
-  const fallbackImage =
-    'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
-  const rawImageUrl = item?.imageUrl || item?.images?.[0] || fallbackImage;
-  const imageUrls = useMemo(() => getImageUrlCandidates(rawImageUrl), [rawImageUrl]);
+  const rawImageUrl = pickFirstImageSource(item?.images, item?.imageUrl);
+  const imageUrls = useMemo(() => {
+    const candidates = getImageUrlCandidates(rawImageUrl);
+    if (!rawImageUrl) return [DEFAULT_MENU_IMAGE];
+    return Array.from(new Set([...candidates, DEFAULT_MENU_IMAGE]));
+  }, [rawImageUrl]);
   const imageUrl = imageUrls[imageIndex] || '';
   const itemName = item?.name || 'Untitled Item';
   const itemDescription = item?.description || '';

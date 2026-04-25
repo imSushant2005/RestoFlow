@@ -1,12 +1,13 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Helmet } from 'react-helmet-async';
-import { UtensilsCrossed, Moon, Sun, ChevronRight, ShoppingBag, Star } from 'lucide-react';
+import { UtensilsCrossed, Moon, Sun, ChevronRight, ShoppingBag, Star, LogIn, QrCode, UserRound } from 'lucide-react';
 import { publicApi } from '../lib/api';
 import { buildCustomerThemeVars } from '../lib/customerTheme';
 import { useTheme } from '../context/ThemeContext';
 import { getDirectImageUrl } from '../lib/images';
 import { BrandLogo } from '../components/BrandLogo';
+import { getCustomerNameForTenant, getCustomerTokenForTenant } from '../lib/tenantStorage';
 
 export function RestaurantHome() {
   const { theme, toggleTheme } = useTheme();
@@ -25,18 +26,29 @@ export function RestaurantHome() {
   });
 
   const menuUrl = seatParam ? `/order/${tenantSlug}/${tableId}/menu?seat=${seatParam}` : `/order/${tenantSlug}/${tableId}/menu`;
+  const directMenuUrl = `/order/${tenantSlug}/menu`;
   const statusUrl = `/order/${tenantSlug}/status`;
+  const historyUrl = `/order/${tenantSlug}/history`;
+  const profileUrl = `/order/${tenantSlug}/profile`;
   const restaurantName = menuData?.businessName || menuData?.name || 'Welcome';
   const logoUrl = menuData?.logoUrl || menuData?.logo || menuData?.businessLogo || menuData?.restaurantLogo || '';
   const coverImageUrl = menuData?.coverImageUrl || menuData?.cover || '';
   const customerThemeVars = buildCustomerThemeVars(menuData);
+  const customerToken = getCustomerTokenForTenant(tenantSlug);
+  const customerName = getCustomerNameForTenant(tenantSlug);
 
   if (isLoading) {
     return (
-      <div className="min-h-[100dvh] bg-white flex flex-col items-center justify-center gap-5 p-6">
-        <div className="w-20 h-20 rounded-3xl bg-gray-100 shimmer"></div>
-        <div className="w-48 h-8 bg-gray-100 rounded-xl shimmer"></div>
-        <div className="w-32 h-5 bg-gray-50 rounded-lg shimmer"></div>
+      <div className="min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center gap-6 p-6 text-center text-white">
+        <div className="relative flex h-24 w-24 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5 shadow-2xl">
+          <div className="absolute inset-0 rounded-[2rem] bg-blue-500/10 blur-xl" />
+          <UtensilsCrossed size={36} className="relative text-blue-400 animate-pulse" />
+        </div>
+        <div className="space-y-2">
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-400/80">Welcome Screen</p>
+          <h1 className="text-3xl font-black tracking-tight">{restaurantName}</h1>
+          <p className="text-sm font-medium text-slate-400">Order what you like. We’re preparing your restaurant experience.</p>
+        </div>
       </div>
     );
   }
@@ -101,6 +113,12 @@ export function RestaurantHome() {
 
         <h1 className="relative z-10 text-3xl font-black tracking-tight leading-tight mb-2">{restaurantName}</h1>
         <p className="relative z-10 text-white/80 font-medium text-sm max-w-xs">{menuData?.description || 'Fresh food, great vibes. Order from your table.'}</p>
+        {customerToken && (
+          <div className="relative z-10 mt-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-white">
+            <UserRound size={14} />
+            {customerName || 'Signed In'}
+          </div>
+        )}
 
         {tableId && (
           <div className="relative z-10 mt-5 inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-bold border border-white/30">
@@ -122,7 +140,20 @@ export function RestaurantHome() {
         <p className="text-center text-sm font-medium text-gray-400 mb-2">What would you like to do?</p>
 
         <button
-          onClick={() => navigate(menuUrl)}
+          onClick={() => navigate('/scan')}
+          className="w-full flex items-center justify-between active:scale-[0.98] text-gray-900 px-6 py-5 rounded-2xl border border-gray-100 bg-gray-50 transition-all font-bold text-base"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gray-200 rounded-xl flex items-center justify-center">
+              <QrCode size={20} className="text-gray-700" />
+            </div>
+            Scan Table QR
+          </div>
+          <ChevronRight size={20} className="text-gray-400" />
+        </button>
+
+        <button
+          onClick={() => navigate(tableId ? menuUrl : directMenuUrl)}
           className="w-full flex items-center justify-between active:scale-[0.98] text-white px-6 py-5 rounded-2xl shadow-lg transition-all font-bold text-base"
           style={{ backgroundImage: 'var(--brand-gradient)' }}
         >
@@ -130,10 +161,25 @@ export function RestaurantHome() {
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
               <UtensilsCrossed size={20} />
             </div>
-            Browse Menu
+            Enter Menu
           </div>
           <ChevronRight size={20} />
         </button>
+
+        {!customerToken && (
+          <button
+            onClick={() => navigate(`/?tenant=${tenantSlug}`)}
+            className="w-full flex items-center justify-between bg-gray-50 hover:bg-gray-100 active:scale-[0.98] text-gray-800 px-6 py-5 rounded-2xl border border-gray-100 transition-all font-bold text-base"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gray-200 rounded-xl flex items-center justify-center">
+                <LogIn size={20} className="text-gray-600" />
+              </div>
+              Login / Signup
+            </div>
+            <ChevronRight size={20} className="text-gray-400" />
+          </button>
+        )}
 
         <button
           onClick={() => navigate(statusUrl)}
@@ -147,6 +193,23 @@ export function RestaurantHome() {
           </div>
           <ChevronRight size={20} className="text-gray-400" />
         </button>
+
+        {customerToken && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              onClick={() => navigate(historyUrl)}
+              className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-5 py-4 text-left font-bold text-gray-800 transition-all hover:bg-gray-100"
+            >
+              Order History
+            </button>
+            <button
+              onClick={() => navigate(profileUrl)}
+              className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-5 py-4 text-left font-bold text-gray-800 transition-all hover:bg-gray-100"
+            >
+              My Profile
+            </button>
+          </div>
+        )}
 
         {menuData?.categories?.length > 0 && (
           <div className="mt-4">

@@ -8,6 +8,7 @@ import { deleteCache, withCache } from '../services/cache.service';
 import { generateOrderNumber } from '../services/order-number.service';
 import { buildServerPricedOrderPayload } from '../services/order-payload.service';
 import { cacheKeys } from '../utils/cache-keys';
+import { logger } from '../utils/logger';
 import {
   canMoveSessionToBilling,
   hasServiceInProgress,
@@ -19,6 +20,15 @@ import {
   readTableQrSecret,
   verifyCustomerAccessTokenFromRequest,
 } from '../utils/public-access';
+import { getSessionAccessTokenTtl, normalizePlan } from '../config/plans';
+
+function logSessionError(message: string, error: unknown, meta?: Record<string, unknown>) {
+  logger.error({ err: error, ...meta }, message);
+}
+
+function logSessionWarn(message: string, error: unknown, meta?: Record<string, unknown>) {
+  logger.warn({ err: error, ...meta }, message);
+}
 
 async function resolveTenantBySlugOrThrow(tenantSlug: string) {
   return withCache(
@@ -76,9 +86,13 @@ function isActiveSessionConflictError(error: unknown) {
   );
 }
 
-function withSessionAccessToken<T extends { id: string; tenantId: string; customerId: string; tableId?: string | null }>(
+function withSessionAccessToken<
+  T extends { id: string; tenantId: string; customerId: string; tableId?: string | null; partySize?: number | null }
+>(
   session: T,
+  options?: { plan?: unknown; partySize?: number | null },
 ) {
+  const sessionPartySize = Math.max(1, Number(options?.partySize ?? session.partySize ?? 1));
   return {
     ...session,
     sessionAccessToken: generateSessionAccessToken({
@@ -86,6 +100,7 @@ function withSessionAccessToken<T extends { id: string; tenantId: string; custom
       sessionId: session.id,
       customerId: session.customerId,
       tableId: session.tableId ?? null,
+      expiresIn: getSessionAccessTokenTtl(options?.plan, sessionPartySize),
     }),
   };
 }
@@ -484,12 +499,23 @@ export async function performSessionCompletion(
   const eventType = shouldClose ? 'session:completed' : 'session:settled';
   const status = String((result as any).sessionStatus || (shouldClose ? 'CLOSED' : 'ACTIVE'));
 
+  const billPayload = (result as any).bill
+    ? {
+        id: (result as any).bill.id,
+        invoiceNumber: (result as any).bill.invoiceNumber,
+        totalAmount: (result as any).bill.totalAmount,
+        paymentStatus: (result as any).bill.paymentStatus,
+        paymentMethod: (result as any).bill.paymentMethod,
+        paidAt: (result as any).bill.paidAt,
+      }
+    : undefined;
   const payload = {
     sessionId: result.id,
     paymentMethod,
     closedAt: result.closedAt,
     status,
     totalAmount: (result as any).bill?.totalAmount,
+    bill: billPayload,
   };
 
   getIO().to(tenantRoom).emit(eventType, payload);
@@ -498,11 +524,13 @@ export async function performSessionCompletion(
   getIO().to(tenantRoom).emit('session:update', {
     sessionId: result.id,
     status,
+    bill: billPayload,
     updatedAt: new Date().toISOString(),
   });
   getIO().to(sessionRoom).emit('session:update', {
     sessionId: result.id,
     status,
+    bill: billPayload,
     updatedAt: new Date().toISOString(),
   });
 
@@ -696,7 +724,7 @@ export const createSession = async (req: Request, res: Response) => {
       return newSession;
       });
     } catch (err) {
-      console.error('createSession prisma.$transaction failed', {
+          logSessionError('createSession prisma.$transaction failed', err, {
         tenantSlug,
         tableId,
         partySize,
@@ -734,15 +762,15 @@ export const createSession = async (req: Request, res: Response) => {
     });
 
     // Respond immediately â€” cache cleanup runs after response is flushed
-    res.status(201).json(withSessionAccessToken(session));
+    res.status(201).json(withSessionAccessToken(session, { plan: tenant.plan, partySize: session.partySize }));
 
     setImmediate(() => {
       invalidateSessionCaches(tenant.id, session.id).catch((err) =>
-        console.error('[SESSION_CACHE_INVALIDATION_ERROR]', err),
+        logSessionWarn('[SESSION_CACHE_INVALIDATION_ERROR]', err),
       );
     });
   } catch (error) {
-    console.error('createSession error:', error);
+    logSessionError('createSession error', error);
     if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
       return res.status(404).json({ error: 'Restaurant not found' });
     }
@@ -792,10 +820,10 @@ export const getSession = async (req: Request, res: Response) => {
         },
         runningTotal,
         itemCount,
-      }),
+      }, { plan: tenant.plan, partySize: session.partySize }),
     );
   } catch (error) {
-    console.error('getSession error:', error);
+    logSessionError('getSession error', error);
     if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
       return res.status(404).json({ error: 'Restaurant not found' });
     }
@@ -924,7 +952,7 @@ export const addOrderToSession = async (req: Request, res: Response) => {
       return newOrder;
       });
     } catch (err) {
-      console.error('addOrderToSession prisma.$transaction failed', {
+          logSessionError('addOrderToSession prisma.$transaction failed', err, {
         tenantSlug,
         sessionId,
         itemsSummary: Array.isArray(items) ? `${items.length} items` : typeof items,
@@ -943,7 +971,7 @@ export const addOrderToSession = async (req: Request, res: Response) => {
     };
 
     await invalidateSessionCaches(tenant.id, sessionId, [order.id]).catch((err) =>
-      console.error('[SESSION_ORDER_CACHE_INVALIDATION_ERROR]', err),
+        logSessionWarn('[SESSION_ORDER_CACHE_INVALIDATION_ERROR]', err),
     );
 
     getIO().to(tenantRoom).emit('order:new', order);
@@ -960,7 +988,7 @@ export const addOrderToSession = async (req: Request, res: Response) => {
 
     res.status(201).json(order);
   } catch (error: any) {
-    console.error('addOrderToSession error:', error);
+    logSessionError('addOrderToSession error', error);
     if (error instanceof Error && (error.message === 'ORDER_ITEMS_REQUIRED' || error.message === 'ORDER_ITEMS_INVALID')) {
       return res.status(400).json({ error: 'Order items are missing or invalid. Refresh the menu and try again.' });
     }
@@ -1129,7 +1157,7 @@ export const finishSession = async (req: Request, res: Response) => {
       return updatedSession;
       });
     } catch (err) {
-      console.error('finishSession prisma.$transaction failed', {
+          logSessionError('finishSession prisma.$transaction failed', err, {
         tenantSlug,
         sessionId,
         error: err && (err instanceof Error ? err.stack || err.message : String(err)),
@@ -1167,7 +1195,7 @@ export const finishSession = async (req: Request, res: Response) => {
 
     res.json(result);
   } catch (error) {
-    console.error('finishSession error:', error);
+    logSessionError('finishSession error', error);
     if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
       return res.status(404).json({ error: 'Restaurant not found' });
     }
@@ -1215,7 +1243,7 @@ export const completeSession = async (req: Request, res: Response) => {
 
     res.json(result);
   } catch (error) {
-    console.error('completeSession error:', error);
+    logSessionError('completeSession error', error);
     if (error instanceof Error && error.message === 'SESSION_NOT_FOUND') {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -1246,6 +1274,7 @@ export const requestSessionPayment = async (req: Request, res: Response) => {
 
     const tenant = await resolveTenantBySlugOrThrow(tenantSlug);
     const session = await fetchSessionSnapshot(tenant.id, sessionId);
+    const isMiniTokenFlow = normalizePlan(tenant.plan) === 'MINI';
 
     if (!session) return res.status(404).json({ error: 'Session not found' });
 
@@ -1256,11 +1285,21 @@ export const requestSessionPayment = async (req: Request, res: Response) => {
       tenantSlug,
     });
 
-    if (!session.bill || session.sessionStatus !== 'AWAITING_BILL') {
+    const supportsMiniPrepayment =
+      isMiniTokenFlow && !['CLOSED', 'CANCELLED'].includes(String(session.sessionStatus || '').toUpperCase());
+
+    if (!session.bill && !supportsMiniPrepayment) {
       return res.status(409).json({ error: 'The restaurant must finish service and prepare the final bill before checkout.' });
     }
 
-    if (String(session.bill.paymentStatus || '').toUpperCase() === 'PAID') {
+    if (!supportsMiniPrepayment && session.sessionStatus !== 'AWAITING_BILL') {
+      return res.status(409).json({ error: 'The restaurant must finish service and prepare the final bill before checkout.' });
+    }
+
+    const totals = calculateSessionOrderTotals(session.orders);
+    const reconciledExistingBill = reconcileSessionBill(session.bill, totals);
+
+    if (String(reconciledExistingBill?.paymentStatus || '').toUpperCase() === 'PAID') {
       return res.json(
         withSessionAccessToken({
           ...session,
@@ -1274,15 +1313,80 @@ export const requestSessionPayment = async (req: Request, res: Response) => {
             hasWaiterService: tenant.hasWaiterService,
             upiConfigured: Boolean(tenant.upiId),
           },
-          bill: reconcileSessionBill(session.bill, calculateSessionOrderTotals(session.orders)),
-        }),
+          bill: reconciledExistingBill,
+        }, { plan: tenant.plan, partySize: session.partySize }),
       );
     }
 
     const tipAmount = Math.max(0, Number(req.body?.tipAmount) || 0);
+    let reconciledBill = reconciledExistingBill;
 
-    const totals = calculateSessionOrderTotals(session.orders);
-    const reconciledBill = reconcileSessionBill(session.bill, totals);
+    if (!reconciledBill) {
+      const createdBill = await withPrismaRetry(
+        () =>
+          prisma.bill.upsert({
+            where: { sessionId },
+            update: {
+              subtotal: totals.subtotal,
+              taxAmount: totals.taxAmount,
+              discountAmount: totals.discountAmount,
+              totalAmount: totals.totalAmount,
+              businessName: tenant.businessName,
+              businessAddress: tenant.address,
+              gstin: (tenant as any).gstin,
+              fssai: (tenant as any).fssai,
+            } as any,
+            create: {
+              tenantId: tenant.id,
+              sessionId,
+              subtotal: totals.subtotal,
+              taxAmount: totals.taxAmount,
+              discountAmount: totals.discountAmount,
+              totalAmount: totals.totalAmount,
+              invoiceNumber: `INV-${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`,
+              businessName: tenant.businessName,
+              businessAddress: tenant.address,
+              gstin: (tenant as any).gstin,
+              fssai: (tenant as any).fssai,
+            } as any,
+            select: {
+              id: true,
+              tenantId: true,
+              sessionId: true,
+              invoiceNumber: true,
+              subtotal: true,
+              taxAmount: true,
+              discountAmount: true,
+              totalAmount: true,
+              tipAmount: true,
+              paymentStatus: true,
+              paymentMethod: true,
+              paidAt: true,
+              generatedAt: true,
+              businessName: true,
+              businessAddress: true,
+              gstin: true,
+              fssai: true,
+            },
+          }),
+        `session-payment-ensure-bill:${tenant.id}:${sessionId}`,
+      );
+
+      await withPrismaRetry(
+        () =>
+          prisma.diningSession.update({
+            where: { id: session.id },
+            data: {
+              isBillGenerated: true,
+              billGeneratedAt: createdBill.generatedAt,
+            },
+          }),
+        `session-payment-mark-bill:${tenant.id}:${sessionId}`,
+      );
+
+      reconciledBill = createdBill as any;
+    }
+
     const finalTotalWithTip = Number(reconciledBill?.totalAmount || totals.totalAmount || 0) + tipAmount;
 
     if (requestedMethod === 'online' && !tenant.upiId) {
@@ -1291,14 +1395,35 @@ export const requestSessionPayment = async (req: Request, res: Response) => {
       });
     }
 
-    await withPrismaRetry(
+    const nextPaymentStatus = supportsMiniPrepayment && requestedMethod === 'cash' ? 'PENDING_VERIFICATION' : 'UNPAID';
+    const updatedBill = await withPrismaRetry(
       () =>
         prisma.bill.update({
           where: { sessionId },
           data: {
+            paymentStatus: nextPaymentStatus,
             paymentMethod: requestedMethod,
             tipAmount: tipAmount,
             totalAmount: finalTotalWithTip,
+          },
+          select: {
+            id: true,
+            tenantId: true,
+            sessionId: true,
+            invoiceNumber: true,
+            subtotal: true,
+            taxAmount: true,
+            discountAmount: true,
+            totalAmount: true,
+            tipAmount: true,
+            paymentStatus: true,
+            paymentMethod: true,
+            paidAt: true,
+            generatedAt: true,
+            businessName: true,
+            businessAddress: true,
+            gstin: true,
+            fssai: true,
           },
         }),
       `session-payment-request:${tenant.id}:${sessionId}`,
@@ -1319,14 +1444,36 @@ export const requestSessionPayment = async (req: Request, res: Response) => {
       paymentMethod: requestedMethod,
       tableId: session.tableId,
       tableName: session.table?.name,
+      bill: updatedBill,
       updatedAt: new Date().toISOString()
     };
 
     getIO().to(tenantRoom).emit('session:update', payload);
     getIO().to(sessionRoom).emit('session:update', payload);
 
-    // C-2: Emit specific payment request event for vendor notifications
-    getIO().to(tenantRoom).emit('session:payment_requested', payload);
+    if (nextPaymentStatus === 'PENDING_VERIFICATION') {
+      getIO().to(tenantRoom).emit('session:payment_submitted', {
+        sessionId: session.id,
+        tableId: session.tableId || null,
+        tableName: session.table?.name || undefined,
+        method: requestedMethod,
+        totalAmount: Number(updatedBill.totalAmount || finalTotalWithTip || 0),
+        bill: updatedBill,
+        submittedAt: new Date().toISOString(),
+      });
+      getIO().to(sessionRoom).emit('session:payment_submitted', {
+        sessionId: session.id,
+        tableId: session.tableId || null,
+        tableName: session.table?.name || undefined,
+        method: requestedMethod,
+        totalAmount: Number(updatedBill.totalAmount || finalTotalWithTip || 0),
+        bill: updatedBill,
+        submittedAt: new Date().toISOString(),
+      });
+    } else {
+      // C-2: Emit specific payment request event for vendor notifications
+      getIO().to(tenantRoom).emit('session:payment_requested', payload);
+    }
 
     const paymentLink =
       requestedMethod === 'online' && tenant.upiId
@@ -1373,14 +1520,14 @@ export const requestSessionPayment = async (req: Request, res: Response) => {
           upiConfigured: Boolean(tenant.upiId),
         },
         bill: {
-          ...reconciledBill,
+          ...updatedBill,
           paymentMethod: requestedMethod,
         },
         paymentLink,
-      }),
+      }, { plan: tenant.plan, partySize: session.partySize }),
     );
   } catch (error) {
-    console.error('requestSessionPayment error:', error);
+    logSessionError('requestSessionPayment error', error);
     if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
       return res.status(404).json({ error: 'Restaurant not found' });
     }
@@ -1463,7 +1610,7 @@ export const sendSessionPaymentLink = async (req: Request, res: Response) => {
 
     res.json({ success: true, ...payload });
   } catch (error) {
-    console.error('sendSessionPaymentLink error:', error);
+    logSessionError('sendSessionPaymentLink error', error);
     if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
       return res.status(404).json({ error: 'Restaurant not found' });
     }
@@ -1476,6 +1623,7 @@ export const submitSessionPayment = async (req: Request, res: Response) => {
     const { tenantSlug, sessionId } = req.params;
     const tenant = await resolveTenantBySlugOrThrow(tenantSlug);
     const session = await fetchSessionSnapshot(tenant.id, sessionId);
+    const isMiniTokenFlow = normalizePlan(tenant.plan) === 'MINI';
 
     if (!session) return res.status(404).json({ error: 'Session not found' });
 
@@ -1486,7 +1634,10 @@ export const submitSessionPayment = async (req: Request, res: Response) => {
       tenantSlug,
     });
 
-    if (!session.bill || session.sessionStatus !== 'AWAITING_BILL') {
+    const supportsMiniPrepayment =
+      isMiniTokenFlow && !['CLOSED', 'CANCELLED'].includes(String(session.sessionStatus || '').toUpperCase());
+
+    if (!session.bill || (!supportsMiniPrepayment && session.sessionStatus !== 'AWAITING_BILL')) {
       return res.status(409).json({ error: 'This session is not ready for payment confirmation yet.' });
     }
 
@@ -1496,12 +1647,33 @@ export const submitSessionPayment = async (req: Request, res: Response) => {
 
     const totals = calculateSessionOrderTotals(session.orders);
     const reconciledBill = reconcileSessionBill(session.bill, totals);
+    const requestedMethod = String(reconciledBill?.paymentMethod || 'online');
+    const updatedBill = await withPrismaRetry(
+      () =>
+        prisma.bill.update({
+          where: { sessionId: session.id },
+          data: {
+            paymentStatus: 'PENDING_VERIFICATION',
+            paymentMethod: requestedMethod,
+          },
+          select: {
+            id: true,
+            invoiceNumber: true,
+            totalAmount: true,
+            paymentStatus: true,
+            paymentMethod: true,
+            paidAt: true,
+          },
+        }),
+      `session-payment-submitted:${tenant.id}:${session.id}`,
+    );
     const payload = {
       sessionId: session.id,
       tableId: session.tableId || null,
       tableName: session.table?.name || undefined,
-      method: String(reconciledBill?.paymentMethod || 'online'),
-      totalAmount: Number(reconciledBill?.totalAmount || totals.totalAmount || 0),
+      method: String(updatedBill.paymentMethod || requestedMethod),
+      totalAmount: Number(updatedBill.totalAmount || reconciledBill?.totalAmount || totals.totalAmount || 0),
+      bill: updatedBill,
       submittedAt: new Date().toISOString(),
     };
 
@@ -1513,12 +1685,28 @@ export const submitSessionPayment = async (req: Request, res: Response) => {
       deleteCache(cacheKeys.dashboardLiveOrders(tenant.id)),
     ]);
 
+    getIO().to(tenantRoom).emit('session:update', {
+      sessionId: session.id,
+      status: session.sessionStatus,
+      tableId: session.tableId,
+      tableName: session.table?.name,
+      bill: updatedBill,
+      updatedAt: new Date().toISOString(),
+    });
+    getIO().to(sessionRoom).emit('session:update', {
+      sessionId: session.id,
+      status: session.sessionStatus,
+      tableId: session.tableId,
+      tableName: session.table?.name,
+      bill: updatedBill,
+      updatedAt: new Date().toISOString(),
+    });
     getIO().to(tenantRoom).emit('session:payment_submitted', payload);
     getIO().to(sessionRoom).emit('session:payment_submitted', payload);
 
     res.json({ success: true, ...payload });
   } catch (error) {
-    console.error('submitSessionPayment error:', error);
+    logSessionError('submitSessionPayment error', error);
     if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
       return res.status(404).json({ error: 'Restaurant not found' });
     }
@@ -1549,18 +1737,56 @@ export const rejectSessionPayment = async (req: Request, res: Response) => {
 
     const totals = calculateSessionOrderTotals(session.orders);
     const reconciledBill = reconcileSessionBill(session.bill, totals);
+    const updatedBill = await withPrismaRetry(
+      () =>
+        prisma.bill.update({
+          where: { sessionId: session.id },
+          data: { paymentStatus: 'UNPAID' },
+          select: {
+            id: true,
+            invoiceNumber: true,
+            totalAmount: true,
+            paymentStatus: true,
+            paymentMethod: true,
+            paidAt: true,
+          },
+        }),
+      `session-payment-reject:${tenant.id}:${session.id}`,
+    );
     const payload = {
       sessionId: session.id,
-      method: String(reconciledBill?.paymentMethod || 'online'),
-      totalAmount: Number(reconciledBill?.totalAmount || totals.totalAmount || 0),
+      method: String(updatedBill.paymentMethod || reconciledBill?.paymentMethod || 'online'),
+      totalAmount: Number(updatedBill.totalAmount || reconciledBill?.totalAmount || totals.totalAmount || 0),
+      bill: updatedBill,
       message,
       rejectedAt: new Date().toISOString(),
     };
 
+    await Promise.all([
+      deleteCache(cacheKeys.publicSession(tenant.id, session.id)),
+      deleteCache(cacheKeys.dashboardLiveOrders(tenant.id)),
+    ]);
+
+    getIO().to(getTenantRoom(tenant.id)).emit('session:update', {
+      sessionId: session.id,
+      status: session.sessionStatus,
+      tableId: session.tableId,
+      tableName: session.table?.name,
+      bill: updatedBill,
+      updatedAt: new Date().toISOString(),
+    });
+    getIO().to(getSessionRoom(tenant.id, session.id)).emit('session:update', {
+      sessionId: session.id,
+      status: session.sessionStatus,
+      tableId: session.tableId,
+      tableName: session.table?.name,
+      bill: updatedBill,
+      updatedAt: new Date().toISOString(),
+    });
     getIO().to(getSessionRoom(tenant.id, session.id)).emit('session:payment_rejected', payload);
     res.json({ success: true, ...payload });
   } catch (error) {
-    console.error('rejectSessionPayment error:', error);
+    logSessionError('rejectSessionPayment error', error);
     if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
       return res.status(404).json({ error: 'Restaurant not found' });
     }
@@ -1601,10 +1827,10 @@ export const getBill = async (req: Request, res: Response) => {
           upiConfigured: Boolean(tenant.upiId),
         },
         bill: reconcileSessionBill(session.bill, calculateSessionOrderTotals(session.orders)),
-      }),
+      }, { plan: tenant.plan, partySize: session.partySize }),
     );
   } catch (error) {
-    console.error('getBill error:', error);
+    logSessionError('getBill error', error);
     if (error instanceof Error && error.message === 'TENANT_NOT_FOUND') {
       return res.status(404).json({ error: 'Restaurant not found' });
     }
@@ -1665,7 +1891,7 @@ export const getActiveSession = async (req: Request, res: Response) => {
 
     res.json({ activeSession: session || null });
   } catch (error) {
-    console.error('getActiveSession error:', error);
+    logSessionError('getActiveSession error', error);
     res.status(500).json({ error: 'Failed to check active session' });
   }
 };
@@ -1784,7 +2010,7 @@ export const adminFinishSession = async (req: Request, res: Response) => {
         return updatedSession;
       });
     } catch (err) {
-      console.error('adminFinishSession prisma.$transaction failed', err);
+      logSessionError('adminFinishSession prisma.$transaction failed', err);
       throw err;
     }
 
@@ -1818,13 +2044,13 @@ export const adminFinishSession = async (req: Request, res: Response) => {
 
     setImmediate(() => {
       invalidateSessionCaches(session.tenantId, result.id).catch(err => 
-        console.error('[ADMIN_FINISH_CACHE_ERROR]', err)
+      logSessionWarn('[ADMIN_FINISH_CACHE_ERROR]', err)
       );
     });
 
     res.json(result);
   } catch (error) {
-    console.error('adminFinishSession error:', error);
+    logSessionError('adminFinishSession error', error);
     res.status(500).json({ error: 'Failed to finish session via admin authority' });
   }
 };

@@ -6,6 +6,8 @@ const router: Router = Router();
 
 // Public
 router.post('/login', CustomerController.login);
+router.post('/register', CustomerController.register);
+router.post('/auth/login', CustomerController.loginWithPassword);
 
 // Protected (requires customer JWT)
 router.get('/profile', customerAuth, CustomerController.getProfile);

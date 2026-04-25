@@ -8,7 +8,7 @@ import { generateOrderNumber } from '../services/order-number.service';
 import { buildServerPricedOrderPayload } from '../services/order-payload.service';
 import { cacheKeys } from '../utils/cache-keys';
 import { authorizeSessionAccess, generateSessionAccessToken } from '../utils/public-access';
-import { getPlanLimits, normalizePlan } from '../config/plans';
+import { getPlanLimits, getSessionAccessTokenTtl, normalizePlan } from '../config/plans';
 
 const WAITER_CALL_TYPES = new Set(['WAITER', 'BILL', 'WATER', 'EXTRA', 'HELP', 'SPOON', 'TISSUE', 'ASSISTANCE']);
 const ORDERABLE_SESSION_STATUSES = ['OPEN', 'PARTIALLY_SENT', 'ACTIVE'] as const;
@@ -48,6 +48,17 @@ const publicOrderSelect = {
     select: {
       id: true,
       sessionStatus: true,
+      partySize: true,
+      bill: {
+        select: {
+          id: true,
+          invoiceNumber: true,
+          totalAmount: true,
+          paymentStatus: true,
+          paymentMethod: true,
+          paidAt: true,
+        },
+      },
       customer: {
         select: {
           id: true,
@@ -351,6 +362,7 @@ export const createOrder = async (req: Request, res: Response) => {
                 id: true,
                 tableId: true,
                 customerId: true,
+                partySize: true,
                 sessionStatus: true,
               },
             }),
@@ -406,6 +418,7 @@ export const createOrder = async (req: Request, res: Response) => {
               id: true,
               tableId: true,
               customerId: true,
+              partySize: true,
               sessionStatus: true,
             },
           }),
@@ -455,6 +468,7 @@ export const createOrder = async (req: Request, res: Response) => {
               id: true,
               tableId: true,
               customerId: true,
+              partySize: true,
               sessionStatus: true,
             },
           });
@@ -504,6 +518,7 @@ export const createOrder = async (req: Request, res: Response) => {
               id: true,
               tableId: true,
               customerId: true,
+              partySize: true,
               sessionStatus: true,
             },
           });
@@ -588,6 +603,7 @@ export const createOrder = async (req: Request, res: Response) => {
         sessionId: lockedSession.id,
         customerId: lockedSession.customerId,
         tableId: lockedSession.tableId || null,
+        expiresIn: getSessionAccessTokenTtl(tenant.plan, lockedSession.partySize),
       }),
     });
 
@@ -632,6 +648,7 @@ export const createOrder = async (req: Request, res: Response) => {
                 sessionId: lockedSession!.id,
                 customerId: lockedSession!.customerId,
                 tableId: lockedSession!.tableId || null,
+                expiresIn: getSessionAccessTokenTtl(tenant.plan, lockedSession!.partySize),
               }),
             },
             600,

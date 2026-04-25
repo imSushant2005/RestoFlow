@@ -58,6 +58,11 @@ model Tenant {
   staffInvites    StaffInvite[]
   analytics       DailyAnalytics[]
   bills           Bill[]
+  subscription    Subscription?
+  paymentAttempts PaymentAttempt[]
+  billingInvoices SubscriptionInvoice[]
+  billingLedger   BillingLedgerEntry[]
+  planHistory     PlanHistory[]
   expenses        Expense[]
   orderAuditLogs  OrderAuditLog[]
   gstin           String?
@@ -275,6 +280,7 @@ model Customer {
   phone       String    @unique
   name        String?
   email       String?
+  passwordHash String?
   isActive    Boolean   @default(true)
   deactivatedAt DateTime?
   anonymizedAt DateTime?
@@ -349,6 +355,136 @@ model Bill {
 
   @@index([tenantId])
   @@index([sessionId])
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  tenantId           String             @unique
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan               Plan               @default(MINI)
+  billingCycle       SubscriptionCycle  @default(MONTHLY)
+  status             SubscriptionStatus @default(TRIALING)
+  trialStartsAt      DateTime?
+  trialEndsAt        DateTime?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  canceledAt         DateTime?
+  nextRetryAt        DateTime?
+  lastPaymentAt      DateTime?
+  lastPaymentAttemptId String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  paymentAttempts    PaymentAttempt[]
+  invoices           SubscriptionInvoice[]
+  ledgerEntries      BillingLedgerEntry[]
+  planHistory        PlanHistory[]
+
+  @@index([status, currentPeriodEnd])
+  @@index([tenantId, status])
+}
+
+model PaymentAttempt {
+  id                 String               @id @default(cuid())
+  tenantId           String
+  tenant             Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptionId     String?
+  subscription       Subscription?        @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  invoiceId          String?
+  invoice            SubscriptionInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  targetPlan         Plan
+  billingCycle       SubscriptionCycle
+  status             PaymentAttemptStatus @default(PENDING)
+  paymentMethod      String?
+  providerReference  String?
+  amount             Float
+  currency           String               @default("INR")
+  idempotencyKey     String
+  failureReason      String?
+  refundedAt         DateTime?
+  processedAt        DateTime?
+  metadata           Json?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  ledgerEntries      BillingLedgerEntry[]
+  planHistory        PlanHistory[]
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, createdAt(sort: Desc)])
+  @@index([subscriptionId, status, createdAt(sort: Desc)])
+  @@index([invoiceId])
+}
+
+model SubscriptionInvoice {
+  id                 String               @id @default(cuid())
+  tenantId           String
+  tenant             Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptionId     String?
+  subscription       Subscription?        @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  invoiceNumber      String               @unique
+  plan               Plan
+  billingCycle       SubscriptionCycle
+  status             SubscriptionInvoiceStatus @default(PENDING)
+  amount             Float
+  currency           String               @default("INR")
+  issuedAt           DateTime             @default(now())
+  dueAt              DateTime?
+  paidAt             DateTime?
+  periodStart        DateTime?
+  periodEnd          DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  paymentAttempts    PaymentAttempt[]
+  ledgerEntries      BillingLedgerEntry[]
+
+  @@index([tenantId, status, issuedAt(sort: Desc)])
+  @@index([subscriptionId, issuedAt(sort: Desc)])
+}
+
+model BillingLedgerEntry {
+  id                 String            @id @default(cuid())
+  tenantId           String
+  tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptionId     String?
+  subscription       Subscription?     @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  paymentAttemptId   String?
+  paymentAttempt     PaymentAttempt?   @relation(fields: [paymentAttemptId], references: [id], onDelete: SetNull)
+  invoiceId          String?
+  invoice            SubscriptionInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  entryType          BillingLedgerEntryType
+  amount             Float
+  currency           String            @default("INR")
+  note               String?
+  metadata           Json?
+  createdAt          DateTime          @default(now())
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([subscriptionId, createdAt(sort: Desc)])
+  @@index([paymentAttemptId])
+}
+
+model PlanHistory {
+  id                 String           @id @default(cuid())
+  tenantId           String
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptionId     String?
+  subscription       Subscription?    @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  paymentAttemptId   String?
+  paymentAttempt     PaymentAttempt?  @relation(fields: [paymentAttemptId], references: [id], onDelete: SetNull)
+  fromPlan           Plan?
+  toPlan             Plan
+  billingCycle       SubscriptionCycle
+  reason             PlanChangeReason
+  effectiveAt        DateTime
+  actorUserId        String?
+  note               String?
+  createdAt          DateTime         @default(now())
+
+  @@index([tenantId, effectiveAt(sort: Desc)])
+  @@index([subscriptionId, effectiveAt(sort: Desc)])
 }
 
 // ─── ORDERS ───────────────────────────────────────────────
@@ -571,6 +707,53 @@ enum OfferType {
   FIXED
   COMBO
   BOGO
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum SubscriptionCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum PaymentAttemptStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+  CANCELED
+}
+
+enum SubscriptionInvoiceStatus {
+  PENDING
+  PAID
+  VOID
+  REFUNDED
+}
+
+enum BillingLedgerEntryType {
+  CHARGE
+  REFUND
+  CREDIT
+  ADJUSTMENT
+  PLAN_CHANGE
+  RENEWAL
+}
+
+enum PlanChangeReason {
+  TRIAL_START
+  UPGRADE
+  DOWNGRADE
+  RENEWAL
+  REFUND
+  CANCELLATION
+  ADMIN_ADJUSTMENT
 }
 
 enum AuditActorType {

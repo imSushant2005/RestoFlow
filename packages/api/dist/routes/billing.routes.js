@@ -41,6 +41,11 @@ const rbac_js_1 = require("../constants/rbac.js");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.requireAuth);
 router.get('/', (0, role_middleware_1.requireRoles)(rbac_js_1.BILLING_VIEW_ROLES), BillingController.getBillingDetails);
+router.post('/trials/start', (0, role_middleware_1.requireRoles)(rbac_js_1.FULL_ACCESS_ROLES), BillingController.startTrial);
 router.post('/checkout', (0, role_middleware_1.requireRoles)(rbac_js_1.FULL_ACCESS_ROLES), BillingController.createCheckoutSession);
+router.post('/attempts/:attemptId/confirm', (0, role_middleware_1.requireRoles)(rbac_js_1.FULL_ACCESS_ROLES), BillingController.confirmPayment);
+router.post('/attempts/:attemptId/fail', (0, role_middleware_1.requireRoles)(rbac_js_1.FULL_ACCESS_ROLES), BillingController.failPayment);
+router.post('/attempts/:attemptId/refund', (0, role_middleware_1.requireRoles)(rbac_js_1.FULL_ACCESS_ROLES), BillingController.refundPayment);
+router.post('/subscription/cancel', (0, role_middleware_1.requireRoles)(rbac_js_1.FULL_ACCESS_ROLES), BillingController.cancelSubscription);
 exports.default = router;
 //# sourceMappingURL=billing.routes.js.map

@@ -55,8 +55,6 @@ const order_routes_1 = __importDefault(require("./routes/order.routes"));
 const analytics_routes_1 = __importDefault(require("./routes/analytics.routes"));
 const settings_routes_1 = __importDefault(require("./routes/settings.routes"));
 const billing_routes_1 = __importDefault(require("./routes/billing.routes"));
-const payment_routes_1 = __importDefault(require("./routes/payment.routes"));
-const PaymentController = __importStar(require("./controllers/payment.controller"));
 const ai_routes_1 = __importDefault(require("./routes/ai.routes"));
 const notification_routes_1 = __importDefault(require("./routes/notification.routes"));
 const customer_routes_1 = __importDefault(require("./routes/customer.routes"));
@@ -94,11 +92,6 @@ function buildAllowedOrigins() {
 }
 const allowedOrigins = buildAllowedOrigins();
 // Trusted origin patterns — used as fallback when CLIENT_URL / CORS_ORIGIN are not set.
-const TRUSTED_ORIGIN_PATTERNS = [
-    /\.vercel\.app$/,
-    /\.railway\.app$/,
-    /\.up\.railway\.app$/,
-];
 function isOriginAllowed(origin) {
     // 1. Same-origin or server-to-server (no Origin header)
     if (!origin)
@@ -114,13 +107,10 @@ function isOriginAllowed(origin) {
         /^http:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\./.test(origin))) {
         return true;
     }
-    // 4. Pattern match (vercel/railway)
-    // Use a simple check to catch if the origin ends with a trusted domain
-    const isTrusted = TRUSTED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin));
-    if (!isTrusted && isProduction) {
-        console.warn(`[CORS_REJECT] Restricted origin attempt: ${origin}. Add to CLIENT_URL if this is expected.`);
+    if (isProduction) {
+        console.warn(`[CORS_REJECT] Restricted origin attempt: ${origin}. Add to ALLOWED_ORIGINS if this is expected.`);
     }
-    return isTrusted;
+    return false;
 }
 app.disable('x-powered-by');
 if (env_1.env.TRUST_PROXY) {
@@ -166,8 +156,6 @@ const strictAuthLimiter = (0, express_rate_limit_1.default)({
 });
 app.use('/public', apiLimiter);
 app.use((0, pino_http_1.default)({ logger: logger_1.logger }));
-// Removed cors() from here as it's now at the top
-app.post('/payments/webhook', express_1.default.raw({ type: 'application/json' }), PaymentController.handleWebhook);
 app.use(express_1.default.json({ limit: env_1.env.JSON_BODY_LIMIT }));
 app.use((0, cookie_parser_1.default)());
 void (0, socket_1.initSocket)(httpServer).catch((error) => {
@@ -273,7 +261,6 @@ app.use('/orders', tenant_rate_limit_middleware_1.tenantRateLimitMiddleware, ord
 app.use('/analytics', tenant_rate_limit_middleware_1.tenantRateLimitMiddleware, analytics_routes_1.default);
 app.use('/settings', tenant_rate_limit_middleware_1.tenantRateLimitMiddleware, settings_routes_1.default);
 app.use('/billing', tenant_rate_limit_middleware_1.tenantRateLimitMiddleware, billing_routes_1.default);
-app.use('/payments', payment_routes_1.default);
 app.use('/ai', ai_routes_1.default);
 app.use('/notifications', notification_routes_1.default);
 app.use('/customer', customer_routes_1.default);

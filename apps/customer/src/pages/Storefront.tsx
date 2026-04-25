@@ -22,6 +22,7 @@ import { getCustomerServiceCopy } from '../lib/serviceMode';
 import {
   getActiveSessionForTenant,
   getTenantStorageItem,
+  removeTenantStorageItem,
   setCustomerAuthForTenant,
   setTenantStorageItem,
 } from '../lib/tenantStorage';
@@ -70,6 +71,8 @@ export function Storefront() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const seatParam = searchParams.get('seat');
+  const entryMode = searchParams.get('mode');
+  const entrySource = searchParams.get('source');
 
   const [intakeError, setIntakeError] = useState('');
   const [searchText, setSearchText] = useState('');
@@ -106,6 +109,9 @@ export function Storefront() {
   const activeSessionId = getActiveSessionForTenant(tenantSlug);
   const hasTableRoute = Boolean(tableId && tableId !== 'undefined');
   const isTakeawayEntry = !hasTableRoute;
+  const isCounterEntry =
+    isTakeawayEntry &&
+    (entryMode === 'counter' || entrySource === 'staff' || searchParams.get('staff') === '1');
   const menuSnapshot = useMemo(() => readMenuSnapshot(tenantSlug), [tenantSlug]);
 
   const {
@@ -136,6 +142,15 @@ export function Storefront() {
       setTenantBusinessType(menuData.businessType);
     }
   }, [menuData?.businessType, menuData?.plan, setTenantBusinessType, setTenantPlan, setTenantScope, tenantSlug]);
+
+  useEffect(() => {
+    if (!tenantSlug) return;
+    if (isCounterEntry) {
+      setTenantStorageItem(tenantSlug, 'entry_mode', 'counter');
+      return;
+    }
+    removeTenantStorageItem(tenantSlug, 'entry_mode');
+  }, [isCounterEntry, tenantSlug]);
 
   useEffect(() => {
     if (hasTableRoute) {
@@ -400,22 +415,24 @@ export function Storefront() {
               style={{ background: 'var(--surface)', color: 'var(--text-2)', border: '1px solid var(--border)' }}
             >
               <Store size={12} />
-              Direct ordering
+              {isCounterEntry ? 'Counter assisted' : 'Direct ordering'}
             </span>
             <span
               className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em]"
               style={{ background: 'var(--surface)', color: 'var(--text-2)', border: '1px solid var(--border)' }}
             >
               <ShieldCheck size={12} />
-              Secure session
+              {isCounterEntry ? 'Staff-friendly flow' : 'Secure session'}
             </span>
           </div>
 
           <h1 className="mb-2 text-4xl font-black tracking-tight" style={{ color: 'var(--text-1)' }}>
-            {t('entry.orderFrom')} {restaurantName}
+            {isCounterEntry ? `Start counter order for ${restaurantName}` : `${t('entry.orderFrom')} ${restaurantName}`}
           </h1>
           <p className="mb-10 text-lg font-medium leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            {t('entry.startWith')}
+            {isCounterEntry
+              ? 'Use this public ordering screen like a counter or kiosk. Add the guest details, place the order, and continue with the live tracker.'
+              : t('entry.startWith')}
           </p>
 
           <div className="space-y-6">
@@ -424,7 +441,7 @@ export function Storefront() {
                 className="absolute left-4 top-[-10px] z-10 px-1 text-[10px] font-black uppercase tracking-widest"
                 style={{ color: 'var(--brand)', background: 'var(--bg)' }}
               >
-                {t('entry.displayName')}
+                {isCounterEntry ? 'Guest name' : t('entry.displayName')}
               </label>
               <input
                 type="text"
@@ -432,7 +449,7 @@ export function Storefront() {
                 onChange={(event) => setName(event.target.value)}
                 className="w-full rounded-2xl px-5 py-4 font-bold outline-none transition-all placeholder:text-gray-400"
                 style={{ background: 'var(--surface)', border: '2px solid var(--border)', color: 'var(--text-1)' }}
-                placeholder="e.g. Arjun Singh"
+                placeholder={isCounterEntry ? 'e.g. Walk-in guest' : 'e.g. Arjun Singh'}
               />
             </div>
 
@@ -441,7 +458,7 @@ export function Storefront() {
                 className="absolute left-4 top-[-10px] z-10 px-1 text-[10px] font-black uppercase tracking-widest"
                 style={{ color: 'var(--brand)', background: 'var(--bg)' }}
               >
-                {t('entry.phone')}
+                {isCounterEntry ? 'Guest phone' : t('entry.phone')}
               </label>
               <input
                 type="tel"
@@ -468,7 +485,7 @@ export function Storefront() {
                 const normalizedPhone = phone.replace(/\D/g, '').slice(0, 10);
 
                 if (!normalizedName || normalizedPhone.length < 10) {
-                  setIntakeError('Enter a valid customer name and 10-digit mobile number.');
+                  setIntakeError(isCounterEntry ? 'Enter the guest name and a valid 10-digit mobile number.' : 'Enter a valid customer name and 10-digit mobile number.');
                   return;
                 }
 
@@ -507,7 +524,7 @@ export function Storefront() {
               disabled={intakeSubmitting}
               className="mt-4 flex w-full items-center justify-center gap-3 rounded-3xl bg-[#1a1c23] py-4 font-black text-white shadow-2xl transition-all hover:bg-black disabled:opacity-60"
             >
-              {intakeSubmitting ? t('entry.signingIn') : t('entry.continue')} <ChevronRight size={20} />
+              {intakeSubmitting ? t('entry.signingIn') : isCounterEntry ? 'Start counter order' : t('entry.continue')} <ChevronRight size={20} />
             </button>
           </div>
         </div>
@@ -576,7 +593,13 @@ export function Storefront() {
                     className="rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em]"
                     style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
                   >
-                    {activeSessionId && activeServiceCopy ? `${activeServiceCopy.compactLabel} live order` : hasTableRoute ? 'Table ordering' : 'Direct ordering'}
+                    {activeSessionId && activeServiceCopy
+                      ? `${activeServiceCopy.compactLabel} live order`
+                      : hasTableRoute
+                        ? 'Table ordering'
+                        : isCounterEntry
+                          ? 'Counter ordering'
+                          : 'Direct ordering'}
                   </span>
                 </div>
 

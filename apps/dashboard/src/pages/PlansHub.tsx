@@ -146,6 +146,7 @@ const PLANS: PricingPlan[] = [
 export function PlansHub() {
   const queryClient = useQueryClient();
   const [showRecommendation, setShowRecommendation] = useState(false);
+  const [billingMessage, setBillingMessage] = useState('');
   const [answers, setAnswers] = useState({
     tables: 0,
     qr: false,
@@ -158,14 +159,45 @@ export function PlansHub() {
   });
 
   const planMutation = useMutation({
-    mutationFn: async (plan: string) => api.patch('/settings/business', { plan }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings-business'] });
+    mutationFn: async (plan: string) => {
+      const checkout = await api.post('/billing/checkout', {
+        planId: plan,
+        billingCycle: 'MONTHLY',
+        idempotencyKey: `subscription:${plan}:monthly`,
+      });
+      const attempt = checkout.data?.paymentAttempt;
+      if (!attempt?.id) {
+        throw new Error('Could not create payment attempt');
+      }
+
+      const providerReference =
+        window.prompt(
+          `Enter the internal payment reference for invoice ${attempt.invoice?.invoiceNumber || attempt.id}. This keeps the subscription ledger auditable.`,
+        ) || '';
+
+      if (!providerReference.trim()) {
+        throw new Error('Payment reference is required to confirm an in-house subscription payment.');
+      }
+
+      return api.post(`/billing/attempts/${attempt.id}/confirm`, {
+        paymentMethod: 'INTERNAL_SETTLEMENT',
+        providerReference: providerReference.trim(),
+        note: `Confirmed from subscription workspace for ${plan}`,
+        idempotencyKey: `subscription-confirm:${attempt.id}`,
+      });
+    },
+    onSuccess: async (response: any) => {
+      const invoiceNumber = response?.data?.invoice?.invoiceNumber || response?.data?.attempt?.invoice?.invoiceNumber;
+      setBillingMessage(invoiceNumber ? `Subscription activated. Invoice ${invoiceNumber} is now in billing history.` : 'Subscription activated successfully.');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['settings-business'] }),
+        queryClient.invalidateQueries({ queryKey: ['billing-overview'] }),
+      ]);
+    },
+    onError: (error: any) => {
+      setBillingMessage(error?.response?.data?.error || error?.message || 'Could not activate subscription.');
     },
   });
-
-  const userEmail = localStorage.getItem('userEmail');
-  const isSuperuser = userEmail === 'sushantrana2005@gmail.com';
   const activePlan = normalizePlanTier(business?.plan);
   const trialEndsAt = business?.trialEndsAt;
 
@@ -331,10 +363,8 @@ export function PlansHub() {
           const isActive = plan.id === activePlan;
 
           const buttonLabel = isActive
-            ? isSuperuser
-              ? 'Active (change anyway)'
-              : 'Active plan'
-            : plan.contactOnly && !isSuperuser
+            ? 'Active plan'
+            : plan.contactOnly
               ? plan.cta
               : planMutation.isPending
                 ? 'Updating...'
@@ -426,22 +456,22 @@ export function PlansHub() {
 
               <button
                 onClick={() => {
-                  if (plan.id === activePlan && !isSuperuser) {
+                  if (plan.id === activePlan) {
                     return;
                   }
 
-                  if (plan.contactOnly && !isSuperuser) {
+                  if (plan.contactOnly) {
                     window.location.assign('/contact');
                     return;
                   }
 
-                  const canChange = isSuperuser || (plan.id !== activePlan && !planMutation.isPending);
+                  const canChange = plan.id !== activePlan && !planMutation.isPending;
                   if (!canChange) return;
                   planMutation.mutate(plan.id);
                 }}
-                disabled={(!isSuperuser && plan.id === activePlan) || planMutation.isPending}
+                disabled={plan.id === activePlan || planMutation.isPending}
                 className={`w-full rounded-xl py-3.5 text-xs font-black uppercase tracking-widest transition-all ${
-                  isActive && !isSuperuser
+                  isActive
                     ? 'cursor-default border border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
                     : plan.popular
                       ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-xl shadow-blue-900/20 hover:opacity-90'
@@ -498,6 +528,11 @@ export function PlansHub() {
       </div>
 
       <div className="mt-20 space-y-4 text-center">
+        {billingMessage ? (
+          <div className="mx-auto max-w-2xl rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-100">
+            {billingMessage}
+          </div>
+        ) : null}
         <div className="mb-4 flex flex-wrap items-center justify-center gap-6">
           <div className="flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-opaque)] px-4 py-2">
             <Check className="text-emerald-400" size={16} />

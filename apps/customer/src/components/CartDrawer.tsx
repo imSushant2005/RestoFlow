@@ -18,7 +18,11 @@ import { api, publicApi } from '../lib/api';
 import { formatINR } from '../lib/currency';
 import { getDirectImageUrl } from '../lib/images';
 import { getCustomerServiceCopy, normalizeCustomerServiceMode, type CustomerServiceMode } from '../lib/serviceMode';
-import { getActiveSessionForTenant, setActiveSessionForTenant } from '../lib/tenantStorage';
+import {
+  getActiveSessionForTenant,
+  setActiveSessionForTenant,
+  setPendingMiniPaymentForTenant,
+} from '../lib/tenantStorage';
 import { useCartStore } from '../store/cartStore';
 
 function buildIdempotencyKey(tenantSlug: string) {
@@ -62,6 +66,7 @@ export function CartDrawer({ onClose, tenantSlug, tableId }: any) {
     customerName,
     customerPhone,
     orderType,
+    tenantPlan,
     setOrderType,
     activeSheet,
     setActiveSheet,
@@ -70,6 +75,7 @@ export function CartDrawer({ onClose, tenantSlug, tableId }: any) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [isBillExpanded, setIsBillExpanded] = useState(false);
+  const [miniCheckoutOpen, setMiniCheckoutOpen] = useState(false);
 
   const safeItems = useMemo(() => (Array.isArray(items) ? items : []), [items]);
 
@@ -138,10 +144,14 @@ export function CartDrawer({ onClose, tenantSlug, tableId }: any) {
 
   const resolvedOrderType = tableId ? 'DINE_IN' : orderType ? normalizeCustomerServiceMode(orderType) : undefined;
   const orderServiceCopy = resolvedOrderType ? getCustomerServiceCopy(resolvedOrderType) : null;
+  const isMiniTokenFlow = String(tenantPlan || '').toUpperCase() === 'MINI';
 
   if (!isOpen) return null;
 
-  const submitCheckout = async (selectedOrderType: CustomerServiceMode) => {
+  const submitCheckout = async (
+    selectedOrderType: CustomerServiceMode,
+    miniPaymentMethod?: 'cash' | 'online',
+  ) => {
     if (!tenantSlug || safeItems.length === 0) return;
 
     setIsSubmitting(true);
@@ -203,6 +213,45 @@ export function CartDrawer({ onClose, tenantSlug, tableId }: any) {
         setActiveSessionForTenant(tenantSlug, createdSessionId);
       }
 
+      let followupWarning = '';
+      if (isMiniTokenFlow && createdSessionId && miniPaymentMethod) {
+        try {
+          const paymentResponse = await publicApi.post(`/${tenantSlug}/sessions/${createdSessionId}/payment-request`, {
+            method: miniPaymentMethod,
+          });
+
+          if (miniPaymentMethod === 'cash') {
+            setPendingMiniPaymentForTenant(tenantSlug, {
+              sessionId: createdSessionId,
+              method: 'cash',
+              state: 'PENDING_VENDOR',
+              submittedAt: Date.now(),
+            });
+          } else {
+            const paymentLink = paymentResponse?.data?.paymentLink
+              ? {
+                  amount: Number(paymentResponse.data.paymentLink.amount || 0),
+                  upiId: String(paymentResponse.data.paymentLink.upiId || ''),
+                  upiUri: String(paymentResponse.data.paymentLink.upiUri || ''),
+                }
+              : null;
+
+            setPendingMiniPaymentForTenant(tenantSlug, {
+              sessionId: createdSessionId,
+              method: 'online',
+              state: paymentLink?.upiUri ? 'OPEN_LINK' : 'PENDING_VENDOR',
+              paymentLink,
+              submittedAt: null,
+            });
+          }
+        } catch (paymentError: any) {
+          followupWarning =
+            paymentError?.response?.data?.error ||
+            paymentError?.message ||
+            'Order was placed, but the payment step needs attention at the counter.';
+        }
+      }
+
       if (!tableId) {
         setOrderType(selectedOrderType);
       }
@@ -213,6 +262,9 @@ export function CartDrawer({ onClose, tenantSlug, tableId }: any) {
         const finalSessionId = getActiveSessionForTenant(tenantSlug) || createdSessionId || sessionToken;
         if (finalSessionId) {
           navigate(`/order/${tenantSlug}/session/${finalSessionId}`);
+          if (followupWarning) {
+            window.setTimeout(() => window.alert(followupWarning), 160);
+          }
           return;
         }
         navigate(`/order/${tenantSlug}/status`);
@@ -242,6 +294,10 @@ export function CartDrawer({ onClose, tenantSlug, tableId }: any) {
 
   const handleCheckout = () => {
     if (!tenantSlug || safeItems.length === 0 || isSubmitting) return;
+    if (isMiniTokenFlow) {
+      setMiniCheckoutOpen(true);
+      return;
+    }
     submitCheckout(resolvedOrderType || 'DINE_IN');
   };
 
@@ -737,6 +793,71 @@ export function CartDrawer({ onClose, tenantSlug, tableId }: any) {
           </div>
         )}
       </div>
+      {miniCheckoutOpen && (
+        <div className="absolute inset-0 z-[150] flex items-end justify-center bg-slate-950/70 p-4 backdrop-blur-sm lg:items-center">
+          <div
+            className="w-full max-w-md rounded-[28px] border p-6 shadow-2xl"
+            style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--brand)' }}>
+                  Mini Counter Checkout
+                </p>
+                <h3 className="mt-2 text-2xl font-black tracking-tight" style={{ color: 'var(--text-1)' }}>
+                  How will you pay?
+                </h3>
+                <p className="mt-2 text-sm font-semibold leading-relaxed" style={{ color: 'var(--text-3)' }}>
+                  We will create your token first. The kitchen starts only after the counter verifies the payment.
+                </p>
+              </div>
+              <button
+                onClick={() => setMiniCheckoutOpen(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-2xl"
+                style={{ background: 'var(--surface-3)', color: 'var(--text-1)' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-3">
+              <button
+                onClick={() => {
+                  setMiniCheckoutOpen(false);
+                  void submitCheckout(resolvedOrderType || 'DINE_IN', 'cash');
+                }}
+                className="flex items-center justify-between rounded-2xl px-4 py-4 text-left text-white shadow-lg transition-all active:scale-[0.98]"
+                style={{ background: 'var(--brand)' }}
+              >
+                <div>
+                  <p className="text-sm font-black uppercase tracking-[0.14em]">Cash</p>
+                  <p className="mt-1 text-xs font-semibold text-white/80">
+                    Pay at the counter and wait for the vendor to verify before preparation starts.
+                  </p>
+                </div>
+                <ChevronRight size={18} />
+              </button>
+
+              <button
+                onClick={() => {
+                  setMiniCheckoutOpen(false);
+                  void submitCheckout(resolvedOrderType || 'DINE_IN', 'online');
+                }}
+                className="flex items-center justify-between rounded-2xl border px-4 py-4 text-left transition-all active:scale-[0.98]"
+                style={{ background: 'var(--surface-3)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
+              >
+                <div>
+                  <p className="text-sm font-black uppercase tracking-[0.14em]">UPI / Online</p>
+                  <p className="mt-1 text-xs font-semibold leading-relaxed" style={{ color: 'var(--text-3)' }}>
+                    Open the exact-amount UPI payment, come back here, and we will wait for vendor confirmation.
+                  </p>
+                </div>
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

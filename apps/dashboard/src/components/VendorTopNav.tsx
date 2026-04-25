@@ -90,7 +90,6 @@ const ROUTE_LABELS: Record<string, string> = {
   '/app/menu': 'Menu',
   '/app/tables': 'Tables & QR',
   '/app/orders': 'Live Orders',
-  '/app/assisted-ordering': 'Assisted Ordering',
   '/app/waiter': 'Waiter Ops',
   '/app/billing': 'Billing',
   '/app/analytics': 'Analytics',
@@ -191,7 +190,7 @@ export function VendorTopNav({
   const orderLink = useMemo(() => {
     const slug = business?.slug?.trim() || authMe?.tenant?.slug?.trim();
     if (!slug) return '';
-    return `${getCustomerAppUrl()}/order/${slug}`;
+    return `${getCustomerAppUrl()}/order/${slug}?mode=counter&source=staff`;
   }, [authMe?.tenant?.slug, business?.slug]);
 
   const visibleNotifications = useMemo(() => notifications.slice(0, 20), [notifications]);
@@ -413,7 +412,7 @@ export function VendorTopNav({
                   style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--text-2)' }}
                 >
                   <ExternalLink size={14} />
-                  Open Public Ordering
+                  Open Counter Ordering
                 </button>
                 <div className="grid grid-cols-2 gap-2">
                   <button
