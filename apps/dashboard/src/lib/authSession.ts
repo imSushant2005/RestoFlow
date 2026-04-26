@@ -92,7 +92,7 @@ export function applySessionSnapshot(data: any) {
   localStorage.setItem('userRole', role);
   localStorage.setItem('userEmail', data?.user?.email || '');
 
-  const mustChangePassword = role === 'OWNER' && Boolean(data?.user?.mustChangePassword);
+  const mustChangePassword = Boolean(data?.user?.mustChangePassword);
   if (mustChangePassword) localStorage.setItem('mustChangePassword', '1');
   else localStorage.removeItem('mustChangePassword');
 

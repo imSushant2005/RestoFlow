@@ -18,6 +18,7 @@ const router: Router = Router();
 
 router.post('/register', register);
 router.post('/clerk-sync', clerkSync);
+router.post('/google/complete', clerkSync);
 router.post('/login', login);
 router.post('/forgot-password/question', getForgotPasswordQuestion);
 router.post('/forgot-password/reset', resetForgotPassword);

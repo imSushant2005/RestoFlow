@@ -19,7 +19,7 @@ function sanitizeSegment(value: string) {
 function buildUsername(name: string, slug?: string) {
   const handle = sanitizeSegment(name) || 'staff';
   const tenant = sanitizeSegment(slug || 'restaurant') || 'restaurant';
-  return `${handle}@${tenant}.BHOJFLOW`;
+  return `${handle}@${tenant}.bhojflow`;
 }
 
 function buildEmployeeCode(name: string, slug?: string) {
@@ -741,7 +741,7 @@ export function Settings() {
                   <div className="space-y-5">
                     {/* Add member form */}
                     <Card accent="bg-indigo-500">
-                      <SectionTitle icon={<Users size={16} />} title="Add Team Member" subtitle="Provision access for waiters, kitchen staff, or managers." />
+                      <SectionTitle icon={<Users size={16} />} title="Add Team Member" subtitle="Provision access for cashiers, waiters, kitchen staff, or managers." />
                       <form onSubmit={handleStaffAdd} className="grid gap-4 sm:grid-cols-2">
                         <Field label="Full Name">
                           <Input
@@ -757,6 +757,7 @@ export function Settings() {
                             onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value })}
                             className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm font-bold text-white outline-none focus:border-blue-500 transition-colors appearance-none"
                           >
+                            <option value="CASHIER">Cashier / Counter</option>
                             <option value="WAITER">Waiter Ops</option>
                             <option value="KITCHEN">Kitchen / KDS</option>
                             <option value="MANAGER">Store Manager</option>

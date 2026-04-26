@@ -46,6 +46,8 @@ const envSchema = z
     STAFF_REFRESH_SECRET: z.string().min(16).optional(),
     CUSTOMER_SECRET: z.string().min(16).optional(),
     SESSION_SECRET: z.string().min(16).optional(),
+    CLERK_JWT_PUBLIC_KEY: z.string().optional(),
+    CLERK_JWT_ISSUER: z.string().optional(),
     REDIS_URL: z
       .string()
       .optional()
@@ -178,6 +180,8 @@ export const env = {
   STAFF_REFRESH_SECRET: emptyToUndefined(data.STAFF_REFRESH_SECRET),
   CUSTOMER_SECRET: emptyToUndefined(data.CUSTOMER_SECRET),
   SESSION_SECRET: emptyToUndefined(data.SESSION_SECRET),
+  CLERK_JWT_PUBLIC_KEY: emptyToUndefined(data.CLERK_JWT_PUBLIC_KEY),
+  CLERK_JWT_ISSUER: emptyToUndefined(data.CLERK_JWT_ISSUER),
   REDIS_URL: emptyToUndefined(data.REDIS_URL),
   CLOUDINARY_URL: emptyToUndefined(data.CLOUDINARY_URL),
   GEMINI_API_KEY: emptyToUndefined(data.GEMINI_API_KEY),

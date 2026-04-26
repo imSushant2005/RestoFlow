@@ -4,7 +4,9 @@ exports.logout = exports.refresh = exports.resetForgotPassword = exports.getForg
 const prisma_1 = require("@bhojflow/prisma");
 const zod_1 = require("zod");
 const crypto_1 = require("crypto");
+const jsonwebtoken_1 = require("jsonwebtoken");
 const prisma_2 = require("../db/prisma");
+const env_1 = require("../config/env");
 const cache_service_1 = require("../services/cache.service");
 const cache_keys_1 = require("../utils/cache-keys");
 const hash_1 = require("../utils/hash");
@@ -13,7 +15,7 @@ const logger_1 = require("../utils/logger");
 const auth_security_service_1 = require("../services/auth-security.service");
 const registerSchema = zod_1.z.object({
     email: zod_1.z.string().email(),
-    password: zod_1.z.string().min(6),
+    password: zod_1.z.string().min(8),
     name: zod_1.z.string().trim().min(2).max(80).optional(),
     tenantName: zod_1.z.string().trim().min(2).max(120).optional(),
 });
@@ -23,14 +25,8 @@ const loginSchema = zod_1.z.object({
     password: zod_1.z.string().min(1),
 });
 const clerkSyncSchema = zod_1.z.object({
-    clerkUserId: zod_1.z.string().trim().min(1),
-    email: zod_1.z.string().email(),
-    name: zod_1.z.string().trim().min(1).max(80).optional(),
+    sessionToken: zod_1.z.string().trim().min(1),
     tenantName: zod_1.z.string().trim().min(2).max(120).optional(),
-    gstin: zod_1.z.string().trim().min(8).max(20).optional(),
-    businessPhone: zod_1.z.string().trim().min(7).max(20).optional(),
-    password: zod_1.z.string().min(6).optional(),
-    authProvider: zod_1.z.enum(['EMAIL', 'GOOGLE']).optional(),
     intent: zod_1.z.enum(['LOGIN', 'SIGNUP']).optional(),
 });
 const firstPasswordChangeSchema = zod_1.z.object({
@@ -72,6 +68,20 @@ const forgotResetSchema = zod_1.z.object({
     newPassword: zod_1.z.string().min(8),
 });
 const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const clerkEmailClaimKeys = ['primaryEmail', 'email', 'primary_email'];
+const clerkNameClaimKeys = ['fullName', 'name', 'full_name'];
+const sessionUserSelect = {
+    id: true,
+    tenantId: true,
+    role: true,
+    email: true,
+    name: true,
+    employeeCode: true,
+    mustChangePassword: true,
+    securityQuestion: true,
+    preferredLanguage: true,
+    isActive: true,
+};
 function getRefreshCookieOptions() {
     const isProduction = process.env.NODE_ENV === 'production';
     return {
@@ -102,10 +112,71 @@ function normalizeTenantScopedUsername(raw, tenantSlug) {
     const handlePart = raw.trim().toLowerCase().includes('@') ? raw.trim().toLowerCase().split('@')[0] : raw.trim().toLowerCase();
     const handle = sanitizeTenantHandle(handlePart) || 'staff';
     const slug = sanitizeTenantHandle(tenantSlug) || 'restaurant';
-    return `${handle}@${slug}.BHOJFLOW`;
+    return `${handle}@${slug}.bhojflow`;
 }
 function issueRefreshCookie(res, refreshToken) {
     res.cookie('refreshToken', refreshToken, getRefreshCookieOptions());
+}
+function buildSessionPayload(user) {
+    return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        tenantId: user.tenantId,
+        employeeCode: user.employeeCode,
+        mustChangePassword: user.mustChangePassword,
+        hasSecurityQuestion: Boolean(user.securityQuestion),
+        preferredLanguage: user.preferredLanguage || 'en',
+    };
+}
+async function loadSessionUser(userId) {
+    return (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.user.findUnique({
+        where: { id: userId },
+        select: sessionUserSelect,
+    }), `auth-session-user:${userId}`);
+}
+function normalizeClerkPublicKey(rawKey) {
+    const trimmed = rawKey.trim().replace(/\\n/g, '\n');
+    if (trimmed.startsWith('-----BEGIN'))
+        return trimmed;
+    const wrapped = trimmed.match(/.{1,64}/g)?.join('\n') || trimmed;
+    return `-----BEGIN PUBLIC KEY-----\n${wrapped}\n-----END PUBLIC KEY-----`;
+}
+function readClerkClaim(claims, keys) {
+    for (const key of keys) {
+        const value = claims[key];
+        if (typeof value === 'string' && value.trim()) {
+            return value.trim();
+        }
+    }
+    return '';
+}
+function verifyClerkIdentityToken(sessionToken) {
+    if (!env_1.env.CLERK_JWT_PUBLIC_KEY) {
+        throw new Error('CLERK_JWT_PUBLIC_KEY_MISSING');
+    }
+    const claims = (0, jsonwebtoken_1.verify)(sessionToken, normalizeClerkPublicKey(env_1.env.CLERK_JWT_PUBLIC_KEY), {
+        algorithms: ['RS256'],
+        issuer: env_1.env.CLERK_JWT_ISSUER || undefined,
+    });
+    const clerkUserId = typeof claims.sub === 'string' ? claims.sub.trim() : '';
+    if (!clerkUserId) {
+        throw new Error('CLERK_SUBJECT_MISSING');
+    }
+    const email = normalizeEmail(readClerkClaim(claims, clerkEmailClaimKeys));
+    if (!email) {
+        throw new Error('CLERK_EMAIL_CLAIM_MISSING');
+    }
+    const explicitName = readClerkClaim(claims, clerkNameClaimKeys);
+    const firstName = typeof claims.firstName === 'string' ? claims.firstName.trim() : '';
+    const lastName = typeof claims.lastName === 'string' ? claims.lastName.trim() : '';
+    const name = explicitName || `${firstName} ${lastName}`.trim() || email.split('@')[0] || 'Owner';
+    return {
+        clerkUserId,
+        email,
+        name,
+    };
 }
 async function issueSessionForUser(res, user) {
     const tokens = (0, jwt_1.generateTokens)({
@@ -125,24 +196,11 @@ async function issueSessionForUser(res, user) {
     issueRefreshCookie(res, tokens.refreshToken);
     return {
         accessToken: tokens.accessToken,
-        user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.role,
-            tenantId: user.tenantId,
-            employeeCode: user.employeeCode,
-            mustChangePassword: user.mustChangePassword,
-            hasSecurityQuestion: Boolean(user.securityQuestion),
-            preferredLanguage: user.preferredLanguage || 'en',
-        },
+        user: buildSessionPayload(user),
     };
 }
 function getSecuritySetupPending(user) {
-    if (user.role === prisma_1.UserRole.OWNER) {
-        return user.mustChangePassword || !user.securityQuestion;
-    }
-    return !user.securityQuestion;
+    return user.mustChangePassword || !user.securityQuestion;
 }
 async function buildTipSummaryForUser(userId) {
     const now = new Date();
@@ -227,16 +285,16 @@ const register = async (req, res) => {
         const hashedPassword = await (0, hash_1.hashPassword)(validatedData.password);
         const resolvedName = validatedData.name || 'Owner';
         const finalTenantName = validatedData.tenantName?.trim() || buildProvisionalWorkspaceName(resolvedName);
-        const slug = await buildUniqueTenantSlug(validatedData.tenantName || 'workspace');
+        const slug = await buildUniqueTenantSlug(finalTenantName);
         const result = await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.$transaction(async (tx) => {
             const tenant = await tx.tenant.create({
                 data: {
                     businessName: finalTenantName,
                     slug,
                     email: normalizedEmail,
-                    trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day free trial on signup
                     plan: 'MINI',
-                    planStartedAt: new Date(),
+                    onboardingStatus: 'ACCOUNT_CREATED',
+                    trialStatus: 'NOT_STARTED',
                 },
             });
             const user = await tx.user.create({
@@ -278,24 +336,19 @@ exports.register = register;
 const clerkSync = async (req, res) => {
     try {
         const payload = clerkSyncSchema.parse(req.body);
-        const normalizedEmail = normalizeEmail(payload.email);
-        const normalizedProvider = payload.authProvider === 'GOOGLE' ? 'GOOGLE' : 'EMAIL';
         const normalizedIntent = payload.intent === 'LOGIN' ? 'LOGIN' : 'SIGNUP';
+        const identity = verifyClerkIdentityToken(payload.sessionToken);
+        const normalizedEmail = normalizeEmail(identity.email);
         const existingByClerk = await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.user.findFirst({
-            where: { clerkUserId: payload.clerkUserId },
-            select: {
-                id: true,
-                tenantId: true,
-                role: true,
-                email: true,
-                name: true,
-                employeeCode: true,
-                mustChangePassword: true,
-                securityQuestion: true,
-                preferredLanguage: true,
-            },
-        }), `clerk-sync-user:${payload.clerkUserId}`);
+            where: { clerkUserId: identity.clerkUserId },
+            select: sessionUserSelect,
+        }), `clerk-sync-user:${identity.clerkUserId}`);
         if (existingByClerk) {
+            if (!existingByClerk.isActive) {
+                return res.status(403).json({
+                    error: 'Account is inactive. Please contact your workspace administrator.',
+                });
+            }
             const session = await issueSessionForUser(res, existingByClerk);
             return res.json({ ...session, synced: true, created: false, linked: false });
         }
@@ -312,30 +365,26 @@ const clerkSync = async (req, res) => {
                 securityQuestion: true,
                 preferredLanguage: true,
                 clerkUserId: true,
+                isActive: true,
             },
         }), `clerk-sync-email:${normalizedEmail}`);
         if (existingByEmail) {
-            if (existingByEmail.clerkUserId && existingByEmail.clerkUserId !== payload.clerkUserId) {
+            if (!existingByEmail.isActive) {
+                return res.status(403).json({
+                    error: 'Account is inactive. Please contact your workspace administrator.',
+                });
+            }
+            if (existingByEmail.clerkUserId && existingByEmail.clerkUserId !== identity.clerkUserId) {
                 return res.status(409).json({
                     error: 'This email is already linked with another Clerk account. Please use your existing login method.',
                 });
             }
-            const linkedUser = existingByEmail.clerkUserId === payload.clerkUserId
+            const linkedUser = existingByEmail.clerkUserId === identity.clerkUserId
                 ? existingByEmail
                 : await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.user.update({
                     where: { id: existingByEmail.id },
-                    data: { clerkUserId: payload.clerkUserId },
-                    select: {
-                        id: true,
-                        tenantId: true,
-                        role: true,
-                        email: true,
-                        name: true,
-                        employeeCode: true,
-                        mustChangePassword: true,
-                        securityQuestion: true,
-                        preferredLanguage: true,
-                    },
+                    data: { clerkUserId: identity.clerkUserId },
+                    select: sessionUserSelect,
                 }), `clerk-sync-link:${existingByEmail.id}`);
             const session = await issueSessionForUser(res, linkedUser);
             return res.json({ ...session, synced: true, created: false, linked: true });
@@ -345,13 +394,10 @@ const clerkSync = async (req, res) => {
                 error: 'User not found. Please create an account first from the signup page.',
             });
         }
-        const baseName = payload.name?.trim();
-        const fallbackName = normalizedEmail.split('@')[0] || 'Owner';
-        const resolvedName = baseName && baseName.length > 0 ? baseName : fallbackName;
+        const resolvedName = identity.name?.trim() || normalizedEmail.split('@')[0] || 'Owner';
         const finalTenantName = payload.tenantName?.trim() || buildProvisionalWorkspaceName(resolvedName);
-        const tenantSlug = await buildUniqueTenantSlug(payload.tenantName || 'workspace');
-        const localPassword = payload.password ||
-            `${normalizedProvider.toLowerCase()}_${(0, crypto_1.randomBytes)(24).toString('base64url')}`;
+        const tenantSlug = await buildUniqueTenantSlug(finalTenantName);
+        const localPassword = `google_${(0, crypto_1.randomBytes)(24).toString('base64url')}`;
         const hashedPassword = await (0, hash_1.hashPassword)(localPassword);
         const created = await (0, prisma_2.withPrismaRetry)(() => prisma_2.prisma.$transaction(async (tx) => {
             const tenant = await tx.tenant.create({
@@ -359,9 +405,9 @@ const clerkSync = async (req, res) => {
                     businessName: finalTenantName,
                     slug: tenantSlug,
                     email: normalizedEmail,
-                    trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day free trial on signup
                     plan: 'MINI',
-                    planStartedAt: new Date(),
+                    onboardingStatus: 'ACCOUNT_CREATED',
+                    trialStatus: 'NOT_STARTED',
                 },
             });
             const user = await tx.user.create({
@@ -371,8 +417,8 @@ const clerkSync = async (req, res) => {
                     name: resolvedName,
                     passwordHash: hashedPassword,
                     role: prisma_1.UserRole.OWNER,
-                    clerkUserId: payload.clerkUserId,
-                    mustChangePassword: normalizedProvider === 'GOOGLE',
+                    clerkUserId: identity.clerkUserId,
+                    mustChangePassword: false,
                 },
             });
             return { user, tenant };
@@ -416,6 +462,28 @@ const clerkSync = async (req, res) => {
                 error: 'Database connection unavailable. Please retry in a few seconds.',
             });
         }
+        if (message === 'CLERK_JWT_PUBLIC_KEY_MISSING') {
+            return res.status(503).json({
+                error: 'Google sign-in is not fully configured on the server yet.',
+            });
+        }
+        if (message === 'CLERK_EMAIL_CLAIM_MISSING') {
+            return res.status(400).json({
+                error: 'Google sign-in is missing a verified email claim. Add email and name to the Clerk JWT template, then try again.',
+            });
+        }
+        if (message === 'CLERK_SUBJECT_MISSING') {
+            return res.status(401).json({
+                error: 'Google sign-in could not be verified. Please try again.',
+            });
+        }
+        if (message.toLowerCase().includes('jwt') ||
+            message.toLowerCase().includes('signature') ||
+            message.toLowerCase().includes('token expired')) {
+            return res.status(401).json({
+                error: 'Google sign-in token is invalid or expired. Please try again.',
+            });
+        }
         if (code === 'P2022') {
             console.error('[PRISMA_SYNC_DEBUG] Column/Table missing:', error);
             return res.status(500).json({
@@ -449,6 +517,7 @@ const login = async (req, res) => {
             mustChangePassword: true,
             securityQuestion: true,
             preferredLanguage: true,
+            isActive: true,
             passwordHash: true,
         };
         const isEmailLogin = rawIdentifier.includes('@');
@@ -475,6 +544,15 @@ const login = async (req, res) => {
                 reason: 'user_not_found',
             });
             return res.status(401).json({ error: 'User not found. Please create an account first from the signup page.' });
+        }
+        if (!user.isActive) {
+            await (0, auth_security_service_1.recordFailedAuthAttempt)({
+                req,
+                scope: 'login',
+                identifier: rawIdentifier,
+                reason: 'inactive_user',
+            });
+            return res.status(403).json({ error: 'Account is inactive. Please contact your workspace administrator.' });
         }
         const isPasswordValid = await (0, hash_1.verifyPassword)(validatedData.password, user.passwordHash);
         if (!isPasswordValid) {
@@ -535,14 +613,12 @@ const changeFirstPassword = async (req, res) => {
         if (!req.user?.id) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
-        if (req.user.role !== prisma_1.UserRole.OWNER) {
-            return res.status(403).json({ error: 'First-login password flow is reserved for owner accounts.' });
-        }
         const user = await prisma_2.prisma.user.findUnique({
             where: { id: req.user.id },
             select: {
                 id: true,
                 email: true,
+                role: true,
                 passwordHash: true,
                 mustChangePassword: true,
                 clerkUserId: true,
@@ -578,7 +654,7 @@ const changeFirstPassword = async (req, res) => {
         const updatePayload = {
             passwordHash: newPasswordHash,
             mustChangePassword: false,
-            securityQuestion: body.securityQuestion,
+            securityQuestion: body.securityQuestion.trim(),
             securityAnswerHash,
         };
         if (body.username?.trim()) {
@@ -892,7 +968,22 @@ const refresh = async (req, res) => {
         const decoded = (0, jwt_1.verifyRefreshToken)(refreshToken);
         const dbToken = await prisma_2.prisma.refreshToken.findUnique({
             where: { token: refreshToken },
-            include: { user: true },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        tenantId: true,
+                        role: true,
+                        email: true,
+                        name: true,
+                        employeeCode: true,
+                        mustChangePassword: true,
+                        securityQuestion: true,
+                        preferredLanguage: true,
+                        isActive: true,
+                    },
+                },
+            },
         });
         if (!dbToken || dbToken.user.id !== decoded.id || new Date() > dbToken.expiresAt) {
             await (0, auth_security_service_1.recordFailedAuthAttempt)({
@@ -902,6 +993,16 @@ const refresh = async (req, res) => {
                 reason: 'invalid_refresh_token',
             });
             return res.status(401).json({ error: 'Invalid refresh token' });
+        }
+        if (!dbToken.user.isActive) {
+            await prisma_2.prisma.refreshToken.deleteMany({
+                where: { userId: dbToken.user.id },
+            });
+            res.clearCookie('refreshToken', {
+                ...getRefreshCookieOptions(),
+                maxAge: undefined,
+            });
+            return res.status(403).json({ error: 'Account is inactive. Please contact your workspace administrator.' });
         }
         const tokens = (0, jwt_1.generateTokens)({
             id: dbToken.user.id,
@@ -924,7 +1025,10 @@ const refresh = async (req, res) => {
             scope: 'refresh',
             identifier: dbToken.user.email || dbToken.user.id,
         });
-        return res.json({ accessToken: tokens.accessToken });
+        return res.json({
+            accessToken: tokens.accessToken,
+            user: buildSessionPayload(dbToken.user),
+        });
     }
     catch (error) {
         await (0, auth_security_service_1.recordFailedAuthAttempt)({

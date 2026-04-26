@@ -172,7 +172,7 @@ function normalizeDashboardRole(rawRole?: string | null): DashboardRole {
   return 'UNKNOWN';
 }
 
-const FULL_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER']);
+const FULL_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER']);
 const ORDERS_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'KITCHEN', 'WAITER']);
 const BILLING_ACCESS_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER']);
 const BUSINESS_READ_ROLES = new Set<DashboardRole>(['OWNER', 'MANAGER', 'CASHIER', 'WAITER', 'KITCHEN']);
@@ -185,13 +185,9 @@ function getDefaultRouteForRole(role: DashboardRole) {
   return '/app';
 }
 
-function needsWorkspaceSetup(business?: { businessName?: string; gstin?: string | null; phone?: string | null } | null) {
+function needsWorkspaceSetup(business?: { onboardingStatus?: string | null } | null) {
   if (!business) return false;
-  return !Boolean(
-    business.businessName?.trim() &&
-      business.gstin?.trim() &&
-      business.phone?.trim(),
-  );
+  return String(business.onboardingStatus || '').toUpperCase() !== 'COMPLETED';
 }
 
 function getDemoStorageKey(business?: { id?: string; slug?: string }) {
@@ -326,7 +322,7 @@ function MarketingTermsRoute() {
 
 function PostLoginRedirect({ mustChangePassword }: { mustChangePassword: boolean }) {
   const role = normalizeDashboardRole(localStorage.getItem('userRole'));
-  const shouldForceSecuritySetup = role === 'OWNER' && mustChangePassword;
+  const shouldForceSecuritySetup = mustChangePassword;
 
   if (role === 'UNKNOWN') {
     clearDashboardAuthStorage();
@@ -934,8 +930,8 @@ function App() {
       <Route path="/terms" element={<MarketingTermsRoute />} />
       <Route path="/login" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : withScreenFallback(<LoginPage onLogin={handleLogin} />, 'Loading login...')} />
       <Route path="/signup" element={isLoggedIn ? <PostLoginRedirect mustChangePassword={mustChangePassword} /> : withScreenFallback(<SignupPage onLogin={handleLogin} />, 'Loading signup...')} />
-      <Route path="/setup" element={!isLoggedIn ? <Navigate to="/login" replace /> : FULL_ACCESS_ROLES.has(role) ? withScreenFallback(<Onboarding nextPath={role === 'OWNER' && mustChangePassword ? '/security-setup' : getDefaultRouteForRole(role)} />) : <Navigate to={getDefaultRouteForRole(role)} replace />} />
-      <Route path="/security-setup" element={!isLoggedIn ? <Navigate to="/login" replace /> : role === 'OWNER' && mustChangePassword ? <FirstLoginPasswordGate onCompleted={() => setMustChangePassword(false)} onLogout={handleLogout} /> : <PostLoginRedirect mustChangePassword={false} />} />
+      <Route path="/setup" element={!isLoggedIn ? <Navigate to="/login" replace /> : FULL_ACCESS_ROLES.has(role) ? withScreenFallback(<Onboarding nextPath={mustChangePassword ? '/security-setup' : getDefaultRouteForRole(role)} />) : <Navigate to={getDefaultRouteForRole(role)} replace />} />
+      <Route path="/security-setup" element={!isLoggedIn ? <Navigate to="/login" replace /> : mustChangePassword ? <FirstLoginPasswordGate onCompleted={() => setMustChangePassword(false)} onLogout={handleLogout} /> : <PostLoginRedirect mustChangePassword={false} />} />
       <Route path="/app/*" element={!isLoggedIn ? <Navigate to="/login" replace /> : <DashboardShell />} />
       <Route path="*" element={<Navigate to={isLoggedIn ? getDefaultRouteForRole(role) : '/'} replace />} />
     </Routes>

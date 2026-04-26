@@ -1,14 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { Loader2, ShieldCheck } from 'lucide-react';
-import { useUser } from '@clerk/clerk-react';
+import { useAuth } from '@clerk/clerk-react';
 import { api } from '../lib/api';
-import {
-  getClerkDisplayName,
-  getClerkPrimaryEmail,
-  parseApiError,
-  persistSession,
-} from '../lib/authSession';
+import { parseApiError, persistSession } from '../lib/authSession';
 
 type ClerkFinalizePageProps = {
   onLogin: (state: { mustChangePassword: boolean }) => void;
@@ -18,10 +13,13 @@ function normalizeFlow(value: string | null) {
   return value === 'signup' ? 'signup' : 'login';
 }
 
+const clerkJwtTemplate =
+  import.meta.env.VITE_CLERK_JWT_TEMPLATE || import.meta.env.NEXT_PUBLIC_CLERK_JWT_TEMPLATE;
+
 export function ClerkFinalizePage({ onLogin }: ClerkFinalizePageProps) {
   const [searchParams] = useSearchParams();
   const flow = normalizeFlow(searchParams.get('flow'));
-  const { isLoaded, user } = useUser();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
   const syncStartedRef = useRef(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
@@ -29,7 +27,7 @@ export function ClerkFinalizePage({ onLogin }: ClerkFinalizePageProps) {
   useEffect(() => {
     if (!isLoaded || syncStartedRef.current || done) return;
 
-    if (!user) {
+    if (!isSignedIn) {
       setError(
         flow === 'signup'
           ? 'Google signup could not be completed. Please try again.'
@@ -38,22 +36,18 @@ export function ClerkFinalizePage({ onLogin }: ClerkFinalizePageProps) {
       return;
     }
 
-    const email = getClerkPrimaryEmail(user);
-    if (!email) {
-      setError('Google account did not provide an email address.');
-      return;
-    }
-
     syncStartedRef.current = true;
-    const resolvedName = getClerkDisplayName(user, email);
 
-    void api
-      .post('/auth/clerk-sync', {
-        clerkUserId: user.id,
-        email,
-        name: resolvedName,
-        authProvider: 'GOOGLE',
-        intent: flow === 'signup' ? 'SIGNUP' : 'LOGIN',
+    void getToken(clerkJwtTemplate ? { template: clerkJwtTemplate } : undefined)
+      .then((sessionToken) => {
+        if (!sessionToken) {
+          throw new Error('Missing Google verification token.');
+        }
+
+        return api.post('/auth/google/complete', {
+          sessionToken,
+          intent: flow === 'signup' ? 'SIGNUP' : 'LOGIN',
+        });
       })
       .then((res) => {
         persistSession(res.data, onLogin);
@@ -70,7 +64,7 @@ export function ClerkFinalizePage({ onLogin }: ClerkFinalizePageProps) {
         );
         syncStartedRef.current = false;
       });
-  }, [done, flow, isLoaded, onLogin, user]);
+  }, [done, flow, getToken, isLoaded, isSignedIn, onLogin]);
 
   if (done) {
     return <Navigate to="/" replace />;
@@ -97,8 +91,8 @@ export function ClerkFinalizePage({ onLogin }: ClerkFinalizePageProps) {
           {error
             ? error
             : flow === 'signup'
-              ? 'We are linking your Google account and creating your workspace.'
-              : 'We are linking your Google account and opening your workspace.'}
+              ? 'We are verifying your Google identity and preparing onboarding.'
+              : 'We are verifying your Google identity and opening your workspace.'}
         </p>
 
         {error ? (

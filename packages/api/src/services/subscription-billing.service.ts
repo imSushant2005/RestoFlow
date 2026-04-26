@@ -108,12 +108,17 @@ export async function getTenantBillingSnapshot(tenantId: string) {
   };
 }
 
-export async function startTrialForTenant(input: {
+type TrialActivationInput = {
   tenantId: string;
   actorUserId?: string | null;
   plan: unknown;
   hasWaiterService?: boolean;
-}) {
+};
+
+async function activateTrialInTransaction(
+  tx: Prisma.TransactionClient,
+  input: TrialActivationInput,
+) {
   const normalizedPlan = parsePlan(input.plan);
   if (!normalizedPlan) {
     throw new Error('INVALID_PLAN');
@@ -122,83 +127,114 @@ export async function startTrialForTenant(input: {
   const now = new Date();
   const trialEndsAt = addDays(now, TRIAL_DURATION_DAYS);
 
-  return prisma.$transaction(async (tx) => {
-    const tenant = await tx.tenant.findUnique({
-      where: { id: input.tenantId },
-      select: { id: true, plan: true, trialEndsAt: true },
-    });
-
-    if (!tenant) {
-      throw new Error('TENANT_NOT_FOUND');
-    }
-
-    const subscription = await tx.subscription.upsert({
-      where: { tenantId: input.tenantId },
-      create: {
-        tenantId: input.tenantId,
-        plan: normalizedPlan,
-        billingCycle: SubscriptionCycle.MONTHLY,
-        status: SubscriptionStatus.TRIALING,
-        trialStartsAt: now,
-        trialEndsAt,
-        currentPeriodStart: now,
-        currentPeriodEnd: trialEndsAt,
-      },
-      update: {
-        plan: normalizedPlan,
-        billingCycle: SubscriptionCycle.MONTHLY,
-        status: SubscriptionStatus.TRIALING,
-        trialStartsAt: now,
-        trialEndsAt,
-        currentPeriodStart: now,
-        currentPeriodEnd: trialEndsAt,
-        cancelAtPeriodEnd: false,
-        canceledAt: null,
-      },
-    });
-
-    await tx.tenant.update({
-      where: { id: input.tenantId },
-      data: {
-        plan: normalizedPlan,
-        planStartedAt: now,
-        planExpiresAt: trialEndsAt,
-        trialEndsAt,
-        hasWaiterService: input.hasWaiterService,
-      },
-    });
-
-    await tx.planHistory.create({
-      data: {
-        tenantId: input.tenantId,
-        subscriptionId: subscription.id,
-        fromPlan: tenant.plan,
-        toPlan: normalizedPlan,
-        billingCycle: SubscriptionCycle.MONTHLY,
-        reason: PlanChangeReason.TRIAL_START,
-        effectiveAt: now,
-        actorUserId: input.actorUserId || null,
-        note: '30-day founder-led trial activated',
-      },
-    });
-
-    await tx.billingLedgerEntry.create({
-      data: {
-        tenantId: input.tenantId,
-        subscriptionId: subscription.id,
-        entryType: BillingLedgerEntryType.CREDIT,
-        amount: 0,
-        currency: BILLING_CURRENCY,
-        note: `Trial started for ${normalizedPlan}`,
-        metadata: {
-          plan: normalizedPlan,
-          trialEndsAt: trialEndsAt.toISOString(),
-        },
-      },
-    });
-
-    return { subscription, trialEndsAt, plan: normalizedPlan };
+  const tenant = await tx.tenant.findUnique({
+    where: { id: input.tenantId },
+    select: {
+      id: true,
+      plan: true,
+      trialEndsAt: true,
+      trialStartedAt: true,
+      trialStatus: true,
+      hasWaiterService: true,
+    },
   });
+
+  if (!tenant) {
+    throw new Error('TENANT_NOT_FOUND');
+  }
+
+  const existingSubscription = await tx.subscription.findUnique({
+    where: { tenantId: input.tenantId },
+  });
+
+  if (tenant.trialStartedAt && tenant.trialStatus !== 'NOT_STARTED') {
+    return {
+      subscription: existingSubscription,
+      trialEndsAt: tenant.trialEndsAt ?? trialEndsAt,
+      plan: existingSubscription?.plan || normalizedPlan,
+      created: false,
+    };
+  }
+
+  const subscription = await tx.subscription.upsert({
+    where: { tenantId: input.tenantId },
+    create: {
+      tenantId: input.tenantId,
+      plan: normalizedPlan,
+      billingCycle: SubscriptionCycle.MONTHLY,
+      status: SubscriptionStatus.TRIALING,
+      trialStartsAt: now,
+      trialEndsAt,
+      currentPeriodStart: now,
+      currentPeriodEnd: trialEndsAt,
+    },
+    update: {
+      plan: normalizedPlan,
+      billingCycle: SubscriptionCycle.MONTHLY,
+      status: SubscriptionStatus.TRIALING,
+      trialStartsAt: now,
+      trialEndsAt,
+      currentPeriodStart: now,
+      currentPeriodEnd: trialEndsAt,
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
+    },
+  });
+
+  await tx.tenant.update({
+    where: { id: input.tenantId },
+    data: {
+      plan: normalizedPlan,
+      planStartedAt: now,
+      planExpiresAt: trialEndsAt,
+      trialStartedAt: now,
+      trialEndsAt,
+      trialStatus: 'ACTIVE',
+      hasWaiterService: input.hasWaiterService ?? tenant.hasWaiterService,
+    },
+  });
+
+  await tx.planHistory.create({
+    data: {
+      tenantId: input.tenantId,
+      subscriptionId: subscription.id,
+      fromPlan: tenant.plan,
+      toPlan: normalizedPlan,
+      billingCycle: SubscriptionCycle.MONTHLY,
+      reason: PlanChangeReason.TRIAL_START,
+      effectiveAt: now,
+      actorUserId: input.actorUserId || null,
+      note: '30-day founder-led trial activated',
+    },
+  });
+
+  await tx.billingLedgerEntry.create({
+    data: {
+      tenantId: input.tenantId,
+      subscriptionId: subscription.id,
+      entryType: BillingLedgerEntryType.CREDIT,
+      amount: 0,
+      currency: BILLING_CURRENCY,
+      note: `Trial started for ${normalizedPlan}`,
+      metadata: {
+        plan: normalizedPlan,
+        trialEndsAt: trialEndsAt.toISOString(),
+      },
+    },
+  });
+
+  return { subscription, trialEndsAt, plan: normalizedPlan, created: true };
+}
+
+export async function startTrialForTenant(input: TrialActivationInput) {
+  return prisma.$transaction(async (tx) => activateTrialInTransaction(tx, input));
+}
+
+export async function startTrialForTenantTransaction(
+  tx: Prisma.TransactionClient,
+  input: TrialActivationInput,
+) {
+  return activateTrialInTransaction(tx, input);
 }
 
 export async function createSubscriptionPaymentAttempt(input: {
@@ -407,6 +443,7 @@ export async function confirmSubscriptionPaymentAttempt(input: {
         plan: attempt.targetPlan,
         planStartedAt: now,
         planExpiresAt: currentPeriodEnd,
+        trialStatus: 'CONVERTED',
         trialEndsAt: null,
       },
     });

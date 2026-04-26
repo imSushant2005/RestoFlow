@@ -1,17 +1,46 @@
 import { Request, Response } from 'express';
 import { prisma, withPrismaRetry } from '../db/prisma';
-import { getPlanLimits, normalizePlan } from '../config/plans';
+import { getPlanLimits, normalizePlan, parsePlan } from '../config/plans';
 import { UserRole, Plan } from '@bhojflow/prisma';
 import { hashPassword } from '../utils/hash';
 import { z } from 'zod';
 import { deleteCache, withCache } from '../services/cache.service';
+import { startTrialForTenantTransaction } from '../services/subscription-billing.service';
+
+const restaurantTypeValues = [
+  'FINE_DINING',
+  'CASUAL_DINING',
+  'FAST_FOOD',
+  'QSR',
+  'CAFE',
+  'BAKERY',
+  'CLOUD_KITCHEN',
+  'FOOD_TRUCK',
+  'BAR_LOUNGE',
+  'BUFFET',
+  'FAMILY_RESTAURANT',
+  'STREET_FOOD',
+  'SWEET_SHOP',
+  'MULTI_BRAND_KITCHEN',
+  'OTHER',
+] as const;
+
+const onboardingStatusValues = [
+  'ACCOUNT_CREATED',
+  'RESTAURANT_PROFILE',
+  'RESTAURANT_TYPE',
+  'COMPLETED',
+] as const;
+
+const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+const PHONE_PATTERN = /^[0-9+\-\s()]{7,20}$/;
 
 const createStaffSchema = z
   .object({
     email: z.string().trim().optional(),
     username: z.string().trim().optional(),
     name: z.string().trim().min(1).max(80),
-    password: z.string().min(6),
+    password: z.string().min(8),
     role: z.string(),
     employeeCode: z
       .string()
@@ -43,7 +72,7 @@ const updateStaffSchema = z.object({
     .max(40)
     .regex(/^[A-Za-z0-9_-]+$/, 'Employee ID can only include letters, numbers, - and _')
     .optional(),
-  password: z.string().min(6).optional(),
+  password: z.string().min(8).optional(),
 });
 
 const updateBusinessSettingsSchema = z.object({
@@ -64,13 +93,71 @@ const updateBusinessSettingsSchema = z.object({
     .regex(/^[a-z0-9.\-_]{2,}@[a-z][a-z0-9.-]{1,}$/i, 'Enter a valid UPI ID')
     .optional()
     .nullable(),
+  restaurantType: z.enum(restaurantTypeValues).optional().nullable(),
+  businessType: z.string().trim().max(80).optional().nullable(),
   hasWaiterService: z.boolean().optional(),
+  tableCount: z.number().int().min(0).max(500).optional(),
+  deliveryEnabled: z.boolean().optional(),
+  multiBranch: z.boolean().optional(),
   gstin: z.string().trim().min(8).max(20).optional(),
   businessHours: z.unknown().optional(),
+  onboardingStatus: z.enum(onboardingStatusValues).optional(),
+  workspaceConfig: z.unknown().optional(),
+  successChecklist: z.unknown().optional(),
   isActive: z.boolean().optional(),
   plan: z.nativeEnum(Plan).optional(),
   trialEndsAt: z.string().pipe(z.coerce.date()).optional().nullable(),
 });
+
+const slugAvailabilitySchema = z.object({
+  slug: z.string().trim().min(2).max(120),
+});
+
+const completeOnboardingSchema = z.object({
+  businessName: z.string().trim().min(2).max(120),
+  slug: z.string().trim().min(2).max(120),
+  restaurantType: z.enum(restaurantTypeValues),
+  phone: z.string().trim().min(7).max(20),
+  tableCount: z.number().int().min(0).max(500),
+  hasWaiterService: z.boolean(),
+  deliveryEnabled: z.boolean(),
+  multiBranch: z.boolean(),
+  gstin: z.string().trim().min(8).max(20).optional().or(z.literal('')),
+  planId: z.string().trim().min(1),
+});
+
+const baseBusinessSelect = {
+  id: true,
+  businessName: true,
+  slug: true,
+  email: true,
+  phone: true,
+  upiId: true,
+  hasWaiterService: true,
+  tableCount: true,
+  deliveryEnabled: true,
+  multiBranch: true,
+  gstin: true,
+  currencySymbol: true,
+  taxRate: true,
+  description: true,
+  logoUrl: true,
+  coverImageUrl: true,
+  primaryColor: true,
+  accentColor: true,
+  businessHours: true,
+  isActive: true,
+  plan: true,
+  trialStartedAt: true,
+  trialEndsAt: true,
+  trialStatus: true,
+  restaurantType: true,
+  businessType: true,
+  onboardingStatus: true,
+  onboardingCompletedAt: true,
+  workspaceConfig: true,
+  successChecklist: true,
+} as const;
 
 function sanitizeSegment(value: string) {
   return value
@@ -85,7 +172,7 @@ function normalizeLoginEmail(raw: string, tenantSlug: string) {
   if (!trimmed) return '';
   const handlePart = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed;
   const handle = sanitizeSegment(handlePart) || 'staff';
-  return `${handle}@${tenantSlug}.BHOJFLOW`;
+  return `${handle}@${sanitizeSegment(tenantSlug) || 'restaurant'}.bhojflow`;
 }
 
 function defaultEmployeeCode(name: string, tenantSlug: string) {
@@ -100,6 +187,115 @@ function isEmailLike(value: string) {
 
 function normalizeGstin(value?: string | null) {
   return value?.trim().toUpperCase() || '';
+}
+
+function normalizePhone(value?: string | null) {
+  return value?.trim() || '';
+}
+
+function normalizeSlug(value?: string | null) {
+  return sanitizeSegment(value || '');
+}
+
+async function buildAvailableSlugCandidate(baseSlug: string, excludeTenantId?: string) {
+  const base = normalizeSlug(baseSlug) || 'restaurant';
+  let attempt = 0;
+
+  while (attempt < 1000) {
+    const candidate = attempt === 0 ? base : `${base}-${attempt + 1}`;
+    const existing = await prisma.tenant.findUnique({
+      where: { slug: candidate },
+      select: { id: true },
+    });
+
+    if (!existing || existing.id === excludeTenantId) {
+      return candidate;
+    }
+
+    attempt += 1;
+  }
+
+  return `${base}-${Date.now().toString().slice(-4)}`;
+}
+
+function mapRestaurantTypeToBusinessType(restaurantType: (typeof restaurantTypeValues)[number]) {
+  switch (restaurantType) {
+    case 'CAFE':
+    case 'BAKERY':
+      return 'cafe';
+    case 'CLOUD_KITCHEN':
+    case 'MULTI_BRAND_KITCHEN':
+      return 'cloud_kitchen';
+    case 'STREET_FOOD':
+    case 'FOOD_TRUCK':
+      return 'street_vendor';
+    default:
+      return 'restaurant';
+  }
+}
+
+function buildWorkspacePreset(input: {
+  restaurantType: (typeof restaurantTypeValues)[number];
+  tableCount: number;
+  hasWaiterService: boolean;
+  deliveryEnabled: boolean;
+  multiBranch: boolean;
+}) {
+  const base = {
+    qrOrdering: true,
+    takeaway: false,
+    compactKitchen: false,
+    dineIn: input.tableCount > 0,
+    tablesEnabled: input.tableCount > 0,
+    deliveryEnabled: input.deliveryEnabled,
+    kitchenPriority: false,
+    waiterEnabled: input.hasWaiterService,
+    reservationsReady: false,
+    premiumBilling: false,
+    counterMode: false,
+    quickBilling: false,
+    fastKitchen: false,
+    sessionBilling: false,
+    tableTurnoverMode: false,
+    multiBrand: false,
+    multiBranch: input.multiBranch,
+  };
+
+  switch (input.restaurantType) {
+    case 'CAFE':
+      return { ...base, takeaway: true, compactKitchen: true };
+    case 'CLOUD_KITCHEN':
+      return {
+        ...base,
+        qrOrdering: false,
+        takeaway: true,
+        dineIn: false,
+        tablesEnabled: false,
+        kitchenPriority: true,
+        waiterEnabled: false,
+        deliveryEnabled: true,
+      };
+    case 'FINE_DINING':
+      return { ...base, waiterEnabled: true, reservationsReady: true, premiumBilling: true };
+    case 'FAST_FOOD':
+    case 'QSR':
+      return { ...base, takeaway: true, counterMode: true, quickBilling: true, fastKitchen: true };
+    case 'BUFFET':
+      return { ...base, waiterEnabled: true, sessionBilling: true, tableTurnoverMode: true };
+    case 'MULTI_BRAND_KITCHEN':
+      return {
+        ...base,
+        qrOrdering: false,
+        takeaway: true,
+        dineIn: false,
+        tablesEnabled: false,
+        kitchenPriority: true,
+        deliveryEnabled: true,
+        multiBrand: true,
+      };
+    default:
+      return base;
+  }
 }
 
 async function ensureUniqueEmployeeCode(base: string, excludeUserId?: string) {
@@ -129,27 +325,7 @@ export const getBusinessSettings = async (req: Request, res: Response) => {
           () =>
             prisma.tenant.findUnique({
               where: { id: req.tenantId },
-              select: {
-                id: true,
-                businessName: true,
-                slug: true,
-                email: true,
-                phone: true,
-                upiId: true,
-                hasWaiterService: true,
-                gstin: true,
-                currencySymbol: true,
-                taxRate: true,
-                description: true,
-                logoUrl: true,
-                coverImageUrl: true,
-                primaryColor: true,
-                accentColor: true,
-                businessHours: true,
-                isActive: true,
-                plan: true,
-                trialEndsAt: true,
-              },
+              select: baseBusinessSelect,
             }),
           `business-settings:${req.tenantId}`,
         ),
@@ -169,6 +345,34 @@ export const getBusinessSettings = async (req: Request, res: Response) => {
   }
 };
 
+export const getBusinessSlugAvailability = async (req: Request, res: Response) => {
+  try {
+    const query = slugAvailabilitySchema.parse(req.query);
+    const normalizedSlug = normalizeSlug(query.slug);
+
+    if (!normalizedSlug || normalizedSlug.length < 2) {
+      return res.status(400).json({ error: 'Slug must contain at least 2 letters or numbers.' });
+    }
+
+    const existing = await prisma.tenant.findUnique({
+      where: { slug: normalizedSlug },
+      select: { id: true },
+    });
+
+    if (!existing || existing.id === req.tenantId) {
+      return res.json({ slug: normalizedSlug, available: true, suggestion: normalizedSlug });
+    }
+
+    const suggestion = await buildAvailableSlugCandidate(normalizedSlug, req.tenantId);
+    return res.json({ slug: normalizedSlug, available: false, suggestion });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
+    }
+    return res.status(500).json({ error: 'Unable to validate slug right now.' });
+  }
+};
+
 export const updateBusinessSettings = async (req: Request, res: Response) => {
   try {
     const payload = updateBusinessSettingsSchema.parse(req.body);
@@ -185,17 +389,30 @@ export const updateBusinessSettings = async (req: Request, res: Response) => {
       email,
       phone,
       upiId,
+      restaurantType,
+      businessType,
       hasWaiterService,
+      tableCount,
+      deliveryEnabled,
+      multiBranch,
       gstin,
       businessHours,
+      onboardingStatus,
+      workspaceConfig,
+      successChecklist,
       isActive,
       plan,
       trialEndsAt,
     } = payload;
 
-    const normalizedSlug = slug?.trim().toLowerCase();
+    const normalizedSlug = slug === undefined ? undefined : normalizeSlug(slug);
     const normalizedGstin = normalizeGstin(gstin);
+    const normalizedPhone = normalizePhone(phone);
     const normalizedPlan = plan ? normalizePlan(plan) : undefined;
+
+    if (slug !== undefined && !normalizedSlug) {
+      return res.status(400).json({ error: 'Workspace URL must contain letters or numbers.' });
+    }
 
     if ((normalizedPlan !== undefined || trialEndsAt !== undefined) && req.user?.role !== UserRole.OWNER) {
       return res.status(403).json({
@@ -219,6 +436,12 @@ export const updateBusinessSettings = async (req: Request, res: Response) => {
     }
 
     if (normalizedGstin) {
+      if (!GSTIN_PATTERN.test(normalizedGstin)) {
+        return res.status(400).json({
+          error: 'GSTIN format looks incorrect. Double-check the number or leave it blank for now.',
+        });
+      }
+
       const existingTenant = await prisma.tenant.findFirst({
         where: {
           gstin: normalizedGstin,
@@ -234,6 +457,10 @@ export const updateBusinessSettings = async (req: Request, res: Response) => {
       }
     }
 
+    if (normalizedPhone && !PHONE_PATTERN.test(normalizedPhone)) {
+      return res.status(400).json({ error: 'Phone format looks incorrect.' });
+    }
+
     const tenant = await prisma.tenant.update({
       where: { id: req.tenantId },
       data: {
@@ -247,37 +474,25 @@ export const updateBusinessSettings = async (req: Request, res: Response) => {
         logoUrl,
         coverImageUrl,
         email,
-        phone,
+        phone: phone === undefined ? undefined : normalizedPhone || null,
         upiId: upiId === undefined ? undefined : upiId?.trim() || null,
+        restaurantType: restaurantType === undefined ? undefined : restaurantType || null,
+        businessType: businessType === undefined ? undefined : businessType?.trim() || undefined,
         hasWaiterService,
+        tableCount,
+        deliveryEnabled,
+        multiBranch,
         gstin: gstin === undefined ? undefined : normalizedGstin || null,
         businessHours: businessHours === undefined ? undefined : (businessHours as any),
+        onboardingStatus,
+        workspaceConfig: workspaceConfig === undefined ? undefined : (workspaceConfig as any),
+        successChecklist: successChecklist === undefined ? undefined : (successChecklist as any),
         isActive,
         plan: undefined,
         trialEndsAt: undefined,
         planStartedAt: undefined,
       },
-      select: {
-        id: true,
-        businessName: true,
-        slug: true,
-        email: true,
-        phone: true,
-        upiId: true,
-        hasWaiterService: true,
-        gstin: true,
-        currencySymbol: true,
-        taxRate: true,
-        description: true,
-        logoUrl: true,
-        coverImageUrl: true,
-        primaryColor: true,
-        accentColor: true,
-        businessHours: true,
-        isActive: true,
-        plan: true,
-        trialEndsAt: true,
-      }
+      select: baseBusinessSelect,
     });
     await Promise.all([
       deleteCache(`tenant:${req.tenantId}:business-settings`),
@@ -292,7 +507,160 @@ export const updateBusinessSettings = async (req: Request, res: Response) => {
       planLimits: getPlanLimits(tenant.plan),
     });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
+    }
     res.status(500).json({ error: 'Failed to update settings' });
+  }
+};
+
+export const completeBusinessOnboarding = async (req: Request, res: Response) => {
+  try {
+    const payload = completeOnboardingSchema.parse(req.body);
+    const normalizedSlug = normalizeSlug(payload.slug);
+    const normalizedGstin = normalizeGstin(payload.gstin);
+    const normalizedPhone = normalizePhone(payload.phone);
+    const normalizedPlan = parsePlan(payload.planId);
+    const restaurantType = payload.restaurantType;
+    const forceKitchenOnly =
+      restaurantType === 'CLOUD_KITCHEN' || restaurantType === 'MULTI_BRAND_KITCHEN';
+    const effectiveTableCount = forceKitchenOnly ? 0 : payload.tableCount;
+    const effectiveHasWaiterService = forceKitchenOnly ? false : payload.hasWaiterService;
+    const effectiveDeliveryEnabled = forceKitchenOnly ? true : payload.deliveryEnabled;
+
+    if (!normalizedPlan) {
+      return res.status(400).json({ error: 'Invalid plan selected.' });
+    }
+
+    if (!normalizedSlug || normalizedSlug.length < 2) {
+      return res.status(400).json({ error: 'Workspace URL is required.' });
+    }
+
+    if (!PHONE_PATTERN.test(normalizedPhone)) {
+      return res.status(400).json({ error: 'Phone format looks incorrect.' });
+    }
+
+    if (normalizedGstin && !GSTIN_PATTERN.test(normalizedGstin)) {
+      return res.status(400).json({ error: 'GSTIN format looks incorrect. You can also skip it for now.' });
+    }
+
+    const slugSuggestion = await buildAvailableSlugCandidate(normalizedSlug, req.tenantId);
+    if (slugSuggestion !== normalizedSlug) {
+      return res.status(409).json({
+        error: 'That workspace URL is already taken.',
+        suggestion: slugSuggestion,
+      });
+    }
+
+    const existingTenant = await prisma.tenant.findUnique({
+      where: { id: req.tenantId },
+      select: { slug: true, successChecklist: true },
+    });
+
+    if (!existingTenant) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    const preset = buildWorkspacePreset({
+      restaurantType,
+      tableCount: effectiveTableCount,
+      hasWaiterService: effectiveHasWaiterService,
+      deliveryEnabled: effectiveDeliveryEnabled,
+      multiBranch: payload.multiBranch,
+    });
+
+    const setupChecklist =
+      existingTenant.successChecklist && typeof existingTenant.successChecklist === 'object'
+        ? existingTenant.successChecklist
+        : {
+            addMenuItem: false,
+            generateQr: false,
+            createTestOrder: false,
+            addStaffMember: false,
+            openDashboard: false,
+          };
+
+    const result = await prisma.$transaction(async (tx) => {
+      if (normalizedGstin) {
+        const duplicateGstin = await tx.tenant.findFirst({
+          where: {
+            gstin: normalizedGstin,
+            id: { not: req.tenantId },
+          },
+          select: { id: true },
+        });
+
+        if (duplicateGstin) {
+          throw new Error('GSTIN_ALREADY_EXISTS');
+        }
+      }
+
+      await tx.tenant.update({
+        where: { id: req.tenantId },
+        data: {
+          businessName: payload.businessName.trim(),
+          slug: normalizedSlug,
+          phone: normalizedPhone,
+          gstin: normalizedGstin || null,
+          restaurantType,
+          businessType: mapRestaurantTypeToBusinessType(restaurantType),
+          hasWaiterService: effectiveHasWaiterService,
+          tableCount: effectiveTableCount,
+          deliveryEnabled: effectiveDeliveryEnabled,
+          multiBranch: payload.multiBranch,
+          onboardingStatus: 'COMPLETED',
+          onboardingCompletedAt: new Date(),
+          workspaceConfig: preset,
+          successChecklist: setupChecklist,
+        },
+      });
+
+      const trial = await startTrialForTenantTransaction(tx, {
+        tenantId: req.tenantId!,
+        actorUserId: req.user?.id,
+        plan: normalizedPlan,
+        hasWaiterService: effectiveHasWaiterService,
+      });
+
+      const tenant = await tx.tenant.findUnique({
+        where: { id: req.tenantId },
+        select: baseBusinessSelect,
+      });
+
+      if (!tenant) {
+        throw new Error('TENANT_NOT_FOUND');
+      }
+
+      return { tenant, trial };
+    });
+
+    await Promise.all([
+      deleteCache(`tenant:${req.tenantId}:business-settings`),
+      deleteCache(`tenant:${req.tenantId}:billing`),
+      deleteCache(`public_menu_${existingTenant.slug}`),
+      deleteCache(`public_menu_${normalizedSlug}`),
+    ]);
+
+    return res.json({
+      ...result.tenant,
+      plan: normalizePlan(result.tenant.plan),
+      planLimits: getPlanLimits(result.tenant.plan),
+      trialStartedAt: result.tenant.trialStartedAt,
+      trialEndsAt: result.trial.trialEndsAt,
+      trialActivated: result.trial.created,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
+    }
+
+    if (error instanceof Error && error.message === 'GSTIN_ALREADY_EXISTS') {
+      return res.status(409).json({
+        error: 'GST number already exists. Each workspace must use a unique GST number.',
+      });
+    }
+
+    return res.status(500).json({ error: 'Unable to finish onboarding right now.' });
   }
 };
 
@@ -312,7 +680,12 @@ export const getStaff = async (req: Request, res: Response) => {
       },
       orderBy: { createdAt: 'asc' },
     });
-    res.json(staff);
+    res.json(
+      staff.map((member) => ({
+        ...member,
+        username: member.email,
+      })),
+    );
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch staff' });
   }
@@ -355,7 +728,7 @@ export const createStaff = async (req: Request, res: Response) => {
     const requestedLogin = payload.username?.trim() || payload.email?.trim() || '';
     const email = normalizeLoginEmail(requestedLogin, tenant.slug);
     if (!isEmailLike(email)) {
-      return res.status(400).json({ error: 'Username format is invalid. Use for example: alex@your-venue.BHOJFLOW' });
+      return res.status(400).json({ error: 'Username format is invalid. Use for example: alex@your-venue.bhojflow' });
     }
 
     const baseEmployeeCode = payload.employeeCode?.trim().toUpperCase() || defaultEmployeeCode(name, tenant.slug);
@@ -471,7 +844,7 @@ export const updateStaff = async (req: Request, res: Response) => {
     if (requestedLogin) {
       const email = normalizeLoginEmail(requestedLogin, tenant.slug);
       if (!isEmailLike(email)) {
-        return res.status(400).json({ error: 'Username format is invalid. Use for example: alex@your-venue.BHOJFLOW' });
+        return res.status(400).json({ error: 'Username format is invalid. Use for example: alex@your-venue.bhojflow' });
       }
       const existingByEmail = await prisma.user.findFirst({
         where: { email, id: { not: id } },

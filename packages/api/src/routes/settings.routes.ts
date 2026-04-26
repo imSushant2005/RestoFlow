@@ -9,7 +9,9 @@ const router: Router = Router();
 router.use(requireAuth);
 
 router.get('/business', requireRoles(BUSINESS_SETTINGS_READ_ROLES), SettingsController.getBusinessSettings);
+router.get('/business/slug-availability', requireRoles(BUSINESS_SETTINGS_READ_ROLES), SettingsController.getBusinessSlugAvailability);
 router.patch('/business', requireRoles(FULL_ACCESS_ROLES), SettingsController.updateBusinessSettings);
+router.post('/business/onboarding', requireRoles(FULL_ACCESS_ROLES), SettingsController.completeBusinessOnboarding);
 
 router.get('/staff', requireRoles(FULL_ACCESS_ROLES), SettingsController.getStaff);
 router.post('/staff', requireRoles(FULL_ACCESS_ROLES), SettingsController.createStaff);

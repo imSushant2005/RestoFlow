@@ -6,6 +6,7 @@ const auth_middleware_1 = require("../middlewares/auth.middleware");
 const router = (0, express_1.Router)();
 router.post('/register', auth_controller_1.register);
 router.post('/clerk-sync', auth_controller_1.clerkSync);
+router.post('/google/complete', auth_controller_1.clerkSync);
 router.post('/login', auth_controller_1.login);
 router.post('/forgot-password/question', auth_controller_1.getForgotPasswordQuestion);
 router.post('/forgot-password/reset', auth_controller_1.resetForgotPassword);

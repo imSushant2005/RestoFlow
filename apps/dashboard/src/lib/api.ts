@@ -39,13 +39,7 @@ export async function refreshAccessToken() {
           throw new Error('Missing access token from refresh response');
         }
 
-        applySessionSnapshot({
-          accessToken,
-          user: {
-            role: localStorage.getItem('userRole') || 'UNKNOWN',
-            mustChangePassword: localStorage.getItem('mustChangePassword') === '1',
-          },
-        });
+        applySessionSnapshot(response.data);
 
         return accessToken;
       })
@@ -82,7 +76,11 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const originalRequest = error.config as RetriableRequestConfig | undefined;
     const requestUrl = String(originalRequest?.url || '');
-    const isAuthRoute = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register') || requestUrl.includes('/auth/clerk-sync');
+    const isAuthRoute =
+      requestUrl.includes('/auth/login') ||
+      requestUrl.includes('/auth/register') ||
+      requestUrl.includes('/auth/clerk-sync') ||
+      requestUrl.includes('/auth/google/complete');
     const isRefreshRoute = requestUrl.includes('/auth/refresh');
     const isLogoutRoute = requestUrl.includes('/auth/logout');
 

@@ -23,6 +23,7 @@ model Tenant {
   accentColor     String   @default("#2D3748")
   cuisineType     String?
   businessType    String   @default("restaurant") // restaurant|cafe|hotel|street_vendor|cloud_kitchen
+  restaurantType  String?
   address         String?
   city            String?
   phone           String?
@@ -34,12 +35,21 @@ model Tenant {
   taxRate         Float    @default(5.0) // GST percentage
   upiId           String?
   hasWaiterService Boolean  @default(false)
+  tableCount      Int       @default(0)
+  deliveryEnabled Boolean   @default(false)
+  multiBranch     Boolean   @default(false)
+  onboardingStatus String   @default("ACCOUNT_CREATED")
+  onboardingCompletedAt DateTime?
+  workspaceConfig Json?
+  successChecklist Json?
   timezone        String   @default("Asia/Kolkata")
   isActive        Boolean  @default(true)
   plan            Plan     @default(MINI)
   planStartedAt   DateTime?
   planExpiresAt   DateTime?
+  trialStartedAt  DateTime?
   trialEndsAt     DateTime?  // 1-month free trial
+  trialStatus     String   @default("NOT_STARTED")
   businessHours   Json?    // { monday: { open: "09:00", close: "22:00", isOpen: true }, ... }
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

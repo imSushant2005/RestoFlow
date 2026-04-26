@@ -251,6 +251,8 @@ app.get('/metrics', async (_req, res) => {
 // C-7: Auth rate limiters applied BEFORE the auth router
 app.use('/auth/login', authLimiter);
 app.use('/auth/register', authLimiter);
+app.use('/auth/google/complete', authLimiter);
+app.use('/auth/clerk-sync', authLimiter);
 app.use('/auth/forgot-password/reset', strictAuthLimiter);
 app.use('/auth', auth_routes_1.default);
 app.use('/menus', menu_routes_1.default);

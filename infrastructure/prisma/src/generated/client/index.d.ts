@@ -3796,10 +3796,12 @@ export namespace Prisma {
 
   export type TenantAvgAggregateOutputType = {
     taxRate: number | null
+    tableCount: number | null
   }
 
   export type TenantSumAggregateOutputType = {
     taxRate: number | null
+    tableCount: number | null
   }
 
   export type TenantMinAggregateOutputType = {
@@ -3813,6 +3815,7 @@ export namespace Prisma {
     accentColor: string | null
     cuisineType: string | null
     businessType: string | null
+    restaurantType: string | null
     address: string | null
     city: string | null
     phone: string | null
@@ -3824,12 +3827,19 @@ export namespace Prisma {
     taxRate: number | null
     upiId: string | null
     hasWaiterService: boolean | null
+    tableCount: number | null
+    deliveryEnabled: boolean | null
+    multiBranch: boolean | null
+    onboardingStatus: string | null
+    onboardingCompletedAt: Date | null
     timezone: string | null
     isActive: boolean | null
     plan: $Enums.Plan | null
     planStartedAt: Date | null
     planExpiresAt: Date | null
+    trialStartedAt: Date | null
     trialEndsAt: Date | null
+    trialStatus: string | null
     createdAt: Date | null
     updatedAt: Date | null
     isPilot: boolean | null
@@ -3848,6 +3858,7 @@ export namespace Prisma {
     accentColor: string | null
     cuisineType: string | null
     businessType: string | null
+    restaurantType: string | null
     address: string | null
     city: string | null
     phone: string | null
@@ -3859,12 +3870,19 @@ export namespace Prisma {
     taxRate: number | null
     upiId: string | null
     hasWaiterService: boolean | null
+    tableCount: number | null
+    deliveryEnabled: boolean | null
+    multiBranch: boolean | null
+    onboardingStatus: string | null
+    onboardingCompletedAt: Date | null
     timezone: string | null
     isActive: boolean | null
     plan: $Enums.Plan | null
     planStartedAt: Date | null
     planExpiresAt: Date | null
+    trialStartedAt: Date | null
     trialEndsAt: Date | null
+    trialStatus: string | null
     createdAt: Date | null
     updatedAt: Date | null
     isPilot: boolean | null
@@ -3883,6 +3901,7 @@ export namespace Prisma {
     accentColor: number
     cuisineType: number
     businessType: number
+    restaurantType: number
     address: number
     city: number
     phone: number
@@ -3894,12 +3913,21 @@ export namespace Prisma {
     taxRate: number
     upiId: number
     hasWaiterService: number
+    tableCount: number
+    deliveryEnabled: number
+    multiBranch: number
+    onboardingStatus: number
+    onboardingCompletedAt: number
+    workspaceConfig: number
+    successChecklist: number
     timezone: number
     isActive: number
     plan: number
     planStartedAt: number
     planExpiresAt: number
+    trialStartedAt: number
     trialEndsAt: number
+    trialStatus: number
     businessHours: number
     createdAt: number
     updatedAt: number
@@ -3912,10 +3940,12 @@ export namespace Prisma {
 
   export type TenantAvgAggregateInputType = {
     taxRate?: true
+    tableCount?: true
   }
 
   export type TenantSumAggregateInputType = {
     taxRate?: true
+    tableCount?: true
   }
 
   export type TenantMinAggregateInputType = {
@@ -3929,6 +3959,7 @@ export namespace Prisma {
     accentColor?: true
     cuisineType?: true
     businessType?: true
+    restaurantType?: true
     address?: true
     city?: true
     phone?: true
@@ -3940,12 +3971,19 @@ export namespace Prisma {
     taxRate?: true
     upiId?: true
     hasWaiterService?: true
+    tableCount?: true
+    deliveryEnabled?: true
+    multiBranch?: true
+    onboardingStatus?: true
+    onboardingCompletedAt?: true
     timezone?: true
     isActive?: true
     plan?: true
     planStartedAt?: true
     planExpiresAt?: true
+    trialStartedAt?: true
     trialEndsAt?: true
+    trialStatus?: true
     createdAt?: true
     updatedAt?: true
     isPilot?: true
@@ -3964,6 +4002,7 @@ export namespace Prisma {
     accentColor?: true
     cuisineType?: true
     businessType?: true
+    restaurantType?: true
     address?: true
     city?: true
     phone?: true
@@ -3975,12 +4014,19 @@ export namespace Prisma {
     taxRate?: true
     upiId?: true
     hasWaiterService?: true
+    tableCount?: true
+    deliveryEnabled?: true
+    multiBranch?: true
+    onboardingStatus?: true
+    onboardingCompletedAt?: true
     timezone?: true
     isActive?: true
     plan?: true
     planStartedAt?: true
     planExpiresAt?: true
+    trialStartedAt?: true
     trialEndsAt?: true
+    trialStatus?: true
     createdAt?: true
     updatedAt?: true
     isPilot?: true
@@ -3999,6 +4045,7 @@ export namespace Prisma {
     accentColor?: true
     cuisineType?: true
     businessType?: true
+    restaurantType?: true
     address?: true
     city?: true
     phone?: true
@@ -4010,12 +4057,21 @@ export namespace Prisma {
     taxRate?: true
     upiId?: true
     hasWaiterService?: true
+    tableCount?: true
+    deliveryEnabled?: true
+    multiBranch?: true
+    onboardingStatus?: true
+    onboardingCompletedAt?: true
+    workspaceConfig?: true
+    successChecklist?: true
     timezone?: true
     isActive?: true
     plan?: true
     planStartedAt?: true
     planExpiresAt?: true
+    trialStartedAt?: true
     trialEndsAt?: true
+    trialStatus?: true
     businessHours?: true
     createdAt?: true
     updatedAt?: true
@@ -4122,6 +4178,7 @@ export namespace Prisma {
     accentColor: string
     cuisineType: string | null
     businessType: string
+    restaurantType: string | null
     address: string | null
     city: string | null
     phone: string | null
@@ -4133,12 +4190,21 @@ export namespace Prisma {
     taxRate: number
     upiId: string | null
     hasWaiterService: boolean
+    tableCount: number
+    deliveryEnabled: boolean
+    multiBranch: boolean
+    onboardingStatus: string
+    onboardingCompletedAt: Date | null
+    workspaceConfig: JsonValue | null
+    successChecklist: JsonValue | null
     timezone: string
     isActive: boolean
     plan: $Enums.Plan
     planStartedAt: Date | null
     planExpiresAt: Date | null
+    trialStartedAt: Date | null
     trialEndsAt: Date | null
+    trialStatus: string
     businessHours: JsonValue | null
     createdAt: Date
     updatedAt: Date
@@ -4177,6 +4243,7 @@ export namespace Prisma {
     accentColor?: boolean
     cuisineType?: boolean
     businessType?: boolean
+    restaurantType?: boolean
     address?: boolean
     city?: boolean
     phone?: boolean
@@ -4188,12 +4255,21 @@ export namespace Prisma {
     taxRate?: boolean
     upiId?: boolean
     hasWaiterService?: boolean
+    tableCount?: boolean
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: boolean
+    onboardingCompletedAt?: boolean
+    workspaceConfig?: boolean
+    successChecklist?: boolean
     timezone?: boolean
     isActive?: boolean
     plan?: boolean
     planStartedAt?: boolean
     planExpiresAt?: boolean
+    trialStartedAt?: boolean
     trialEndsAt?: boolean
+    trialStatus?: boolean
     businessHours?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -4233,6 +4309,7 @@ export namespace Prisma {
     accentColor?: boolean
     cuisineType?: boolean
     businessType?: boolean
+    restaurantType?: boolean
     address?: boolean
     city?: boolean
     phone?: boolean
@@ -4244,12 +4321,21 @@ export namespace Prisma {
     taxRate?: boolean
     upiId?: boolean
     hasWaiterService?: boolean
+    tableCount?: boolean
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: boolean
+    onboardingCompletedAt?: boolean
+    workspaceConfig?: boolean
+    successChecklist?: boolean
     timezone?: boolean
     isActive?: boolean
     plan?: boolean
     planStartedAt?: boolean
     planExpiresAt?: boolean
+    trialStartedAt?: boolean
     trialEndsAt?: boolean
+    trialStatus?: boolean
     businessHours?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -4269,6 +4355,7 @@ export namespace Prisma {
     accentColor?: boolean
     cuisineType?: boolean
     businessType?: boolean
+    restaurantType?: boolean
     address?: boolean
     city?: boolean
     phone?: boolean
@@ -4280,12 +4367,21 @@ export namespace Prisma {
     taxRate?: boolean
     upiId?: boolean
     hasWaiterService?: boolean
+    tableCount?: boolean
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: boolean
+    onboardingCompletedAt?: boolean
+    workspaceConfig?: boolean
+    successChecklist?: boolean
     timezone?: boolean
     isActive?: boolean
     plan?: boolean
     planStartedAt?: boolean
     planExpiresAt?: boolean
+    trialStartedAt?: boolean
     trialEndsAt?: boolean
+    trialStatus?: boolean
     businessHours?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -4352,6 +4448,7 @@ export namespace Prisma {
       accentColor: string
       cuisineType: string | null
       businessType: string
+      restaurantType: string | null
       address: string | null
       city: string | null
       phone: string | null
@@ -4363,12 +4460,21 @@ export namespace Prisma {
       taxRate: number
       upiId: string | null
       hasWaiterService: boolean
+      tableCount: number
+      deliveryEnabled: boolean
+      multiBranch: boolean
+      onboardingStatus: string
+      onboardingCompletedAt: Date | null
+      workspaceConfig: Prisma.JsonValue | null
+      successChecklist: Prisma.JsonValue | null
       timezone: string
       isActive: boolean
       plan: $Enums.Plan
       planStartedAt: Date | null
       planExpiresAt: Date | null
+      trialStartedAt: Date | null
       trialEndsAt: Date | null
+      trialStatus: string
       businessHours: Prisma.JsonValue | null
       createdAt: Date
       updatedAt: Date
@@ -4797,6 +4903,7 @@ export namespace Prisma {
     readonly accentColor: FieldRef<"Tenant", 'String'>
     readonly cuisineType: FieldRef<"Tenant", 'String'>
     readonly businessType: FieldRef<"Tenant", 'String'>
+    readonly restaurantType: FieldRef<"Tenant", 'String'>
     readonly address: FieldRef<"Tenant", 'String'>
     readonly city: FieldRef<"Tenant", 'String'>
     readonly phone: FieldRef<"Tenant", 'String'>
@@ -4808,12 +4915,21 @@ export namespace Prisma {
     readonly taxRate: FieldRef<"Tenant", 'Float'>
     readonly upiId: FieldRef<"Tenant", 'String'>
     readonly hasWaiterService: FieldRef<"Tenant", 'Boolean'>
+    readonly tableCount: FieldRef<"Tenant", 'Int'>
+    readonly deliveryEnabled: FieldRef<"Tenant", 'Boolean'>
+    readonly multiBranch: FieldRef<"Tenant", 'Boolean'>
+    readonly onboardingStatus: FieldRef<"Tenant", 'String'>
+    readonly onboardingCompletedAt: FieldRef<"Tenant", 'DateTime'>
+    readonly workspaceConfig: FieldRef<"Tenant", 'Json'>
+    readonly successChecklist: FieldRef<"Tenant", 'Json'>
     readonly timezone: FieldRef<"Tenant", 'String'>
     readonly isActive: FieldRef<"Tenant", 'Boolean'>
     readonly plan: FieldRef<"Tenant", 'Plan'>
     readonly planStartedAt: FieldRef<"Tenant", 'DateTime'>
     readonly planExpiresAt: FieldRef<"Tenant", 'DateTime'>
+    readonly trialStartedAt: FieldRef<"Tenant", 'DateTime'>
     readonly trialEndsAt: FieldRef<"Tenant", 'DateTime'>
+    readonly trialStatus: FieldRef<"Tenant", 'String'>
     readonly businessHours: FieldRef<"Tenant", 'Json'>
     readonly createdAt: FieldRef<"Tenant", 'DateTime'>
     readonly updatedAt: FieldRef<"Tenant", 'DateTime'>
@@ -32045,6 +32161,7 @@ export namespace Prisma {
     accentColor: 'accentColor',
     cuisineType: 'cuisineType',
     businessType: 'businessType',
+    restaurantType: 'restaurantType',
     address: 'address',
     city: 'city',
     phone: 'phone',
@@ -32056,12 +32173,21 @@ export namespace Prisma {
     taxRate: 'taxRate',
     upiId: 'upiId',
     hasWaiterService: 'hasWaiterService',
+    tableCount: 'tableCount',
+    deliveryEnabled: 'deliveryEnabled',
+    multiBranch: 'multiBranch',
+    onboardingStatus: 'onboardingStatus',
+    onboardingCompletedAt: 'onboardingCompletedAt',
+    workspaceConfig: 'workspaceConfig',
+    successChecklist: 'successChecklist',
     timezone: 'timezone',
     isActive: 'isActive',
     plan: 'plan',
     planStartedAt: 'planStartedAt',
     planExpiresAt: 'planExpiresAt',
+    trialStartedAt: 'trialStartedAt',
     trialEndsAt: 'trialEndsAt',
+    trialStatus: 'trialStatus',
     businessHours: 'businessHours',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt',
@@ -32629,16 +32755,16 @@ export namespace Prisma {
 
 
   /**
-   * Reference to a field of type 'Plan'
+   * Reference to a field of type 'Int'
    */
-  export type EnumPlanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Plan'>
+  export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
     
 
 
   /**
-   * Reference to a field of type 'Plan[]'
+   * Reference to a field of type 'Int[]'
    */
-  export type ListEnumPlanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Plan[]'>
+  export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
     
 
 
@@ -32664,6 +32790,20 @@ export namespace Prisma {
 
 
   /**
+   * Reference to a field of type 'Plan'
+   */
+  export type EnumPlanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Plan'>
+    
+
+
+  /**
+   * Reference to a field of type 'Plan[]'
+   */
+  export type ListEnumPlanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Plan[]'>
+    
+
+
+  /**
    * Reference to a field of type 'UserRole'
    */
   export type EnumUserRoleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'UserRole'>
@@ -32674,20 +32814,6 @@ export namespace Prisma {
    * Reference to a field of type 'UserRole[]'
    */
   export type ListEnumUserRoleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'UserRole[]'>
-    
-
-
-  /**
-   * Reference to a field of type 'Int'
-   */
-  export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
-    
-
-
-  /**
-   * Reference to a field of type 'Int[]'
-   */
-  export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
     
 
 
@@ -32890,6 +33016,7 @@ export namespace Prisma {
     accentColor?: StringFilter<"Tenant"> | string
     cuisineType?: StringNullableFilter<"Tenant"> | string | null
     businessType?: StringFilter<"Tenant"> | string
+    restaurantType?: StringNullableFilter<"Tenant"> | string | null
     address?: StringNullableFilter<"Tenant"> | string | null
     city?: StringNullableFilter<"Tenant"> | string | null
     phone?: StringNullableFilter<"Tenant"> | string | null
@@ -32901,12 +33028,21 @@ export namespace Prisma {
     taxRate?: FloatFilter<"Tenant"> | number
     upiId?: StringNullableFilter<"Tenant"> | string | null
     hasWaiterService?: BoolFilter<"Tenant"> | boolean
+    tableCount?: IntFilter<"Tenant"> | number
+    deliveryEnabled?: BoolFilter<"Tenant"> | boolean
+    multiBranch?: BoolFilter<"Tenant"> | boolean
+    onboardingStatus?: StringFilter<"Tenant"> | string
+    onboardingCompletedAt?: DateTimeNullableFilter<"Tenant"> | Date | string | null
+    workspaceConfig?: JsonNullableFilter<"Tenant">
+    successChecklist?: JsonNullableFilter<"Tenant">
     timezone?: StringFilter<"Tenant"> | string
     isActive?: BoolFilter<"Tenant"> | boolean
     plan?: EnumPlanFilter<"Tenant"> | $Enums.Plan
     planStartedAt?: DateTimeNullableFilter<"Tenant"> | Date | string | null
     planExpiresAt?: DateTimeNullableFilter<"Tenant"> | Date | string | null
+    trialStartedAt?: DateTimeNullableFilter<"Tenant"> | Date | string | null
     trialEndsAt?: DateTimeNullableFilter<"Tenant"> | Date | string | null
+    trialStatus?: StringFilter<"Tenant"> | string
     businessHours?: JsonNullableFilter<"Tenant">
     createdAt?: DateTimeFilter<"Tenant"> | Date | string
     updatedAt?: DateTimeFilter<"Tenant"> | Date | string
@@ -32945,6 +33081,7 @@ export namespace Prisma {
     accentColor?: SortOrder
     cuisineType?: SortOrderInput | SortOrder
     businessType?: SortOrder
+    restaurantType?: SortOrderInput | SortOrder
     address?: SortOrderInput | SortOrder
     city?: SortOrderInput | SortOrder
     phone?: SortOrderInput | SortOrder
@@ -32956,12 +33093,21 @@ export namespace Prisma {
     taxRate?: SortOrder
     upiId?: SortOrderInput | SortOrder
     hasWaiterService?: SortOrder
+    tableCount?: SortOrder
+    deliveryEnabled?: SortOrder
+    multiBranch?: SortOrder
+    onboardingStatus?: SortOrder
+    onboardingCompletedAt?: SortOrderInput | SortOrder
+    workspaceConfig?: SortOrderInput | SortOrder
+    successChecklist?: SortOrderInput | SortOrder
     timezone?: SortOrder
     isActive?: SortOrder
     plan?: SortOrder
     planStartedAt?: SortOrderInput | SortOrder
     planExpiresAt?: SortOrderInput | SortOrder
+    trialStartedAt?: SortOrderInput | SortOrder
     trialEndsAt?: SortOrderInput | SortOrder
+    trialStatus?: SortOrder
     businessHours?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -33003,6 +33149,7 @@ export namespace Prisma {
     accentColor?: StringFilter<"Tenant"> | string
     cuisineType?: StringNullableFilter<"Tenant"> | string | null
     businessType?: StringFilter<"Tenant"> | string
+    restaurantType?: StringNullableFilter<"Tenant"> | string | null
     address?: StringNullableFilter<"Tenant"> | string | null
     city?: StringNullableFilter<"Tenant"> | string | null
     phone?: StringNullableFilter<"Tenant"> | string | null
@@ -33014,12 +33161,21 @@ export namespace Prisma {
     taxRate?: FloatFilter<"Tenant"> | number
     upiId?: StringNullableFilter<"Tenant"> | string | null
     hasWaiterService?: BoolFilter<"Tenant"> | boolean
+    tableCount?: IntFilter<"Tenant"> | number
+    deliveryEnabled?: BoolFilter<"Tenant"> | boolean
+    multiBranch?: BoolFilter<"Tenant"> | boolean
+    onboardingStatus?: StringFilter<"Tenant"> | string
+    onboardingCompletedAt?: DateTimeNullableFilter<"Tenant"> | Date | string | null
+    workspaceConfig?: JsonNullableFilter<"Tenant">
+    successChecklist?: JsonNullableFilter<"Tenant">
     timezone?: StringFilter<"Tenant"> | string
     isActive?: BoolFilter<"Tenant"> | boolean
     plan?: EnumPlanFilter<"Tenant"> | $Enums.Plan
     planStartedAt?: DateTimeNullableFilter<"Tenant"> | Date | string | null
     planExpiresAt?: DateTimeNullableFilter<"Tenant"> | Date | string | null
+    trialStartedAt?: DateTimeNullableFilter<"Tenant"> | Date | string | null
     trialEndsAt?: DateTimeNullableFilter<"Tenant"> | Date | string | null
+    trialStatus?: StringFilter<"Tenant"> | string
     businessHours?: JsonNullableFilter<"Tenant">
     createdAt?: DateTimeFilter<"Tenant"> | Date | string
     updatedAt?: DateTimeFilter<"Tenant"> | Date | string
@@ -33058,6 +33214,7 @@ export namespace Prisma {
     accentColor?: SortOrder
     cuisineType?: SortOrderInput | SortOrder
     businessType?: SortOrder
+    restaurantType?: SortOrderInput | SortOrder
     address?: SortOrderInput | SortOrder
     city?: SortOrderInput | SortOrder
     phone?: SortOrderInput | SortOrder
@@ -33069,12 +33226,21 @@ export namespace Prisma {
     taxRate?: SortOrder
     upiId?: SortOrderInput | SortOrder
     hasWaiterService?: SortOrder
+    tableCount?: SortOrder
+    deliveryEnabled?: SortOrder
+    multiBranch?: SortOrder
+    onboardingStatus?: SortOrder
+    onboardingCompletedAt?: SortOrderInput | SortOrder
+    workspaceConfig?: SortOrderInput | SortOrder
+    successChecklist?: SortOrderInput | SortOrder
     timezone?: SortOrder
     isActive?: SortOrder
     plan?: SortOrder
     planStartedAt?: SortOrderInput | SortOrder
     planExpiresAt?: SortOrderInput | SortOrder
+    trialStartedAt?: SortOrderInput | SortOrder
     trialEndsAt?: SortOrderInput | SortOrder
+    trialStatus?: SortOrder
     businessHours?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -33102,6 +33268,7 @@ export namespace Prisma {
     accentColor?: StringWithAggregatesFilter<"Tenant"> | string
     cuisineType?: StringNullableWithAggregatesFilter<"Tenant"> | string | null
     businessType?: StringWithAggregatesFilter<"Tenant"> | string
+    restaurantType?: StringNullableWithAggregatesFilter<"Tenant"> | string | null
     address?: StringNullableWithAggregatesFilter<"Tenant"> | string | null
     city?: StringNullableWithAggregatesFilter<"Tenant"> | string | null
     phone?: StringNullableWithAggregatesFilter<"Tenant"> | string | null
@@ -33113,12 +33280,21 @@ export namespace Prisma {
     taxRate?: FloatWithAggregatesFilter<"Tenant"> | number
     upiId?: StringNullableWithAggregatesFilter<"Tenant"> | string | null
     hasWaiterService?: BoolWithAggregatesFilter<"Tenant"> | boolean
+    tableCount?: IntWithAggregatesFilter<"Tenant"> | number
+    deliveryEnabled?: BoolWithAggregatesFilter<"Tenant"> | boolean
+    multiBranch?: BoolWithAggregatesFilter<"Tenant"> | boolean
+    onboardingStatus?: StringWithAggregatesFilter<"Tenant"> | string
+    onboardingCompletedAt?: DateTimeNullableWithAggregatesFilter<"Tenant"> | Date | string | null
+    workspaceConfig?: JsonNullableWithAggregatesFilter<"Tenant">
+    successChecklist?: JsonNullableWithAggregatesFilter<"Tenant">
     timezone?: StringWithAggregatesFilter<"Tenant"> | string
     isActive?: BoolWithAggregatesFilter<"Tenant"> | boolean
     plan?: EnumPlanWithAggregatesFilter<"Tenant"> | $Enums.Plan
     planStartedAt?: DateTimeNullableWithAggregatesFilter<"Tenant"> | Date | string | null
     planExpiresAt?: DateTimeNullableWithAggregatesFilter<"Tenant"> | Date | string | null
+    trialStartedAt?: DateTimeNullableWithAggregatesFilter<"Tenant"> | Date | string | null
     trialEndsAt?: DateTimeNullableWithAggregatesFilter<"Tenant"> | Date | string | null
+    trialStatus?: StringWithAggregatesFilter<"Tenant"> | string
     businessHours?: JsonNullableWithAggregatesFilter<"Tenant">
     createdAt?: DateTimeWithAggregatesFilter<"Tenant"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Tenant"> | Date | string
@@ -35645,6 +35821,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -35656,12 +35833,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -35700,6 +35886,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -35711,12 +35898,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -35755,6 +35951,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -35766,12 +35963,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -35810,6 +36016,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -35821,12 +36028,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -35865,6 +36081,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -35876,12 +36093,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -35901,6 +36127,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -35912,12 +36139,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -35937,6 +36173,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -35948,12 +36185,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -38829,11 +39075,15 @@ export namespace Prisma {
     not?: NestedBoolFilter<$PrismaModel> | boolean
   }
 
-  export type EnumPlanFilter<$PrismaModel = never> = {
-    equals?: $Enums.Plan | EnumPlanFieldRefInput<$PrismaModel>
-    in?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
-    notIn?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
-    not?: NestedEnumPlanFilter<$PrismaModel> | $Enums.Plan
+  export type IntFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntFilter<$PrismaModel> | number
   }
 
   export type DateTimeNullableFilter<$PrismaModel = never> = {
@@ -38867,6 +39117,13 @@ export namespace Prisma {
     gt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
     gte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
     not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+  }
+
+  export type EnumPlanFilter<$PrismaModel = never> = {
+    equals?: $Enums.Plan | EnumPlanFieldRefInput<$PrismaModel>
+    in?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
+    notIn?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
+    not?: NestedEnumPlanFilter<$PrismaModel> | $Enums.Plan
   }
 
   export type DateTimeFilter<$PrismaModel = never> = {
@@ -39081,6 +39338,7 @@ export namespace Prisma {
     accentColor?: SortOrder
     cuisineType?: SortOrder
     businessType?: SortOrder
+    restaurantType?: SortOrder
     address?: SortOrder
     city?: SortOrder
     phone?: SortOrder
@@ -39092,12 +39350,21 @@ export namespace Prisma {
     taxRate?: SortOrder
     upiId?: SortOrder
     hasWaiterService?: SortOrder
+    tableCount?: SortOrder
+    deliveryEnabled?: SortOrder
+    multiBranch?: SortOrder
+    onboardingStatus?: SortOrder
+    onboardingCompletedAt?: SortOrder
+    workspaceConfig?: SortOrder
+    successChecklist?: SortOrder
     timezone?: SortOrder
     isActive?: SortOrder
     plan?: SortOrder
     planStartedAt?: SortOrder
     planExpiresAt?: SortOrder
+    trialStartedAt?: SortOrder
     trialEndsAt?: SortOrder
+    trialStatus?: SortOrder
     businessHours?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -39108,6 +39375,7 @@ export namespace Prisma {
 
   export type TenantAvgOrderByAggregateInput = {
     taxRate?: SortOrder
+    tableCount?: SortOrder
   }
 
   export type TenantMaxOrderByAggregateInput = {
@@ -39121,6 +39389,7 @@ export namespace Prisma {
     accentColor?: SortOrder
     cuisineType?: SortOrder
     businessType?: SortOrder
+    restaurantType?: SortOrder
     address?: SortOrder
     city?: SortOrder
     phone?: SortOrder
@@ -39132,12 +39401,19 @@ export namespace Prisma {
     taxRate?: SortOrder
     upiId?: SortOrder
     hasWaiterService?: SortOrder
+    tableCount?: SortOrder
+    deliveryEnabled?: SortOrder
+    multiBranch?: SortOrder
+    onboardingStatus?: SortOrder
+    onboardingCompletedAt?: SortOrder
     timezone?: SortOrder
     isActive?: SortOrder
     plan?: SortOrder
     planStartedAt?: SortOrder
     planExpiresAt?: SortOrder
+    trialStartedAt?: SortOrder
     trialEndsAt?: SortOrder
+    trialStatus?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     isPilot?: SortOrder
@@ -39156,6 +39432,7 @@ export namespace Prisma {
     accentColor?: SortOrder
     cuisineType?: SortOrder
     businessType?: SortOrder
+    restaurantType?: SortOrder
     address?: SortOrder
     city?: SortOrder
     phone?: SortOrder
@@ -39167,12 +39444,19 @@ export namespace Prisma {
     taxRate?: SortOrder
     upiId?: SortOrder
     hasWaiterService?: SortOrder
+    tableCount?: SortOrder
+    deliveryEnabled?: SortOrder
+    multiBranch?: SortOrder
+    onboardingStatus?: SortOrder
+    onboardingCompletedAt?: SortOrder
     timezone?: SortOrder
     isActive?: SortOrder
     plan?: SortOrder
     planStartedAt?: SortOrder
     planExpiresAt?: SortOrder
+    trialStartedAt?: SortOrder
     trialEndsAt?: SortOrder
+    trialStatus?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     isPilot?: SortOrder
@@ -39182,6 +39466,7 @@ export namespace Prisma {
 
   export type TenantSumOrderByAggregateInput = {
     taxRate?: SortOrder
+    tableCount?: SortOrder
   }
 
   export type StringWithAggregatesFilter<$PrismaModel = never> = {
@@ -39244,14 +39529,20 @@ export namespace Prisma {
     _max?: NestedBoolFilter<$PrismaModel>
   }
 
-  export type EnumPlanWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: $Enums.Plan | EnumPlanFieldRefInput<$PrismaModel>
-    in?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
-    notIn?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
-    not?: NestedEnumPlanWithAggregatesFilter<$PrismaModel> | $Enums.Plan
+  export type IntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
     _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedEnumPlanFilter<$PrismaModel>
-    _max?: NestedEnumPlanFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
   }
 
   export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
@@ -39291,6 +39582,16 @@ export namespace Prisma {
     _count?: NestedIntNullableFilter<$PrismaModel>
     _min?: NestedJsonNullableFilter<$PrismaModel>
     _max?: NestedJsonNullableFilter<$PrismaModel>
+  }
+
+  export type EnumPlanWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.Plan | EnumPlanFieldRefInput<$PrismaModel>
+    in?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
+    notIn?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
+    not?: NestedEnumPlanWithAggregatesFilter<$PrismaModel> | $Enums.Plan
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumPlanFilter<$PrismaModel>
+    _max?: NestedEnumPlanFilter<$PrismaModel>
   }
 
   export type DateTimeWithAggregatesFilter<$PrismaModel = never> = {
@@ -39461,17 +39762,6 @@ export namespace Prisma {
     createdAt?: SortOrder
   }
 
-  export type IntFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntFilter<$PrismaModel> | number
-  }
-
   export type CategoryCountOrderByAggregateInput = {
     id?: SortOrder
     tenantId?: SortOrder
@@ -39523,22 +39813,6 @@ export namespace Prisma {
 
   export type CategorySumOrderByAggregateInput = {
     sortOrder?: SortOrder
-  }
-
-  export type IntWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedFloatFilter<$PrismaModel>
-    _sum?: NestedIntFilter<$PrismaModel>
-    _min?: NestedIntFilter<$PrismaModel>
-    _max?: NestedIntFilter<$PrismaModel>
   }
 
   export type FloatNullableFilter<$PrismaModel = never> = {
@@ -41539,12 +41813,20 @@ export namespace Prisma {
     set?: boolean
   }
 
-  export type EnumPlanFieldUpdateOperationsInput = {
-    set?: $Enums.Plan
+  export type IntFieldUpdateOperationsInput = {
+    set?: number
+    increment?: number
+    decrement?: number
+    multiply?: number
+    divide?: number
   }
 
   export type NullableDateTimeFieldUpdateOperationsInput = {
     set?: Date | string | null
+  }
+
+  export type EnumPlanFieldUpdateOperationsInput = {
+    set?: $Enums.Plan
   }
 
   export type DateTimeFieldUpdateOperationsInput = {
@@ -42223,14 +42505,6 @@ export namespace Prisma {
     connectOrCreate?: MenuItemCreateOrConnectWithoutCategoryInput | MenuItemCreateOrConnectWithoutCategoryInput[]
     createMany?: MenuItemCreateManyCategoryInputEnvelope
     connect?: MenuItemWhereUniqueInput | MenuItemWhereUniqueInput[]
-  }
-
-  export type IntFieldUpdateOperationsInput = {
-    set?: number
-    increment?: number
-    decrement?: number
-    multiply?: number
-    divide?: number
   }
 
   export type TenantUpdateOneRequiredWithoutCategoriesNestedInput = {
@@ -43926,11 +44200,15 @@ export namespace Prisma {
     not?: NestedBoolFilter<$PrismaModel> | boolean
   }
 
-  export type NestedEnumPlanFilter<$PrismaModel = never> = {
-    equals?: $Enums.Plan | EnumPlanFieldRefInput<$PrismaModel>
-    in?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
-    notIn?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
-    not?: NestedEnumPlanFilter<$PrismaModel> | $Enums.Plan
+  export type NestedIntFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntFilter<$PrismaModel> | number
   }
 
   export type NestedDateTimeNullableFilter<$PrismaModel = never> = {
@@ -43942,6 +44220,13 @@ export namespace Prisma {
     gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
+  }
+
+  export type NestedEnumPlanFilter<$PrismaModel = never> = {
+    equals?: $Enums.Plan | EnumPlanFieldRefInput<$PrismaModel>
+    in?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
+    notIn?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
+    not?: NestedEnumPlanFilter<$PrismaModel> | $Enums.Plan
   }
 
   export type NestedDateTimeFilter<$PrismaModel = never> = {
@@ -43970,17 +44255,6 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedStringFilter<$PrismaModel>
     _max?: NestedStringFilter<$PrismaModel>
-  }
-
-  export type NestedIntFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntFilter<$PrismaModel> | number
   }
 
   export type NestedStringNullableWithAggregatesFilter<$PrismaModel = never> = {
@@ -44035,14 +44309,20 @@ export namespace Prisma {
     _max?: NestedBoolFilter<$PrismaModel>
   }
 
-  export type NestedEnumPlanWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: $Enums.Plan | EnumPlanFieldRefInput<$PrismaModel>
-    in?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
-    notIn?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
-    not?: NestedEnumPlanWithAggregatesFilter<$PrismaModel> | $Enums.Plan
+  export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
     _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedEnumPlanFilter<$PrismaModel>
-    _max?: NestedEnumPlanFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
   }
 
   export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
@@ -44081,6 +44361,16 @@ export namespace Prisma {
     not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
   }
 
+  export type NestedEnumPlanWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.Plan | EnumPlanFieldRefInput<$PrismaModel>
+    in?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
+    notIn?: $Enums.Plan[] | ListEnumPlanFieldRefInput<$PrismaModel>
+    not?: NestedEnumPlanWithAggregatesFilter<$PrismaModel> | $Enums.Plan
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumPlanFilter<$PrismaModel>
+    _max?: NestedEnumPlanFilter<$PrismaModel>
+  }
+
   export type NestedDateTimeWithAggregatesFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -44110,22 +44400,6 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumUserRoleFilter<$PrismaModel>
     _max?: NestedEnumUserRoleFilter<$PrismaModel>
-  }
-
-  export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedFloatFilter<$PrismaModel>
-    _sum?: NestedIntFilter<$PrismaModel>
-    _min?: NestedIntFilter<$PrismaModel>
-    _max?: NestedIntFilter<$PrismaModel>
   }
 
   export type NestedFloatNullableFilter<$PrismaModel = never> = {
@@ -46055,6 +46329,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -46066,12 +46341,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -46109,6 +46393,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -46120,12 +46405,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -46245,6 +46539,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -46256,12 +46551,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -46299,6 +46603,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -46310,12 +46615,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -46496,6 +46810,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -46507,12 +46822,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -46550,6 +46874,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -46561,12 +46886,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -46620,6 +46954,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -46631,12 +46966,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -46674,6 +47018,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -46685,12 +47030,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -46728,6 +47082,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -46739,12 +47094,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -46782,6 +47146,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -46793,12 +47158,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -46918,6 +47292,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -46929,12 +47304,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -46972,6 +47356,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -46983,12 +47368,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -47042,6 +47436,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -47053,12 +47448,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -47096,6 +47500,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -47107,12 +47512,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -47271,6 +47685,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -47282,12 +47697,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -47325,6 +47749,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -47336,12 +47761,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -47725,6 +48159,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -47736,12 +48171,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -47779,6 +48223,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -47790,12 +48235,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -47849,6 +48303,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -47860,12 +48315,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -47903,6 +48367,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -47914,12 +48379,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -47957,6 +48431,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -47968,12 +48443,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -48011,6 +48495,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -48022,12 +48507,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -48137,6 +48631,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -48148,12 +48643,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -48191,6 +48695,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -48202,12 +48707,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -48261,6 +48775,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -48272,12 +48787,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -48315,6 +48839,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -48326,12 +48851,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -48526,6 +49060,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -48537,12 +49072,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -48580,6 +49124,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -48591,12 +49136,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -48813,6 +49367,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -48824,12 +49379,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -48867,6 +49431,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -48878,12 +49443,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -49175,6 +49749,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -49186,12 +49761,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -49229,6 +49813,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -49240,12 +49825,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -49487,6 +50081,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -49498,12 +50093,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -49541,6 +50145,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -49552,12 +50157,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -49652,6 +50266,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -49663,12 +50278,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -49706,6 +50330,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -49717,12 +50342,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -49807,6 +50441,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -49818,12 +50453,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -49861,6 +50505,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -49872,12 +50517,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -50109,6 +50763,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -50120,12 +50775,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50163,6 +50827,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -50174,12 +50839,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50281,6 +50955,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -50292,12 +50967,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -50335,6 +51019,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -50346,12 +51031,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -50573,6 +51267,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -50584,12 +51279,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50627,6 +51331,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -50638,12 +51343,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50819,6 +51533,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -50830,12 +51545,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -50873,6 +51597,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -50884,12 +51609,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -51082,6 +51816,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -51093,12 +51828,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -51136,6 +51880,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -51147,12 +51892,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -51277,6 +52031,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -51288,12 +52043,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -51331,6 +52095,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -51342,12 +52107,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -51544,6 +52318,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -51555,12 +52330,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -51598,6 +52382,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -51609,12 +52394,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -51813,6 +52607,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -51824,12 +52619,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -51867,6 +52671,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -51878,12 +52683,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -52035,6 +52849,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -52046,12 +52861,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -52089,6 +52913,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -52100,12 +52925,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -52253,6 +53087,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -52264,12 +53099,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -52307,6 +53151,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -52318,12 +53163,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -52582,6 +53436,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -52593,12 +53448,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -52636,6 +53500,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -52647,12 +53512,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53141,6 +54015,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -53152,12 +54027,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -53195,6 +54079,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -53206,12 +54091,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -53455,6 +54349,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -53466,12 +54361,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53509,6 +54413,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -53520,12 +54425,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53777,6 +54691,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -53788,12 +54703,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -53831,6 +54755,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -53842,12 +54767,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -53901,6 +54835,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -53912,12 +54847,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53955,6 +54899,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -53966,12 +54911,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54009,6 +54963,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -54020,12 +54975,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -54063,6 +55027,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -54074,12 +55039,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -54133,6 +55107,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -54144,12 +55119,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54187,6 +55171,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -54198,12 +55183,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54241,6 +55235,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -54252,12 +55247,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -54295,6 +55299,7 @@ export namespace Prisma {
     accentColor?: string
     cuisineType?: string | null
     businessType?: string
+    restaurantType?: string | null
     address?: string | null
     city?: string | null
     phone?: string | null
@@ -54306,12 +55311,21 @@ export namespace Prisma {
     taxRate?: number
     upiId?: string | null
     hasWaiterService?: boolean
+    tableCount?: number
+    deliveryEnabled?: boolean
+    multiBranch?: boolean
+    onboardingStatus?: string
+    onboardingCompletedAt?: Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: string
     isActive?: boolean
     plan?: $Enums.Plan
     planStartedAt?: Date | string | null
     planExpiresAt?: Date | string | null
+    trialStartedAt?: Date | string | null
     trialEndsAt?: Date | string | null
+    trialStatus?: string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -54434,6 +55448,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -54445,12 +55460,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54488,6 +55512,7 @@ export namespace Prisma {
     accentColor?: StringFieldUpdateOperationsInput | string
     cuisineType?: NullableStringFieldUpdateOperationsInput | string | null
     businessType?: StringFieldUpdateOperationsInput | string
+    restaurantType?: NullableStringFieldUpdateOperationsInput | string | null
     address?: NullableStringFieldUpdateOperationsInput | string | null
     city?: NullableStringFieldUpdateOperationsInput | string | null
     phone?: NullableStringFieldUpdateOperationsInput | string | null
@@ -54499,12 +55524,21 @@ export namespace Prisma {
     taxRate?: FloatFieldUpdateOperationsInput | number
     upiId?: NullableStringFieldUpdateOperationsInput | string | null
     hasWaiterService?: BoolFieldUpdateOperationsInput | boolean
+    tableCount?: IntFieldUpdateOperationsInput | number
+    deliveryEnabled?: BoolFieldUpdateOperationsInput | boolean
+    multiBranch?: BoolFieldUpdateOperationsInput | boolean
+    onboardingStatus?: StringFieldUpdateOperationsInput | string
+    onboardingCompletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    workspaceConfig?: NullableJsonNullValueInput | InputJsonValue
+    successChecklist?: NullableJsonNullValueInput | InputJsonValue
     timezone?: StringFieldUpdateOperationsInput | string
     isActive?: BoolFieldUpdateOperationsInput | boolean
     plan?: EnumPlanFieldUpdateOperationsInput | $Enums.Plan
     planStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     planExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStartedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     trialEndsAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    trialStatus?: StringFieldUpdateOperationsInput | string
     businessHours?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
